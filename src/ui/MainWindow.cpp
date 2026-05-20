@@ -1,11 +1,12 @@
 #include "ui/MainWindow.h"
 
+#include "ui/ChatView.h"
+
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
 #include <QPushButton>
-#include <QScrollArea>
 #include <QTextEdit>
 #include <QVBoxLayout>
 
@@ -77,24 +78,8 @@ void MainWindow::setupUi()
     headerLayout->addWidget(titleGroup, 1);
     headerLayout->addWidget(m_settingsButton);
 
-    auto *scrollArea = new QScrollArea(mainPanel);
-    scrollArea->setObjectName(QStringLiteral("chatScrollArea"));
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setFrameShape(QFrame::NoFrame);
-
-    m_chatContainer = new QWidget(scrollArea);
-    m_chatContainer->setObjectName(QStringLiteral("chatContainer"));
-    auto *chatLayout = new QVBoxLayout(m_chatContainer);
-    chatLayout->setContentsMargins(28, 28, 28, 28);
-    chatLayout->setSpacing(14);
-    chatLayout->addStretch(1);
-
-    auto *welcome = new QLabel(QStringLiteral("Start a conversation by configuring your API settings, then send a message."), m_chatContainer);
-    welcome->setObjectName(QStringLiteral("welcomeMessage"));
-    welcome->setWordWrap(true);
-    chatLayout->insertWidget(0, welcome);
-
-    scrollArea->setWidget(m_chatContainer);
+    m_chatView = new ChatView(mainPanel);
+    m_chatView->addMessage(MessageRole::Assistant, QStringLiteral("Start a conversation by configuring your API settings, then send a message."));
 
     auto *composer = new QFrame(mainPanel);
     composer->setObjectName(QStringLiteral("composer"));
@@ -115,7 +100,7 @@ void MainWindow::setupUi()
     composerLayout->addWidget(m_sendButton, 0, Qt::AlignBottom);
 
     mainLayout->addWidget(header);
-    mainLayout->addWidget(scrollArea, 1);
+    mainLayout->addWidget(m_chatView, 1);
     mainLayout->addWidget(composer);
 
     rootLayout->addWidget(sidebar);
@@ -124,10 +109,23 @@ void MainWindow::setupUi()
     setCentralWidget(central);
 
     connect(m_messageInput, &QTextEdit::textChanged, this, &MainWindow::updateSendButtonState);
+    connect(m_sendButton, &QPushButton::clicked, this, &MainWindow::addLocalPreviewMessage);
 }
 
 void MainWindow::updateSendButtonState()
 {
     const bool hasText = !m_messageInput->toPlainText().trimmed().isEmpty();
     m_sendButton->setEnabled(hasText);
+}
+
+void MainWindow::addLocalPreviewMessage()
+{
+    const QString content = m_messageInput->toPlainText().trimmed();
+    if (content.isEmpty()) {
+        return;
+    }
+
+    m_chatView->addMessage(MessageRole::User, content);
+    m_chatView->addMessage(MessageRole::Assistant, QStringLiteral("API integration will be added in a later task."));
+    m_messageInput->clear();
 }

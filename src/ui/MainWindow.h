@@ -2,11 +2,11 @@
 
 #include <QMainWindow>
 
+class ChatView;
 class QLabel;
 class QListWidget;
 class QPushButton;
 class QTextEdit;
-class QWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -18,9 +18,10 @@ public:
 private:
     void setupUi();
     void updateSendButtonState();
+    void addLocalPreviewMessage();
 
     QListWidget *m_sessionList = nullptr;
-    QWidget *m_chatContainer = nullptr;
+    ChatView *m_chatView = nullptr;
     QTextEdit *m_messageInput = nullptr;
     QPushButton *m_sendButton = nullptr;
     QPushButton *m_settingsButton = nullptr;

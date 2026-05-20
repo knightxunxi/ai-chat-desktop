@@ -20,8 +20,17 @@ qt_standard_project_setup()
 
 qt_add_executable(AIChatDesktop
     src/main.cpp
+    src/core/AppConfig.h
+    src/core/AppLanguage.h
+    src/core/ChatMessage.h
+    src/core/ChatSession.h
+    src/core/MessageRole.h
+    src/ui/ChatView.h
+    src/ui/ChatView.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
+    src/ui/MessageWidget.h
+    src/ui/MessageWidget.cpp
     resources/resources.qrc
 )
 

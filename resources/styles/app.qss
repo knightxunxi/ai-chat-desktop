@@ -105,11 +105,35 @@ QWidget#chatContainer {
     background: #f7f8fa;
 }
 
-QLabel#welcomeMessage {
+QFrame#assistantMessage,
+QFrame#userMessage,
+QFrame#systemMessage {
     padding: 18px 20px;
     border: 1px solid #dfe5ec;
     border-radius: 8px;
+}
+
+QFrame#assistantMessage {
     background: #ffffff;
+}
+
+QFrame#userMessage {
+    background: #e9f3ff;
+    border-color: #c7ddf8;
+}
+
+QFrame#systemMessage {
+    background: #fff7e8;
+    border-color: #f3ddb4;
+}
+
+QLabel#messageRole {
+    color: #5f6c7b;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QLabel#messageContent {
     color: #4b5563;
     font-size: 14px;
 }

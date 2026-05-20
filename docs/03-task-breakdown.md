@@ -21,6 +21,7 @@ V1 完成后，用户应该可以：
 
 - 启动桌面应用。
 - 配置 API Key、Base URL 和模型名称。
+- 切换中文或英文界面语言。
 - 发送消息给 DeepSeek/OpenAI 兼容接口。
 - 看到 AI 的流式回复。
 - 进行当前会话内的多轮对话。
@@ -107,6 +108,7 @@ feat: add resource and stylesheet support
 
 - 创建 `src/core/AppConfig.h`。
 - 字段包含 `providerName`、`baseUrl`、`modelName`、`apiKey`。
+- 字段包含界面语言 `language`。
 - 提供 `isComplete()` 或类似方法判断配置是否完整。
 - 提供默认 DeepSeek 配置值。
 
@@ -114,6 +116,7 @@ feat: add resource and stylesheet support
 
 - 可以创建默认配置。
 - 可以判断配置是否满足发送请求条件。
+- 可以读取默认界面语言。
 
 建议提交：
 
@@ -215,6 +218,7 @@ feat: add chat message view
 
 - 创建 `SettingsDialog`。
 - 输入项包含服务商、Base URL、模型名称、API Key。
+- 提供界面语言选项，至少包含中文和英文。
 - API Key 输入框使用密码显示模式。
 - 提供保存和取消按钮。
 - 保存前校验必要字段。
@@ -223,6 +227,7 @@ feat: add chat message view
 
 - 用户可以打开设置窗口。
 - 用户可以输入并保存配置。
+- 用户可以选择中文或英文界面语言。
 - 必填项为空时显示提示。
 
 建议提交：
@@ -248,6 +253,7 @@ feat: add settings dialog
 
 - 保存配置后关闭应用。
 - 重新启动应用后可以看到上次配置。
+- 重新启动应用后可以恢复上次选择的界面语言。
 - 配置缺失时可以识别为未完成配置。
 
 建议提交：
