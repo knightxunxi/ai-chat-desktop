@@ -79,6 +79,8 @@ V1 使用 `QSettings` 保存配置。
 - API Key
 - 最近使用的会话 ID
 
+角色提示词不放在 `AppConfig` 中。它属于会话级别数据，应保存在 `ChatSession` 和聊天记录存储中。
+
 注意：
 
 - V1 中 API Key 先以普通本地配置方式保存。
@@ -162,6 +164,10 @@ V1 请求体示例：
 {
   "model": "deepseek-v4-flash",
   "messages": [
+    {
+      "role": "system",
+      "content": "你是一名严谨但耐心的 C++ 导师。"
+    },
     {
       "role": "user",
       "content": "你好"
@@ -295,9 +301,12 @@ ai-chat-desktop/
 
 - `id`
 - `title`
+- `systemPrompt`
 - `createdAt`
 - `updatedAt`
 - `messages`
+
+`systemPrompt` 用于保存当前会话的角色提示词。它不一定作为普通消息显示在聊天窗口中，但在请求 AI 时会转换为第一条 `system` 消息。
 
 ### 6.2 UI 模块
 
@@ -310,6 +319,7 @@ ai-chat-desktop/
 - 显示左侧会话区域。
 - 显示聊天内容区域。
 - 显示输入区域。
+- 显示和编辑当前会话的角色提示词入口。
 - 打开设置窗口。
 - 将用户操作转发给应用控制层。
 
@@ -423,6 +433,7 @@ V1 推荐两张表。
 CREATE TABLE sessions (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
+    system_prompt TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -477,8 +488,10 @@ main.cpp
 用户输入消息并点击发送
   -> MainWindow 获取输入内容
   -> ApplicationController 校验配置和消息
+  -> 读取当前会话角色提示词
   -> 创建用户消息并显示
   -> 创建空 AI 消息并显示生成中状态
+  -> OpenAICompatibleClient 将角色提示词作为 system 消息放在请求开头
   -> OpenAICompatibleClient 发起流式请求
   -> StreamParser 解析文本片段
   -> ApplicationController 追加文本到 AI 消息
@@ -563,6 +576,7 @@ V1 界面参考常见 AI 聊天软件，但不做复杂动画。
 - 左侧为会话区域。
 - 右侧为聊天区域。
 - 底部为输入区域。
+- 当前会话应提供角色提示词入口，可以用会话设置、顶部按钮或轻量编辑区实现。
 - 用户消息靠右或使用明显区分样式。
 - AI 消息靠左或使用明显区分样式。
 - 输入区域在请求中可以保持可见。
@@ -579,6 +593,7 @@ V1 至少包含以下验证。
 - 保存配置。
 - 重启后读取配置。
 - 发送一条消息。
+- 设置角色提示词后发送消息。
 - 连续发送多条消息。
 - 清空会话。
 - 输入空消息。
