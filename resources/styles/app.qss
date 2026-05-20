@@ -1,0 +1,133 @@
+QMainWindow {
+    background: #f4f6f8;
+}
+
+QWidget#mainPanel {
+    background: #f7f8fa;
+}
+
+QFrame#sidebar {
+    background: #eef1f4;
+    border-right: 1px solid #d8dee6;
+}
+
+QPushButton {
+    min-height: 34px;
+    padding: 6px 14px;
+    border: 1px solid #c8d0da;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #1f2933;
+    font-size: 14px;
+}
+
+QPushButton:hover {
+    background: #f6f8fb;
+}
+
+QPushButton:pressed {
+    background: #e9eef5;
+}
+
+QPushButton:disabled {
+    color: #9aa5b1;
+    background: #edf1f5;
+    border-color: #d8dee6;
+}
+
+QPushButton#newChatButton {
+    background: #1f7a68;
+    border-color: #1f7a68;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+QPushButton#newChatButton:hover {
+    background: #176b5b;
+}
+
+QPushButton#sendButton {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+QPushButton#sendButton:hover {
+    background: #1d4ed8;
+}
+
+QPushButton#sendButton:disabled {
+    background: #d6deea;
+    border-color: #d6deea;
+    color: #7b8794;
+}
+
+QListWidget#sessionList {
+    border: none;
+    background: transparent;
+    outline: none;
+    color: #1f2933;
+}
+
+QListWidget#sessionList::item {
+    min-height: 36px;
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+QListWidget#sessionList::item:selected {
+    background: #ffffff;
+    color: #111827;
+}
+
+QFrame#chatHeader {
+    background: #ffffff;
+    border-bottom: 1px solid #dfe5ec;
+}
+
+QLabel#modelLabel {
+    color: #111827;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+QLabel#personaLabel {
+    color: #5f6c7b;
+    font-size: 13px;
+}
+
+QScrollArea#chatScrollArea {
+    background: #f7f8fa;
+}
+
+QWidget#chatContainer {
+    background: #f7f8fa;
+}
+
+QLabel#welcomeMessage {
+    padding: 18px 20px;
+    border: 1px solid #dfe5ec;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #4b5563;
+    font-size: 14px;
+}
+
+QFrame#composer {
+    background: #ffffff;
+    border-top: 1px solid #dfe5ec;
+}
+
+QTextEdit#messageInput {
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 14px;
+}
+
+QTextEdit#messageInput:focus {
+    border-color: #2563eb;
+}
