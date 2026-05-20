@@ -27,6 +27,26 @@ target_include_directories(StreamParserTest PRIVATE
 
 add_test(NAME StreamParserTest COMMAND StreamParserTest)
 
+add_executable(OpenAICompatibleClientTest
+    services/OpenAICompatibleClientTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/services/AIClient.h
+    ${PROJECT_SOURCE_DIR}/src/services/OpenAICompatibleClient.h
+    ${PROJECT_SOURCE_DIR}/src/services/OpenAICompatibleClient.cpp
+    ${PROJECT_SOURCE_DIR}/src/services/StreamParser.h
+    ${PROJECT_SOURCE_DIR}/src/services/StreamParser.cpp
+)
+
+target_link_libraries(OpenAICompatibleClientTest PRIVATE
+    Qt6::Core
+    Qt6::Network
+)
+
+target_include_directories(OpenAICompatibleClientTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME OpenAICompatibleClientTest COMMAND OpenAICompatibleClientTest)
+
 add_executable(ChatHistoryStorageTest
     storage/ChatHistoryStorageTest.cpp
     ${PROJECT_SOURCE_DIR}/src/storage/ChatHistoryStorage.cpp

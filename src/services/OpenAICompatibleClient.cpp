@@ -40,6 +40,7 @@ void OpenAICompatibleClient::cancel()
     m_currentReply->deleteLater();
     m_currentReply = nullptr;
     m_streamParser.reset();
+    m_errorBody.clear();
     m_doneReceived = false;
 }
 
@@ -57,7 +58,7 @@ QUrl OpenAICompatibleClient::chatCompletionsUrl(const QString &baseUrl) const
     return QUrl(normalized);
 }
 
-QByteArray OpenAICompatibleClient::buildRequestBody(const AppConfig &config, const ChatSession &session) const
+QByteArray OpenAICompatibleClient::buildRequestBody(const AppConfig &config, const ChatSession &session)
 {
     QJsonArray messages;
 
@@ -143,22 +144,39 @@ void OpenAICompatibleClient::handleFinished()
     m_currentReply = nullptr;
 
     const QByteArray remainingBody = reply->readAll();
-    if (!remainingBody.isEmpty() && reply->error() == QNetworkReply::NoError) {
-        const StreamParseResult result = m_streamParser.consume(remainingBody);
-        for (const QString &delta : result.textDeltas) {
+    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
+    if (statusCode >= 400) {
+        m_errorBody.append(remainingBody);
+        const QString fallback = QStringLiteral("HTTP request failed with status %1.").arg(statusCode);
+        emit requestFailed(extractErrorMessage(m_errorBody, fallback));
+    } else if (reply->error() != QNetworkReply::NoError) {
+        m_errorBody.append(remainingBody);
+        emit requestFailed(extractErrorMessage(m_errorBody, reply->errorString()));
+    } else {
+        if (!remainingBody.isEmpty()) {
+            const StreamParseResult result = m_streamParser.consume(remainingBody);
+            for (const QString &delta : result.textDeltas) {
+                emit textDeltaReceived(delta);
+            }
+            if (result.done) {
+                m_doneReceived = true;
+            }
+        }
+
+        const StreamParseResult finalResult = m_streamParser.finish();
+        for (const QString &delta : finalResult.textDeltas) {
             emit textDeltaReceived(delta);
         }
-        if (result.done) {
+        if (finalResult.done) {
             m_doneReceived = true;
         }
-    }
 
-    if (reply->error() != QNetworkReply::NoError) {
-        const QString fallback = reply->errorString();
-        m_errorBody.append(remainingBody);
-        emit requestFailed(extractErrorMessage(m_errorBody, fallback));
-    } else {
-        emit requestFinished();
+        if (!m_doneReceived) {
+            emit requestFailed(QStringLiteral("Streaming response ended before the completion marker."));
+        } else {
+            emit requestFinished();
+        }
     }
 
     reply->deleteLater();

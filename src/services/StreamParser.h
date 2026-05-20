@@ -13,6 +13,7 @@ class StreamParser
 {
 public:
     StreamParseResult consume(const QByteArray &data);
+    StreamParseResult finish();
     void reset();
 
 private:

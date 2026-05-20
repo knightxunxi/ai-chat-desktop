@@ -29,6 +29,24 @@ StreamParseResult StreamParser::consume(const QByteArray &data)
     return result;
 }
 
+StreamParseResult StreamParser::finish()
+{
+    StreamParseResult result;
+    if (m_buffer.isEmpty()) {
+        return result;
+    }
+
+    QByteArray line = m_buffer;
+    m_buffer.clear();
+
+    if (line.endsWith('\r')) {
+        line.chop(1);
+    }
+
+    parseLine(line, result);
+    return result;
+}
+
 void StreamParser::reset()
 {
     m_buffer.clear();

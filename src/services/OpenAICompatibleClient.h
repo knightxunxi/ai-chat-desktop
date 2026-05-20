@@ -16,12 +16,13 @@ class OpenAICompatibleClient : public AIClient
 public:
     explicit OpenAICompatibleClient(QObject *parent = nullptr);
 
+    static QByteArray buildRequestBody(const AppConfig &config, const ChatSession &session);
+
     void sendChat(const AppConfig &config, const ChatSession &session) override;
     void cancel() override;
 
 private:
     QUrl chatCompletionsUrl(const QString &baseUrl) const;
-    QByteArray buildRequestBody(const AppConfig &config, const ChatSession &session) const;
     QString extractErrorMessage(const QByteArray &body, const QString &fallback) const;
     void handleReadyRead();
     void handleFinished();

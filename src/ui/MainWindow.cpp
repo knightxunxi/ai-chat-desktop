@@ -3,13 +3,21 @@
 #include "ui/ChatView.h"
 #include "ui/SettingsDialog.h"
 
+#include <QDateTime>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QKeySequence>
 #include <QLabel>
 #include <QListWidget>
+#include <QListWidgetItem>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QShortcut>
+#include <QSignalBlocker>
+#include <QStatusBar>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -18,10 +26,12 @@ MainWindow::MainWindow(QWidget *parent)
     loadConfig();
     loadSession();
     setupUi();
+    populateSessionList();
     populateChatView();
     applyConfig();
     applyLanguage();
     updateSendButtonState();
+    showStartupWarningIfNeeded();
 
     connect(&m_aiClient, &OpenAICompatibleClient::textDeltaReceived, this, &MainWindow::handleTextDelta);
     connect(&m_aiClient, &OpenAICompatibleClient::requestFinished, this, &MainWindow::handleRequestFinished);
@@ -38,11 +48,33 @@ void MainWindow::loadSession()
     QString error;
     if (!m_chatHistoryStorage.initialize(&error)) {
         m_session = ChatSession::createDefault();
+        m_sessionSummaries.clear();
+        m_historyAvailable = false;
+        m_startupWarningMessage = text(QStringLiteral("Chat history is unavailable. New messages will not be restored after restart.\n\n%1"),
+                                       QStringLiteral("聊天记录不可用。新消息在重启后将无法恢复。\n\n%1"))
+                                      .arg(error);
         return;
     }
 
-    const std::optional<ChatSession> latestSession = m_chatHistoryStorage.loadLatestSession(&error);
-    m_session = latestSession.value_or(ChatSession::createDefault());
+    m_historyAvailable = true;
+    m_sessionSummaries = m_chatHistoryStorage.loadSessionSummaries(&error);
+    if (m_sessionSummaries.isEmpty()) {
+        m_session = ChatSession::createDefault();
+    } else {
+        const std::optional<ChatSession> latestSession = m_chatHistoryStorage.loadSession(m_sessionSummaries.first().id, &error);
+        m_session = latestSession.value_or(ChatSession::createDefault());
+        if (!latestSession.has_value() && !error.isEmpty()) {
+            m_startupWarningMessage = text(QStringLiteral("Failed to load the latest chat history.\n\n%1"),
+                                           QStringLiteral("加载最近聊天记录失败。\n\n%1"))
+                                          .arg(error);
+        }
+    }
+
+    if (m_sessionSummaries.isEmpty() && !error.isEmpty()) {
+        m_startupWarningMessage = text(QStringLiteral("Failed to load the latest chat history.\n\n%1"),
+                                       QStringLiteral("加载最近聊天记录失败。\n\n%1"))
+                                      .arg(error);
+    }
 }
 
 void MainWindow::setupUi()
@@ -69,7 +101,6 @@ void MainWindow::setupUi()
 
     m_sessionList = new QListWidget(sidebar);
     m_sessionList->setObjectName(QStringLiteral("sessionList"));
-    m_sessionList->addItem(QStringLiteral("Getting Started"));
 
     sidebarLayout->addWidget(m_newChatButton);
     sidebarLayout->addWidget(m_sessionList, 1);
@@ -100,10 +131,14 @@ void MainWindow::setupUi()
     titleLayout->addWidget(m_modelLabel);
     titleLayout->addWidget(m_personaLabel);
 
+    m_systemPromptButton = new QPushButton(header);
+    m_systemPromptButton->setObjectName(QStringLiteral("systemPromptButton"));
+
     m_settingsButton = new QPushButton(header);
     m_settingsButton->setObjectName(QStringLiteral("settingsButton"));
 
     headerLayout->addWidget(titleGroup, 1);
+    headerLayout->addWidget(m_systemPromptButton);
     headerLayout->addWidget(m_settingsButton);
 
     m_chatView = new ChatView(mainPanel);
@@ -137,6 +172,89 @@ void MainWindow::setupUi()
     connect(m_messageInput, &QTextEdit::textChanged, this, &MainWindow::updateSendButtonState);
     connect(m_sendButton, &QPushButton::clicked, this, &MainWindow::sendCurrentMessage);
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
+    connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
+    connect(m_newChatButton, &QPushButton::clicked, this, &MainWindow::startNewChat);
+    connect(m_sessionList, &QListWidget::itemClicked, this, &MainWindow::switchToSession);
+
+    auto *returnShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), m_messageInput);
+    connect(returnShortcut, &QShortcut::activated, this, &MainWindow::sendCurrentMessage);
+
+    auto *enterShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Enter")), m_messageInput);
+    connect(enterShortcut, &QShortcut::activated, this, &MainWindow::sendCurrentMessage);
+}
+
+void MainWindow::populateSessionList()
+{
+    if (m_sessionList == nullptr) {
+        return;
+    }
+
+    const QSignalBlocker blocker(m_sessionList);
+    m_sessionList->clear();
+
+    for (const ChatSession &session : m_sessionSummaries) {
+        auto *item = new QListWidgetItem(sessionListTitle(session));
+        item->setData(Qt::UserRole, session.id);
+        m_sessionList->addItem(item);
+    }
+
+    if (findSessionItem(m_session.id) == nullptr) {
+        auto *item = new QListWidgetItem(sessionListTitle(m_session));
+        item->setData(Qt::UserRole, m_session.id);
+        m_sessionList->insertItem(0, item);
+    }
+
+    updateCurrentSessionListItem();
+}
+
+void MainWindow::updateCurrentSessionListItem(bool moveToTop)
+{
+    if (m_sessionList == nullptr) {
+        return;
+    }
+
+    const QSignalBlocker blocker(m_sessionList);
+    QListWidgetItem *item = findSessionItem(m_session.id);
+    if (item == nullptr) {
+        item = new QListWidgetItem();
+        m_sessionList->insertItem(0, item);
+    } else if (moveToTop) {
+        const int row = m_sessionList->row(item);
+        if (row > 0) {
+            item = m_sessionList->takeItem(row);
+            m_sessionList->insertItem(0, item);
+        }
+    }
+
+    item->setText(sessionListTitle(m_session));
+    item->setData(Qt::UserRole, m_session.id);
+    m_sessionList->setCurrentItem(item);
+}
+
+QListWidgetItem *MainWindow::findSessionItem(const QString &sessionId) const
+{
+    if (m_sessionList == nullptr) {
+        return nullptr;
+    }
+
+    for (int row = 0; row < m_sessionList->count(); ++row) {
+        QListWidgetItem *item = m_sessionList->item(row);
+        if (item != nullptr && item->data(Qt::UserRole).toString() == sessionId) {
+            return item;
+        }
+    }
+
+    return nullptr;
+}
+
+QString MainWindow::sessionListTitle(const ChatSession &session) const
+{
+    const QString title = session.title.trimmed();
+    if (title.isEmpty() || (title == QStringLiteral("New Chat") && session.messages.isEmpty())) {
+        return text(QStringLiteral("Getting Started"), QStringLiteral("开始使用"));
+    }
+
+    return title;
 }
 
 void MainWindow::populateChatView()
@@ -167,8 +285,11 @@ void MainWindow::applyLanguage()
 {
     setWindowTitle(text(QStringLiteral("AI Chat Desktop"), QStringLiteral("AI 聊天桌面应用")));
     m_newChatButton->setText(text(QStringLiteral("New Chat"), QStringLiteral("新建会话")));
+    m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
-    m_personaLabel->setText(text(QStringLiteral("Role: Default assistant"), QStringLiteral("角色：默认助手")));
+    m_personaLabel->setText(m_session.hasSystemPrompt()
+                                ? text(QStringLiteral("Role: Custom prompt"), QStringLiteral("角色：自定义提示词"))
+                                : text(QStringLiteral("Role: Default assistant"), QStringLiteral("角色：默认助手")));
     m_messageInput->setPlaceholderText(text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
     m_sendButton->setText(text(QStringLiteral("Send"), QStringLiteral("发送")));
 
@@ -176,9 +297,7 @@ void MainWindow::applyLanguage()
         populateChatView();
     }
 
-    if (m_sessionList->count() > 0) {
-        m_sessionList->item(0)->setText(text(QStringLiteral("Getting Started"), QStringLiteral("开始使用")));
-    }
+    updateCurrentSessionListItem();
 }
 
 QString MainWindow::text(const QString &english, const QString &chinese) const
@@ -205,6 +324,95 @@ void MainWindow::openSettingsDialog()
     applyLanguage();
 }
 
+void MainWindow::editSystemPrompt()
+{
+    if (m_isGenerating) {
+        return;
+    }
+
+    bool accepted = false;
+    const QString prompt = QInputDialog::getMultiLineText(
+        this,
+        text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")),
+        text(QStringLiteral("Set the system prompt for this chat:"), QStringLiteral("设置当前会话的系统提示词：")),
+        m_session.systemPrompt,
+        &accepted);
+
+    if (!accepted) {
+        return;
+    }
+
+    m_session.systemPrompt = prompt.trimmed();
+    m_session.updatedAt = QDateTime::currentDateTimeUtc();
+    if (!saveCurrentSession()) {
+        statusBar()->showMessage(text(QStringLiteral("Failed to save the role prompt."),
+                                      QStringLiteral("保存角色提示词失败。")),
+                                 6000);
+    }
+    applyLanguage();
+}
+
+void MainWindow::startNewChat()
+{
+    if (m_isGenerating) {
+        return;
+    }
+
+    if (m_session.messages.isEmpty() && !m_session.hasSystemPrompt()) {
+        updateCurrentSessionListItem();
+        populateChatView();
+        return;
+    }
+
+    if (!m_session.messages.isEmpty() || m_session.hasSystemPrompt()) {
+        saveCurrentSession();
+    }
+
+    m_session = ChatSession::createDefault();
+    m_currentAssistantContent.clear();
+    m_messageInput->clear();
+    if (!saveCurrentSession()) {
+        updateCurrentSessionListItem(true);
+    }
+    populateChatView();
+    applyLanguage();
+}
+
+void MainWindow::switchToSession(QListWidgetItem *item)
+{
+    if (item == nullptr || m_isGenerating) {
+        return;
+    }
+
+    const QString sessionId = item->data(Qt::UserRole).toString();
+    if (sessionId.isEmpty() || sessionId == m_session.id) {
+        updateCurrentSessionListItem();
+        return;
+    }
+
+    if (!m_session.messages.isEmpty() || m_session.hasSystemPrompt()) {
+        saveCurrentSession();
+    }
+
+    QString error;
+    const std::optional<ChatSession> loaded = m_chatHistoryStorage.loadSession(sessionId, &error);
+    if (!loaded.has_value()) {
+        statusBar()->showMessage(text(QStringLiteral("Failed to load chat session: %1"),
+                                      QStringLiteral("加载会话失败：%1"))
+                                     .arg(error.isEmpty() ? sessionId : error),
+                                 6000);
+        updateCurrentSessionListItem();
+        return;
+    }
+
+    m_session = loaded.value();
+    m_currentAssistantContent.clear();
+    m_messageInput->clear();
+    populateChatView();
+    applyLanguage();
+    updateCurrentSessionListItem();
+}
+
 void MainWindow::sendCurrentMessage()
 {
     const QString content = m_messageInput->toPlainText().trimmed();
@@ -222,6 +430,9 @@ void MainWindow::sendCurrentMessage()
 
     if (m_session.messages.isEmpty()) {
         m_chatView->clearMessages();
+        m_session.title = content.left(36);
+        applyLanguage();
+        updateCurrentSessionListItem(true);
     }
 
     m_session.addMessage(MessageRole::User, content);
@@ -258,7 +469,10 @@ void MainWindow::handleRequestFinished()
 void MainWindow::handleRequestFailed(const QString &message)
 {
     setGenerating(false);
-    const QString displayMessage = text(QStringLiteral("Request failed: %1"), QStringLiteral("请求失败：%1")).arg(message);
+    const QString errorMessage = text(QStringLiteral("Request failed: %1"), QStringLiteral("请求失败：%1")).arg(message);
+    const QString displayMessage = m_currentAssistantContent.isEmpty()
+                                       ? errorMessage
+                                       : QStringLiteral("%1\n\n%2").arg(m_currentAssistantContent, errorMessage);
     if (!m_session.messages.isEmpty()) {
         m_session.messages.last().content = displayMessage;
     }
@@ -270,18 +484,51 @@ void MainWindow::setGenerating(bool generating)
 {
     m_isGenerating = generating;
     m_messageInput->setEnabled(!generating);
+    m_newChatButton->setEnabled(!generating);
+    m_systemPromptButton->setEnabled(!generating);
+    m_settingsButton->setEnabled(!generating);
     m_sendButton->setText(generating ? text(QStringLiteral("Sending"), QStringLiteral("发送中")) : text(QStringLiteral("Send"), QStringLiteral("发送")));
     updateSendButtonState();
 }
 
-void MainWindow::saveCurrentSession()
+bool MainWindow::saveCurrentSession()
 {
+    if (!m_historyAvailable) {
+        return false;
+    }
+
     QString error;
     if (!m_chatHistoryStorage.saveSession(m_session, &error)) {
-        return;
+        statusBar()->showMessage(text(QStringLiteral("Failed to save chat history: %1"),
+                                      QStringLiteral("保存聊天记录失败：%1"))
+                                     .arg(error),
+                                 6000);
+        return false;
     }
 
     for (const ChatMessage &message : m_session.messages) {
-        m_chatHistoryStorage.saveMessage(message, &error);
+        if (!m_chatHistoryStorage.saveMessage(message, &error)) {
+            statusBar()->showMessage(text(QStringLiteral("Failed to save chat history: %1"),
+                                          QStringLiteral("保存聊天记录失败：%1"))
+                                         .arg(error),
+                                     6000);
+            return false;
+        }
     }
+
+    updateCurrentSessionListItem(true);
+    return true;
+}
+
+void MainWindow::showStartupWarningIfNeeded()
+{
+    if (m_startupWarningMessage.isEmpty()) {
+        return;
+    }
+
+    QTimer::singleShot(0, this, [this]() {
+        QMessageBox::warning(this,
+                             text(QStringLiteral("Chat history issue"), QStringLiteral("聊天记录问题")),
+                             m_startupWarningMessage);
+    });
 }

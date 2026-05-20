@@ -2,8 +2,23 @@
 
 #include <QCoreApplication>
 #include <QTemporaryDir>
+#include <QTextStream>
 
 #include <cassert>
+
+namespace {
+
+void assertStorageResult(bool result, const QString &error)
+{
+    if (result) {
+        return;
+    }
+
+    QTextStream(stderr) << error << Qt::endl;
+    assert(false);
+}
+
+} // namespace
 
 int main(int argc, char *argv[])
 {
@@ -30,16 +45,34 @@ int main(int argc, char *argv[])
     assert(storage.saveMessage(userMessage, &error));
     assert(storage.saveMessage(assistantMessage, &error));
 
+    ChatSession secondSession = ChatSession::createDefault();
+    secondSession.title = QStringLiteral("Second Session");
+    ChatMessage secondMessage = secondSession.addMessage(MessageRole::User, QStringLiteral("Later"));
+    secondSession.createdAt = session.createdAt.addSecs(60);
+    secondSession.updatedAt = session.updatedAt.addSecs(60);
+
+    assertStorageResult(storage.saveSession(secondSession, &error), error);
+    assert(storage.saveMessage(secondMessage, &error));
+
+    const QVector<ChatSession> summaries = storage.loadSessionSummaries(&error);
+    assert(summaries.size() == 2);
+    assert(summaries[0].id == secondSession.id);
+    assert(summaries[0].messages.isEmpty());
+    assert(summaries[1].id == session.id);
+
+    std::optional<ChatSession> loadedById = storage.loadSession(session.id, &error);
+    assert(loadedById.has_value());
+    assert(loadedById->messages.size() == 2);
+    assert(loadedById->messages[0].content == QStringLiteral("Hello"));
+
     std::optional<ChatSession> loaded = storage.loadLatestSession(&error);
     assert(loaded.has_value());
-    assert(loaded->id == session.id);
-    assert(loaded->title == QStringLiteral("Storage Test"));
-    assert(loaded->systemPrompt == QStringLiteral("You are a test assistant."));
-    assert(loaded->messages.size() == 2);
-    assert(loaded->messages[0].content == QStringLiteral("Hello"));
-    assert(loaded->messages[1].role == MessageRole::Assistant);
+    assert(loaded->id == secondSession.id);
+    assert(loaded->title == QStringLiteral("Second Session"));
+    assert(loaded->messages.size() == 1);
 
     assert(storage.clearSession(session.id, &error));
+    assert(storage.clearSession(secondSession.id, &error));
     loaded = storage.loadLatestSession(&error);
     assert(!loaded.has_value());
 

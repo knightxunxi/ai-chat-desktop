@@ -25,5 +25,13 @@ int main()
     result = parser.consume("data: [DONE]\n");
     assert(result.done);
 
+    parser.reset();
+    result = parser.consume("data: {\"choices\":[{\"delta\":{\"content\":\"tail\"}}]}");
+    assert(result.textDeltas.isEmpty());
+
+    result = parser.finish();
+    assert(result.textDeltas.size() == 1);
+    assert(result.textDeltas[0] == QStringLiteral("tail"));
+
     return 0;
 }

@@ -21,6 +21,11 @@ QDateTime fromIsoUtc(const QString &value)
     return QDateTime::fromString(value, Qt::ISODateWithMs);
 }
 
+QString nonNullString(const QString &value)
+{
+    return value.isNull() ? QStringLiteral("") : value;
+}
+
 } // namespace
 
 ChatHistoryStorage::ChatHistoryStorage(const QString &databasePath)
@@ -99,8 +104,8 @@ bool ChatHistoryStorage::saveSession(const ChatSession &session, QString *errorM
         "system_prompt = excluded.system_prompt, "
         "updated_at = excluded.updated_at"));
     query.bindValue(QStringLiteral(":id"), session.id);
-    query.bindValue(QStringLiteral(":title"), session.title);
-    query.bindValue(QStringLiteral(":system_prompt"), session.systemPrompt);
+    query.bindValue(QStringLiteral(":title"), nonNullString(session.title));
+    query.bindValue(QStringLiteral(":system_prompt"), nonNullString(session.systemPrompt));
     query.bindValue(QStringLiteral(":created_at"), toIsoUtc(session.createdAt));
     query.bindValue(QStringLiteral(":updated_at"), toIsoUtc(session.updatedAt));
 
@@ -128,7 +133,7 @@ bool ChatHistoryStorage::saveMessage(const ChatMessage &message, QString *errorM
     query.bindValue(QStringLiteral(":id"), message.id);
     query.bindValue(QStringLiteral(":session_id"), message.sessionId);
     query.bindValue(QStringLiteral(":role"), messageRoleToString(message.role));
-    query.bindValue(QStringLiteral(":content"), message.content);
+    query.bindValue(QStringLiteral(":content"), nonNullString(message.content));
     query.bindValue(QStringLiteral(":created_at"), toIsoUtc(message.createdAt));
 
     if (!query.exec()) {
@@ -139,53 +144,77 @@ bool ChatHistoryStorage::saveMessage(const ChatMessage &message, QString *errorM
     return true;
 }
 
-std::optional<ChatSession> ChatHistoryStorage::loadLatestSession(QString *errorMessage) const
+QVector<ChatSession> ChatHistoryStorage::loadSessionSummaries(QString *errorMessage) const
+{
+    QVector<ChatSession> sessions;
+    if (!ensureOpen(errorMessage)) {
+        return sessions;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    if (!query.exec(QStringLiteral(
+            "SELECT id, title, system_prompt, created_at, updated_at "
+            "FROM sessions ORDER BY updated_at DESC"))) {
+        setError(errorMessage, query.lastError().text());
+        return sessions;
+    }
+
+    while (query.next()) {
+        ChatSession session;
+        session.id = query.value(0).toString();
+        session.title = query.value(1).toString();
+        session.systemPrompt = query.value(2).toString();
+        session.createdAt = fromIsoUtc(query.value(3).toString());
+        session.updatedAt = fromIsoUtc(query.value(4).toString());
+        sessions.append(session);
+    }
+
+    return sessions;
+}
+
+std::optional<ChatSession> ChatHistoryStorage::loadSession(const QString &sessionId, QString *errorMessage) const
 {
     if (!ensureOpen(errorMessage)) {
         return std::nullopt;
     }
 
-    QSqlQuery sessionQuery(QSqlDatabase::database(m_connectionName));
-    if (!sessionQuery.exec(QStringLiteral(
-            "SELECT id, title, system_prompt, created_at, updated_at "
-            "FROM sessions ORDER BY updated_at DESC LIMIT 1"))) {
-        setError(errorMessage, sessionQuery.lastError().text());
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral(
+        "SELECT id, title, system_prompt, created_at, updated_at "
+        "FROM sessions WHERE id = :id"));
+    query.bindValue(QStringLiteral(":id"), sessionId);
+
+    if (!query.exec()) {
+        setError(errorMessage, query.lastError().text());
         return std::nullopt;
     }
 
-    if (!sessionQuery.next()) {
+    if (!query.next()) {
         return std::nullopt;
     }
 
     ChatSession session;
-    session.id = sessionQuery.value(0).toString();
-    session.title = sessionQuery.value(1).toString();
-    session.systemPrompt = sessionQuery.value(2).toString();
-    session.createdAt = fromIsoUtc(sessionQuery.value(3).toString());
-    session.updatedAt = fromIsoUtc(sessionQuery.value(4).toString());
+    session.id = query.value(0).toString();
+    session.title = query.value(1).toString();
+    session.systemPrompt = query.value(2).toString();
+    session.createdAt = fromIsoUtc(query.value(3).toString());
+    session.updatedAt = fromIsoUtc(query.value(4).toString());
 
-    QSqlQuery messageQuery(QSqlDatabase::database(m_connectionName));
-    messageQuery.prepare(QStringLiteral(
-        "SELECT id, session_id, role, content, created_at "
-        "FROM messages WHERE session_id = :session_id ORDER BY created_at ASC"));
-    messageQuery.bindValue(QStringLiteral(":session_id"), session.id);
-
-    if (!messageQuery.exec()) {
-        setError(errorMessage, messageQuery.lastError().text());
+    if (!loadMessages(&session, errorMessage)) {
         return std::nullopt;
     }
 
-    while (messageQuery.next()) {
-        ChatMessage message;
-        message.id = messageQuery.value(0).toString();
-        message.sessionId = messageQuery.value(1).toString();
-        message.role = messageRoleFromString(messageQuery.value(2).toString());
-        message.content = messageQuery.value(3).toString();
-        message.createdAt = fromIsoUtc(messageQuery.value(4).toString());
-        session.messages.append(message);
+    return session;
+}
+
+std::optional<ChatSession> ChatHistoryStorage::loadLatestSession(QString *errorMessage) const
+{
+    const QVector<ChatSession> sessions = loadSessionSummaries(errorMessage);
+    if (sessions.isEmpty()) {
+        return std::nullopt;
     }
 
-    return session;
+    return loadSession(sessions.first().id, errorMessage);
 }
 
 bool ChatHistoryStorage::clearSession(const QString &sessionId, QString *errorMessage)
@@ -248,6 +277,38 @@ bool ChatHistoryStorage::ensureOpen(QString *errorMessage) const
     if (!database.isOpen() && !database.open()) {
         setError(errorMessage, database.lastError().text());
         return false;
+    }
+
+    return true;
+}
+
+bool ChatHistoryStorage::loadMessages(ChatSession *session, QString *errorMessage) const
+{
+    if (session == nullptr) {
+        setError(errorMessage, QStringLiteral("Session is null."));
+        return false;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral(
+        "SELECT id, session_id, role, content, created_at "
+        "FROM messages WHERE session_id = :session_id ORDER BY created_at ASC"));
+    query.bindValue(QStringLiteral(":session_id"), session->id);
+
+    if (!query.exec()) {
+        setError(errorMessage, query.lastError().text());
+        return false;
+    }
+
+    session->messages.clear();
+    while (query.next()) {
+        ChatMessage message;
+        message.id = query.value(0).toString();
+        message.sessionId = query.value(1).toString();
+        message.role = messageRoleFromString(query.value(2).toString());
+        message.content = query.value(3).toString();
+        message.createdAt = fromIsoUtc(query.value(4).toString());
+        session->messages.append(message);
     }
 
     return true;
