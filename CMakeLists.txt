@@ -25,12 +25,23 @@ qt_add_executable(AIChatDesktop
     src/core/ChatMessage.h
     src/core/ChatSession.h
     src/core/MessageRole.h
+    src/services/AIClient.h
+    src/services/OpenAICompatibleClient.h
+    src/services/OpenAICompatibleClient.cpp
+    src/services/StreamParser.h
+    src/services/StreamParser.cpp
+    src/storage/ConfigStorage.h
+    src/storage/ConfigStorage.cpp
+    src/storage/ChatHistoryStorage.h
+    src/storage/ChatHistoryStorage.cpp
     src/ui/ChatView.h
     src/ui/ChatView.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
     src/ui/MessageWidget.h
     src/ui/MessageWidget.cpp
+    src/ui/SettingsDialog.h
+    src/ui/SettingsDialog.cpp
     resources/resources.qrc
 )
 

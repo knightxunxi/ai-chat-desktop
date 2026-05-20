@@ -143,6 +143,32 @@ QFrame#composer {
     border-top: 1px solid #dfe5ec;
 }
 
+QDialog {
+    background: #f7f8fa;
+}
+
+QLabel#settingsTitle {
+    color: #111827;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLineEdit,
+QComboBox {
+    min-height: 34px;
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 14px;
+}
+
+QLineEdit:focus,
+QComboBox:focus {
+    border-color: #2563eb;
+}
+
 QTextEdit#messageInput {
     padding: 10px 12px;
     border: 1px solid #cbd5e1;

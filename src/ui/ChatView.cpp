@@ -66,6 +66,11 @@ void ChatView::clearMessages()
     m_lastAssistantMessage = nullptr;
 }
 
+int ChatView::messageCount() const
+{
+    return qMax(0, m_contentLayout->count() - 1);
+}
+
 void ChatView::scrollToBottom()
 {
     QTimer::singleShot(0, this, [this]() {

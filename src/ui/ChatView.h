@@ -18,6 +18,7 @@ public:
     MessageWidget *addMessage(MessageRole role, const QString &content);
     void updateLastAssistantMessage(const QString &content);
     void clearMessages();
+    int messageCount() const;
 
 private:
     void scrollToBottom();
