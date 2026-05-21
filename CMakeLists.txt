@@ -20,6 +20,8 @@ qt_standard_project_setup()
 
 qt_add_executable(AIChatDesktop
     src/main.cpp
+    src/app/ApplicationController.h
+    src/app/ApplicationController.cpp
     src/core/AppConfig.h
     src/core/AppLanguage.h
     src/core/ChatMessage.h
