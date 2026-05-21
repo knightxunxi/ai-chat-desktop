@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include "support/AppLogger.h"
+
 #include <QApplication>
 #include <QColor>
 #include <QFile>
@@ -52,6 +54,10 @@ int main(int argc, char *argv[])
     QApplication::setOrganizationName(QStringLiteral("AIChatDesktop"));
 
     configureLightTheme(app);
+    QString loggerError;
+    if (AppLogger::initialize(&loggerError)) {
+        AppLogger::info(QStringLiteral("Application"), QStringLiteral("Application started. logFile=%1").arg(AppLogger::logFilePath()));
+    }
     loadApplicationStyle(app);
 
     MainWindow window;

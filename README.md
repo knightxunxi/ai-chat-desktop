@@ -15,8 +15,12 @@
 - AI 回复流式展示。
 - 本地保存配置。
 - SQLite 保存聊天记录。
-- 基础多会话列表和新建会话。
+- 多会话列表、新建、切换和删除。
+- 停止生成。
+- 消息复制。
+- AI 消息基础 Markdown 渲染。
 - 基础错误提示。
+- 基础日志记录。
 - Windows Release 打包说明。
 
 ## 技术栈
@@ -46,8 +50,10 @@ Platform: Windows
 ├─ docs/                 项目文档
 ├─ resources/            Qt 资源和样式
 ├─ src/
+│  ├─ app/               应用控制层
 │  ├─ core/              核心数据模型
 │  ├─ services/          AI API 客户端和流式解析
+│  ├─ support/           日志等通用支持模块
 │  ├─ storage/           配置和聊天记录存储
 │  └─ ui/                Qt Widgets 界面
 ├─ tests/                自动化测试
@@ -99,6 +105,16 @@ API Key: 你的 API Key
 
 API Key 只保存在本机配置中，不应写入源码或提交到 Git。
 
+## 日志
+
+应用会在本机应用数据目录写入基础日志，用于定位 API 请求开始、完成、取消和失败原因。日志不记录 API Key、请求体或聊天内容。
+
+Windows 上通常位于：
+
+```text
+%APPDATA%\AIChatDesktop\AI Chat Desktop\ai-chat-desktop.log
+```
+
 ## 测试
 
 ```powershell
@@ -112,6 +128,9 @@ ctest --test-dir build-qt --output-on-failure
 - OpenAI 兼容请求体构建。
 - SQLite 聊天记录存储。
 - 设置窗口基础行为。
+- 消息复制和 Markdown 展示行为。
+- 样式资源加载。
+- 基础日志写入和敏感字段脱敏。
 
 ## Windows 打包
 
@@ -133,15 +152,14 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 
 ## 当前版本状态
 
-V1 已完成基础聊天闭环和 Windows 打包说明。
+V2 正在迭代中，已完成基础聊天闭环、多会话、停止生成、消息复制、基础 Markdown 展示和基础日志。
 
 已知限制：
 
 - API Key 使用普通本地配置保存，尚未加密。
-- 暂不支持停止生成。
-- 暂不支持 Markdown 渲染。
-- 多会话管理仍是基础版本，缺少重命名、删除、搜索等能力。
-- UI 流程控制仍主要在 `MainWindow` 中，V2 建议抽出 `ApplicationController`。
+- 多会话管理缺少重命名和搜索。
+- Markdown 展示仍是基础版本，复杂代码高亮暂未支持。
+- 日志只覆盖基础请求生命周期，尚未提供界面内日志查看。
 
 ## V2 方向
 

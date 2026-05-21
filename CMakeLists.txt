@@ -32,6 +32,8 @@ qt_add_executable(AIChatDesktop
     src/services/OpenAICompatibleClient.cpp
     src/services/StreamParser.h
     src/services/StreamParser.cpp
+    src/support/AppLogger.h
+    src/support/AppLogger.cpp
     src/storage/ConfigStorage.h
     src/storage/ConfigStorage.cpp
     src/storage/ChatHistoryStorage.h

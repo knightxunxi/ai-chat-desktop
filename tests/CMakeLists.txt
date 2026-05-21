@@ -34,6 +34,8 @@ add_executable(OpenAICompatibleClientTest
     ${PROJECT_SOURCE_DIR}/src/services/OpenAICompatibleClient.cpp
     ${PROJECT_SOURCE_DIR}/src/services/StreamParser.h
     ${PROJECT_SOURCE_DIR}/src/services/StreamParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.h
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
 )
 
 target_link_libraries(OpenAICompatibleClientTest PRIVATE
@@ -46,6 +48,21 @@ target_include_directories(OpenAICompatibleClientTest PRIVATE
 )
 
 add_test(NAME OpenAICompatibleClientTest COMMAND OpenAICompatibleClientTest)
+
+add_executable(AppLoggerTest
+    support/AppLoggerTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+)
+
+target_link_libraries(AppLoggerTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AppLoggerTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AppLoggerTest COMMAND AppLoggerTest)
 
 add_executable(ChatHistoryStorageTest
     storage/ChatHistoryStorageTest.cpp
