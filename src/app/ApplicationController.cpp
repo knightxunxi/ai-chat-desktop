@@ -196,6 +196,10 @@ void ApplicationController::deleteCurrentSession()
 
 void ApplicationController::sendMessage(const QString &content)
 {
+    if (m_isGenerating) {
+        return;
+    }
+
     const QString trimmedContent = content.trimmed();
     if (trimmedContent.isEmpty()) {
         return;
@@ -237,6 +241,9 @@ void ApplicationController::cancelCurrentRequest()
         emit assistantMessageUpdated(m_session.messages.last().content);
     }
     saveCurrentSession();
+    emit statusMessage(QStringLiteral("Generation stopped."),
+                       QStringLiteral("已停止生成。"),
+                       2500);
 }
 
 void ApplicationController::handleTextDelta(const QString &delta)

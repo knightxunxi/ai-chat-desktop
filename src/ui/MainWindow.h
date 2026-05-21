@@ -30,6 +30,7 @@ private:
     void applyConfig();
     void applyLanguage();
     QString text(const QString &english, const QString &chinese) const;
+    void updateSendButtonAppearance();
     void updateSendButtonState();
     void openSettingsDialog();
     void editSystemPrompt();

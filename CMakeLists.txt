@@ -44,7 +44,13 @@ qt_add_executable(AIChatDesktop
     src/ui/MessageWidget.cpp
     src/ui/SettingsDialog.h
     src/ui/SettingsDialog.cpp
-    resources/resources.qrc
+)
+
+qt_add_resources(AIChatDesktop "app_resources"
+    PREFIX "/"
+    BASE "${PROJECT_SOURCE_DIR}/resources"
+    FILES
+        "${PROJECT_SOURCE_DIR}/resources/styles/app.qss"
 )
 
 target_link_libraries(AIChatDesktop PRIVATE

@@ -42,8 +42,8 @@ MessageWidget::MessageWidget(MessageRole role, const QString &content, QWidget *
     setObjectName(roleObjectName(role));
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(14, 12, 14, 12);
-    layout->setSpacing(6);
+    layout->setContentsMargins(14, 9, 14, 9);
+    layout->setSpacing(4);
 
     m_roleLabel = new QLabel(roleLabel(role), this);
     m_roleLabel->setObjectName(QStringLiteral("messageRole"));
