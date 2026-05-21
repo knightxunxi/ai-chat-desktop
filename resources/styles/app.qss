@@ -46,6 +46,15 @@ QPushButton#newChatButton:hover {
     background: #176b5b;
 }
 
+QPushButton#deleteChatButton {
+    color: #9f1239;
+}
+
+QPushButton#deleteChatButton:hover {
+    background: #fff1f2;
+    border-color: #fda4af;
+}
+
 QPushButton#sendButton {
     background: #2563eb;
     border-color: #2563eb;

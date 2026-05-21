@@ -148,6 +148,52 @@ void ApplicationController::switchToSession(const QString &sessionId)
     emit currentSessionChanged();
 }
 
+void ApplicationController::deleteCurrentSession()
+{
+    if (m_isGenerating) {
+        return;
+    }
+
+    const QString deletedSessionId = m_session.id;
+    if (m_historyAvailable) {
+        QString error;
+        if (!m_chatHistoryStorage.clearSession(deletedSessionId, &error)) {
+            emit statusMessage(QStringLiteral("Failed to delete chat session: %1").arg(error),
+                               QStringLiteral("删除会话失败：%1").arg(error),
+                               6000);
+            return;
+        }
+    }
+
+    for (int index = 0; index < m_sessionSummaries.size(); ++index) {
+        if (m_sessionSummaries[index].id == deletedSessionId) {
+            m_sessionSummaries.removeAt(index);
+            break;
+        }
+    }
+
+    m_currentAssistantContent.clear();
+
+    if (m_sessionSummaries.isEmpty()) {
+        m_session = ChatSession::createDefault();
+        saveCurrentSession();
+    } else {
+        QString error;
+        const std::optional<ChatSession> nextSession = m_chatHistoryStorage.loadSession(m_sessionSummaries.first().id, &error);
+        if (nextSession.has_value()) {
+            m_session = nextSession.value();
+        } else {
+            m_session = ChatSession::createDefault();
+            emit statusMessage(QStringLiteral("Failed to load the next chat session: %1").arg(error),
+                               QStringLiteral("加载下一个会话失败：%1").arg(error),
+                               6000);
+        }
+    }
+
+    emit sessionListChanged();
+    emit currentSessionChanged();
+}
+
 void ApplicationController::sendMessage(const QString &content)
 {
     const QString trimmedContent = content.trimmed();
