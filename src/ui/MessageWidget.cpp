@@ -37,6 +37,11 @@ QString roleObjectName(MessageRole role)
     return QStringLiteral("message");
 }
 
+Qt::TextFormat contentTextFormat(MessageRole role)
+{
+    return role == MessageRole::Assistant ? Qt::MarkdownText : Qt::PlainText;
+}
+
 } // namespace
 
 MessageWidget::MessageWidget(MessageRole role, const QString &content, QWidget *parent)
@@ -65,7 +70,9 @@ MessageWidget::MessageWidget(MessageRole role, const QString &content, QWidget *
     m_contentLabel = new QLabel(this);
     m_contentLabel->setObjectName(QStringLiteral("messageContent"));
     m_contentLabel->setWordWrap(true);
-    m_contentLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_contentLabel->setTextFormat(contentTextFormat(m_role));
+    m_contentLabel->setOpenExternalLinks(true);
+    m_contentLabel->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
 
     headerLayout->addWidget(m_roleLabel);
     headerLayout->addStretch(1);
