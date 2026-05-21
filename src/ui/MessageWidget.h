@@ -5,6 +5,7 @@
 #include <QFrame>
 
 class QLabel;
+class QPushButton;
 
 class MessageWidget : public QFrame
 {
@@ -18,7 +19,11 @@ public:
     void setContent(const QString &content);
 
 private:
+    void copyContentToClipboard() const;
+
     MessageRole m_role = MessageRole::User;
+    QString m_content;
     QLabel *m_roleLabel = nullptr;
     QLabel *m_contentLabel = nullptr;
+    QPushButton *m_copyButton = nullptr;
 };
