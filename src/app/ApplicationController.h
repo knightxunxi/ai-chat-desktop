@@ -28,6 +28,7 @@ public slots:
     void setSystemPrompt(const QString &prompt);
     void startNewChat();
     void switchToSession(const QString &sessionId);
+    void deleteCurrentSession();
     void sendMessage(const QString &content);
     void cancelCurrentRequest();
 

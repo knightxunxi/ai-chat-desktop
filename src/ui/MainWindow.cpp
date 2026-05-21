@@ -50,10 +50,14 @@ void MainWindow::setupUi()
     m_newChatButton = new QPushButton(sidebar);
     m_newChatButton->setObjectName(QStringLiteral("newChatButton"));
 
+    m_deleteChatButton = new QPushButton(sidebar);
+    m_deleteChatButton->setObjectName(QStringLiteral("deleteChatButton"));
+
     m_sessionList = new QListWidget(sidebar);
     m_sessionList->setObjectName(QStringLiteral("sessionList"));
 
     sidebarLayout->addWidget(m_newChatButton);
+    sidebarLayout->addWidget(m_deleteChatButton);
     sidebarLayout->addWidget(m_sessionList, 1);
 
     auto *mainPanel = new QWidget(central);
@@ -125,6 +129,7 @@ void MainWindow::setupUi()
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
     connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
     connect(m_newChatButton, &QPushButton::clicked, this, &MainWindow::startNewChat);
+    connect(m_deleteChatButton, &QPushButton::clicked, this, &MainWindow::deleteCurrentChat);
     connect(m_sessionList, &QListWidget::itemClicked, this, &MainWindow::switchToSession);
 
     auto *returnShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), m_messageInput);
@@ -253,6 +258,7 @@ void MainWindow::applyLanguage()
 {
     setWindowTitle(text(QStringLiteral("AI Chat Desktop"), QStringLiteral("AI 聊天桌面应用")));
     m_newChatButton->setText(text(QStringLiteral("New Chat"), QStringLiteral("新建会话")));
+    m_deleteChatButton->setText(text(QStringLiteral("Delete Chat"), QStringLiteral("删除会话")));
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
     m_personaLabel->setText(m_controller.currentSession().hasSystemPrompt()
@@ -315,6 +321,28 @@ void MainWindow::startNewChat()
     m_controller.startNewChat();
 }
 
+void MainWindow::deleteCurrentChat()
+{
+    if (m_controller.isGenerating()) {
+        return;
+    }
+
+    const QMessageBox::StandardButton result = QMessageBox::question(
+        this,
+        text(QStringLiteral("Delete chat"), QStringLiteral("删除会话")),
+        text(QStringLiteral("Delete the current chat session? This cannot be undone."),
+             QStringLiteral("确定删除当前会话吗？此操作无法撤销。")),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+
+    if (result != QMessageBox::Yes) {
+        return;
+    }
+
+    m_messageInput->clear();
+    m_controller.deleteCurrentSession();
+}
+
 void MainWindow::switchToSession(QListWidgetItem *item)
 {
     if (item == nullptr) {
@@ -350,6 +378,7 @@ void MainWindow::setGenerating(bool generating)
 {
     m_messageInput->setEnabled(!generating);
     m_newChatButton->setEnabled(!generating);
+    m_deleteChatButton->setEnabled(!generating);
     m_systemPromptButton->setEnabled(!generating);
     m_settingsButton->setEnabled(!generating);
     m_sendButton->setText(generating ? text(QStringLiteral("Sending"), QStringLiteral("发送中")) : text(QStringLiteral("Send"), QStringLiteral("发送")));

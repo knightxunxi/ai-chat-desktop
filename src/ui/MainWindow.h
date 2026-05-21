@@ -34,6 +34,7 @@ private:
     void openSettingsDialog();
     void editSystemPrompt();
     void startNewChat();
+    void deleteCurrentChat();
     void switchToSession(QListWidgetItem *item);
     void sendCurrentMessage();
     void addUserMessage(const QString &content);
@@ -46,6 +47,7 @@ private:
     ApplicationController m_controller;
     QListWidget *m_sessionList = nullptr;
     QPushButton *m_newChatButton = nullptr;
+    QPushButton *m_deleteChatButton = nullptr;
     QPushButton *m_systemPromptButton = nullptr;
     ChatView *m_chatView = nullptr;
     QTextEdit *m_messageInput = nullptr;
