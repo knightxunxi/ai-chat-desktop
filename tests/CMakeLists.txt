@@ -79,6 +79,22 @@ target_include_directories(SettingsDialogSmokeTest PRIVATE
 
 add_test(NAME SettingsDialogSmokeTest COMMAND SettingsDialogSmokeTest)
 
+add_executable(MessageWidgetTest
+    ui/MessageWidgetTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/MessageWidget.cpp
+)
+
+target_link_libraries(MessageWidgetTest PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+)
+
+target_include_directories(MessageWidgetTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME MessageWidgetTest COMMAND MessageWidgetTest)
+
 qt_add_executable(StyleResourceTest
     ui/StyleResourceTest.cpp
 )

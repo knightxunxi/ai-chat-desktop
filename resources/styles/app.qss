@@ -199,6 +199,32 @@ QLabel#messageContent {
     font-size: 14px;
 }
 
+QPushButton#copyMessageButton {
+    min-height: 0;
+    padding: 2px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 5px;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+QPushButton#copyMessageButton:hover {
+    background: #e2e8f0;
+    border-color: #94a3b8;
+}
+
+QPushButton#copyMessageButton:pressed {
+    background: #cbd5e1;
+}
+
+QPushButton#copyMessageButton:disabled {
+    background: #f1f5f9;
+    border-color: #e2e8f0;
+    color: #94a3b8;
+}
+
 QFrame#composer {
     background: #ffffff;
     border-top: 1px solid #dfe5ec;
