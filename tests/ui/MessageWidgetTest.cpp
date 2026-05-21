@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
     auto *copyButton = message.findChild<QPushButton *>(QStringLiteral("copyMessageButton"));
     assert(contentLabel != nullptr);
     assert(copyButton != nullptr);
-    assert(contentLabel->textFormat() == Qt::MarkdownText);
+    assert(contentLabel->textFormat() == Qt::RichText);
     assert(copyButton->isEnabled());
 
     QApplication::clipboard()->clear();
@@ -33,6 +33,13 @@ int main(int argc, char *argv[])
     assert(userContentLabel != nullptr);
     assert(userContentLabel->textFormat() == Qt::PlainText);
     assert(userMessage.content() == QStringLiteral("**not markdown**"));
+
+    MessageWidget codeMessage(MessageRole::Assistant, QStringLiteral("```cpp\nint main() { return 0; }\n```"));
+    auto *codeContentLabel = codeMessage.findChild<QLabel *>(QStringLiteral("messageContent"));
+    assert(codeContentLabel != nullptr);
+    assert(codeContentLabel->text().contains(QStringLiteral("<pre")));
+    assert(codeContentLabel->text().contains(QStringLiteral("#f1f5f9")));
+    assert(codeMessage.content() == QStringLiteral("```cpp\nint main() { return 0; }\n```"));
 
     message.setContent(QString());
     assert(!copyButton->isEnabled());
