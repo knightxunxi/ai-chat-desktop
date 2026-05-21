@@ -1,10 +1,33 @@
 #include "services/OpenAICompatibleClient.h"
 
+#include "support/AppLogger.h"
+
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+
+namespace {
+
+int requestMessageCount(const ChatSession &session)
+{
+    int count = session.hasSystemPrompt() ? 1 : 0;
+    for (const ChatMessage &message : session.messages) {
+        if (message.role != MessageRole::System && !message.content.trimmed().isEmpty()) {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+QString yesNo(bool value)
+{
+    return value ? QStringLiteral("yes") : QStringLiteral("no");
+}
+
+} // namespace
 
 OpenAICompatibleClient::OpenAICompatibleClient(QObject *parent)
     : AIClient(parent)
@@ -19,7 +42,12 @@ void OpenAICompatibleClient::sendChat(const AppConfig &config, const ChatSession
     m_errorBody.clear();
     m_doneReceived = false;
 
-    QNetworkRequest request(chatCompletionsUrl(config.baseUrl));
+    const QUrl requestUrl = chatCompletionsUrl(config.baseUrl);
+    AppLogger::info(QStringLiteral("AIClient"),
+                    QStringLiteral("Chat request started. url=%1 model=%2 messages=%3 systemPrompt=%4")
+                        .arg(requestUrl.toString(), config.modelName, QString::number(requestMessageCount(session)), yesNo(session.hasSystemPrompt())));
+
+    QNetworkRequest request(requestUrl);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(config.apiKey).toUtf8());
 
@@ -34,6 +62,9 @@ void OpenAICompatibleClient::cancel()
     if (m_currentReply == nullptr) {
         return;
     }
+
+    AppLogger::info(QStringLiteral("AIClient"),
+                    QStringLiteral("Chat request canceled. url=%1").arg(m_currentReply->url().toString()));
 
     disconnect(m_currentReply, nullptr, this, nullptr);
     m_currentReply->abort();
@@ -149,10 +180,18 @@ void OpenAICompatibleClient::handleFinished()
     if (statusCode >= 400) {
         m_errorBody.append(remainingBody);
         const QString fallback = QStringLiteral("HTTP request failed with status %1.").arg(statusCode);
-        emit requestFailed(extractErrorMessage(m_errorBody, fallback));
+        const QString errorMessage = extractErrorMessage(m_errorBody, fallback);
+        AppLogger::error(QStringLiteral("AIClient"),
+                         QStringLiteral("Chat request failed. url=%1 status=%2 error=%3")
+                             .arg(reply->url().toString(), QString::number(statusCode), errorMessage));
+        emit requestFailed(errorMessage);
     } else if (reply->error() != QNetworkReply::NoError) {
         m_errorBody.append(remainingBody);
-        emit requestFailed(extractErrorMessage(m_errorBody, reply->errorString()));
+        const QString errorMessage = extractErrorMessage(m_errorBody, reply->errorString());
+        AppLogger::error(QStringLiteral("AIClient"),
+                         QStringLiteral("Chat request network error. url=%1 status=%2 networkError=%3 error=%4")
+                             .arg(reply->url().toString(), QString::number(statusCode), QString::number(reply->error()), errorMessage));
+        emit requestFailed(errorMessage);
     } else {
         if (!remainingBody.isEmpty()) {
             const StreamParseResult result = m_streamParser.consume(remainingBody);
@@ -173,8 +212,15 @@ void OpenAICompatibleClient::handleFinished()
         }
 
         if (!m_doneReceived) {
-            emit requestFailed(QStringLiteral("Streaming response ended before the completion marker."));
+            const QString errorMessage = QStringLiteral("Streaming response ended before the completion marker.");
+            AppLogger::warning(QStringLiteral("AIClient"),
+                               QStringLiteral("Chat request stream ended unexpectedly. url=%1 status=%2")
+                                   .arg(reply->url().toString(), QString::number(statusCode)));
+            emit requestFailed(errorMessage);
         } else {
+            AppLogger::info(QStringLiteral("AIClient"),
+                            QStringLiteral("Chat request finished. url=%1 status=%2")
+                                .arg(reply->url().toString(), QString::number(statusCode)));
             emit requestFinished();
         }
     }

@@ -5,6 +5,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPushButton>
+#include <QTextDocument>
 #include <QVBoxLayout>
 
 namespace {
@@ -37,9 +38,27 @@ QString roleObjectName(MessageRole role)
     return QStringLiteral("message");
 }
 
-Qt::TextFormat contentTextFormat(MessageRole role)
+QString markdownStyleSheet()
 {
-    return role == MessageRole::Assistant ? Qt::MarkdownText : Qt::PlainText;
+    return QStringLiteral(
+        "<style>"
+        "body { color: #1f2937; font-family: 'Segoe UI', 'Microsoft YaHei UI', sans-serif; font-size: 14px; }"
+        "p { margin-top: 0; margin-bottom: 8px; }"
+        "ul, ol { margin-top: 4px; margin-bottom: 8px; }"
+        "pre { background-color: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 6px; color: #0f172a; font-family: Consolas, 'Cascadia Mono', monospace; margin-top: 8px; margin-bottom: 8px; padding: 8px 10px; white-space: pre-wrap; }"
+        "code { background-color: #eef2f7; color: #0f172a; font-family: Consolas, 'Cascadia Mono', monospace; }"
+        "pre code { background-color: transparent; }"
+        "</style>");
+}
+
+QString renderAssistantMarkdown(const QString &content)
+{
+    QTextDocument document;
+    document.setMarkdown(content, QTextDocument::MarkdownDialectGitHub);
+
+    QString html = document.toHtml();
+    html.replace(QStringLiteral("</head>"), markdownStyleSheet() + QStringLiteral("</head>"));
+    return html;
 }
 
 } // namespace
@@ -70,7 +89,7 @@ MessageWidget::MessageWidget(MessageRole role, const QString &content, QWidget *
     m_contentLabel = new QLabel(this);
     m_contentLabel->setObjectName(QStringLiteral("messageContent"));
     m_contentLabel->setWordWrap(true);
-    m_contentLabel->setTextFormat(contentTextFormat(m_role));
+    m_contentLabel->setTextFormat(m_role == MessageRole::Assistant ? Qt::RichText : Qt::PlainText);
     m_contentLabel->setOpenExternalLinks(true);
     m_contentLabel->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
 
@@ -99,7 +118,7 @@ QString MessageWidget::content() const
 void MessageWidget::setContent(const QString &content)
 {
     m_content = content;
-    m_contentLabel->setText(m_content);
+    m_contentLabel->setText(m_role == MessageRole::Assistant ? renderAssistantMarkdown(m_content) : m_content);
     m_copyButton->setEnabled(!m_content.isEmpty());
 }
 
