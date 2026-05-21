@@ -15,6 +15,7 @@
 #include <QShortcut>
 #include <QSignalBlocker>
 #include <QStatusBar>
+#include <QStyle>
 #include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -35,6 +36,7 @@ void MainWindow::setupUi()
     setMinimumSize(860, 560);
 
     auto *central = new QWidget(this);
+    central->setObjectName(QStringLiteral("centralRoot"));
     auto *rootLayout = new QHBoxLayout(central);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
@@ -265,8 +267,7 @@ void MainWindow::applyLanguage()
                                 ? text(QStringLiteral("Role: Custom prompt"), QStringLiteral("角色：自定义提示词"))
                                 : text(QStringLiteral("Role: Default assistant"), QStringLiteral("角色：默认助手")));
     m_messageInput->setPlaceholderText(text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
-    m_sendButton->setText(m_controller.isGenerating() ? text(QStringLiteral("Sending"), QStringLiteral("发送中"))
-                                                       : text(QStringLiteral("Send"), QStringLiteral("发送")));
+    updateSendButtonAppearance();
 
     if (m_chatView != nullptr && m_controller.currentSession().messages.isEmpty()) {
         populateChatView();
@@ -280,10 +281,28 @@ QString MainWindow::text(const QString &english, const QString &chinese) const
     return m_controller.config().language == AppLanguage::English ? english : chinese;
 }
 
+void MainWindow::updateSendButtonAppearance()
+{
+    const bool generating = m_controller.isGenerating();
+    m_sendButton->setText(generating ? text(QStringLiteral("Stop"), QStringLiteral("停止")) : text(QStringLiteral("Send"), QStringLiteral("发送")));
+    m_sendButton->setProperty("stopMode", generating);
+    m_sendButton->setStyleSheet(generating
+                                    ? QStringLiteral("QPushButton#sendButton { background: #dc2626; border-color: #dc2626; color: #ffffff; font-weight: 600; }"
+                                                     "QPushButton#sendButton:hover { background: #b91c1c; border-color: #b91c1c; }")
+                                    : QString());
+    m_sendButton->style()->unpolish(m_sendButton);
+    m_sendButton->style()->polish(m_sendButton);
+}
+
 void MainWindow::updateSendButtonState()
 {
+    if (m_controller.isGenerating()) {
+        m_sendButton->setEnabled(true);
+        return;
+    }
+
     const bool hasText = !m_messageInput->toPlainText().trimmed().isEmpty();
-    m_sendButton->setEnabled(hasText && !m_controller.isGenerating());
+    m_sendButton->setEnabled(hasText);
 }
 
 void MainWindow::openSettingsDialog()
@@ -355,6 +374,11 @@ void MainWindow::switchToSession(QListWidgetItem *item)
 
 void MainWindow::sendCurrentMessage()
 {
+    if (m_controller.isGenerating()) {
+        m_controller.cancelCurrentRequest();
+        return;
+    }
+
     const QString content = m_messageInput->toPlainText().trimmed();
     if (content.isEmpty()) {
         return;
@@ -381,7 +405,7 @@ void MainWindow::setGenerating(bool generating)
     m_deleteChatButton->setEnabled(!generating);
     m_systemPromptButton->setEnabled(!generating);
     m_settingsButton->setEnabled(!generating);
-    m_sendButton->setText(generating ? text(QStringLiteral("Sending"), QStringLiteral("发送中")) : text(QStringLiteral("Send"), QStringLiteral("发送")));
+    updateSendButtonAppearance();
     updateSendButtonState();
 }
 

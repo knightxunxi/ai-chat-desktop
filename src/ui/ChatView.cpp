@@ -23,8 +23,8 @@ ChatView::ChatView(QWidget *parent)
     m_contentWidget->setObjectName(QStringLiteral("chatContainer"));
 
     m_contentLayout = new QVBoxLayout(m_contentWidget);
-    m_contentLayout->setContentsMargins(28, 28, 28, 28);
-    m_contentLayout->setSpacing(14);
+    m_contentLayout->setContentsMargins(24, 20, 24, 20);
+    m_contentLayout->setSpacing(15);
     m_contentLayout->addStretch(1);
 
     m_scrollArea->setWidget(m_contentWidget);
@@ -73,7 +73,19 @@ int ChatView::messageCount() const
 
 void ChatView::scrollToBottom()
 {
-    QTimer::singleShot(0, this, [this]() {
-        m_scrollArea->verticalScrollBar()->setValue(m_scrollArea->verticalScrollBar()->maximum());
+    const auto scroll = [this]() {
+        m_contentWidget->updateGeometry();
+        m_contentLayout->activate();
+        QScrollBar *scrollBar = m_scrollArea->verticalScrollBar();
+        scrollBar->setValue(scrollBar->maximum());
+    };
+
+    QTimer::singleShot(0, this, scroll);
+    QTimer::singleShot(30, this, [this, scroll]() {
+        if (m_scrollArea == nullptr) {
+            return;
+        }
+
+        scroll();
     });
 }

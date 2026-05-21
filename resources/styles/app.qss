@@ -1,5 +1,15 @@
+QWidget {
+    color: #1f2933;
+    selection-background-color: #bfdbfe;
+    selection-color: #111827;
+}
+
 QMainWindow {
     background: #f4f6f8;
+}
+
+QWidget#centralRoot {
+    background: #f7f8fa;
 }
 
 QWidget#mainPanel {
@@ -66,6 +76,16 @@ QPushButton#sendButton:hover {
     background: #1d4ed8;
 }
 
+QPushButton#sendButton[stopMode="true"] {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+QPushButton#sendButton[stopMode="true"]:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
 QPushButton#sendButton:disabled {
     background: #d6deea;
     border-color: #d6deea;
@@ -110,6 +130,38 @@ QScrollArea#chatScrollArea {
     background: #f7f8fa;
 }
 
+QScrollArea#chatScrollArea > QWidget {
+    background: #f7f8fa;
+}
+
+QScrollBar:vertical {
+    width: 12px;
+    margin: 0;
+    background: #e5e7eb;
+}
+
+QScrollBar::handle:vertical {
+    min-height: 36px;
+    border-radius: 6px;
+    background: #64748b;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #475569;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+    border: none;
+    background: transparent;
+}
+
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: transparent;
+}
+
 QWidget#chatContainer {
     background: #f7f8fa;
 }
@@ -117,8 +169,8 @@ QWidget#chatContainer {
 QFrame#assistantMessage,
 QFrame#userMessage,
 QFrame#systemMessage {
-    padding: 18px 20px;
-    border: 1px solid #dfe5ec;
+    padding: 0;
+    border: 1px solid #cfd8e3;
     border-radius: 8px;
 }
 
@@ -127,23 +179,23 @@ QFrame#assistantMessage {
 }
 
 QFrame#userMessage {
-    background: #e9f3ff;
-    border-color: #c7ddf8;
+    background: #dbeafe;
+    border-color: #93c5fd;
 }
 
 QFrame#systemMessage {
     background: #fff7e8;
-    border-color: #f3ddb4;
+    border-color: #e7c77f;
 }
 
 QLabel#messageRole {
-    color: #5f6c7b;
+    color: #374151;
     font-size: 12px;
     font-weight: 600;
 }
 
 QLabel#messageContent {
-    color: #4b5563;
+    color: #1f2937;
     font-size: 14px;
 }
 

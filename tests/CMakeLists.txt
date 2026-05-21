@@ -78,3 +78,20 @@ target_include_directories(SettingsDialogSmokeTest PRIVATE
 )
 
 add_test(NAME SettingsDialogSmokeTest COMMAND SettingsDialogSmokeTest)
+
+qt_add_executable(StyleResourceTest
+    ui/StyleResourceTest.cpp
+)
+
+qt_add_resources(StyleResourceTest "style_test_resources"
+    PREFIX "/"
+    BASE "${PROJECT_SOURCE_DIR}/resources"
+    FILES
+        "${PROJECT_SOURCE_DIR}/resources/styles/app.qss"
+)
+
+target_link_libraries(StyleResourceTest PRIVATE
+    Qt6::Core
+)
+
+add_test(NAME StyleResourceTest COMMAND StyleResourceTest)
