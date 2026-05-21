@@ -62,6 +62,7 @@ Platform: Windows
 - [V1 验收记录](docs/04-v1-acceptance-notes.md)
 - [Windows 打包说明](docs/05-windows-packaging.md)
 - [V1 复盘与 V2 规划](docs/06-v1-retrospective.md)
+- [V2 Roadmap](docs/07-v2-roadmap.md)
 
 ## 构建方式
 
@@ -144,11 +145,12 @@ V1 已完成基础聊天闭环和 Windows 打包说明。
 
 ## V2 方向
 
+V2 详细计划见 [V2 Roadmap](docs/07-v2-roadmap.md)。
+
+优先方向：
+
 - 抽出 `ApplicationController`。
 - 完善多会话管理。
 - 增加停止生成。
 - 增加 Markdown 渲染和复制消息。
-- 增加角色提示词模板。
 - 增加日志和更清晰的错误诊断。
-- 评估更安全的 API Key 存储方式。
-

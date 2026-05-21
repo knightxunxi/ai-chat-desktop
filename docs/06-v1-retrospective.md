@@ -68,4 +68,4 @@
 1. 用有效 API Key 做 `docs/04-v1-acceptance-notes.md` 中的最终手工验收。
 2. 按 `docs/05-windows-packaging.md` 生成 Release 发布目录。
 3. 提交 V1 收尾改动。
-4. 开始 V2 前先抽出控制层，避免后续功能继续压到 `MainWindow`。
+4. 按 `docs/07-v2-roadmap.md` 开始 V2，优先抽出控制层，避免后续功能继续压到 `MainWindow`。
