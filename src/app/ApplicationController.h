@@ -25,6 +25,7 @@ public:
     const QVector<ChatSession> &sessionSummaries() const;
     const QVector<PromptTemplate> &promptTemplates() const;
     bool isGenerating() const;
+    bool exportCurrentSessionMarkdown(const QString &filePath, QString *error = nullptr) const;
 
 public slots:
     void saveConfig(const AppConfig &config);

@@ -38,6 +38,7 @@ private:
     void editSystemPrompt();
     void startNewChat();
     void renameCurrentChat();
+    void exportCurrentChat();
     void deleteCurrentChat();
     void switchToSession(QListWidgetItem *item);
     void sendCurrentMessage();
@@ -53,6 +54,7 @@ private:
     QLineEdit *m_sessionSearchEdit = nullptr;
     QPushButton *m_newChatButton = nullptr;
     QPushButton *m_renameChatButton = nullptr;
+    QPushButton *m_exportChatButton = nullptr;
     QPushButton *m_deleteChatButton = nullptr;
     QPushButton *m_systemPromptButton = nullptr;
     ChatView *m_chatView = nullptr;

@@ -4,6 +4,9 @@
 #include "ui/RolePromptDialog.h"
 #include "ui/SettingsDialog.h"
 
+#include <QDir>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -16,6 +19,7 @@
 #include <QPushButton>
 #include <QShortcut>
 #include <QSignalBlocker>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTextEdit>
@@ -57,6 +61,9 @@ void MainWindow::setupUi()
     m_renameChatButton = new QPushButton(sidebar);
     m_renameChatButton->setObjectName(QStringLiteral("renameChatButton"));
 
+    m_exportChatButton = new QPushButton(sidebar);
+    m_exportChatButton->setObjectName(QStringLiteral("exportChatButton"));
+
     m_deleteChatButton = new QPushButton(sidebar);
     m_deleteChatButton->setObjectName(QStringLiteral("deleteChatButton"));
 
@@ -69,6 +76,7 @@ void MainWindow::setupUi()
 
     sidebarLayout->addWidget(m_newChatButton);
     sidebarLayout->addWidget(m_renameChatButton);
+    sidebarLayout->addWidget(m_exportChatButton);
     sidebarLayout->addWidget(m_deleteChatButton);
     sidebarLayout->addWidget(m_sessionSearchEdit);
     sidebarLayout->addWidget(m_sessionList, 1);
@@ -143,6 +151,7 @@ void MainWindow::setupUi()
     connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
     connect(m_newChatButton, &QPushButton::clicked, this, &MainWindow::startNewChat);
     connect(m_renameChatButton, &QPushButton::clicked, this, &MainWindow::renameCurrentChat);
+    connect(m_exportChatButton, &QPushButton::clicked, this, &MainWindow::exportCurrentChat);
     connect(m_deleteChatButton, &QPushButton::clicked, this, &MainWindow::deleteCurrentChat);
     connect(m_sessionList, &QListWidget::itemClicked, this, &MainWindow::switchToSession);
     connect(m_sessionSearchEdit, &QLineEdit::textChanged, &m_controller, &ApplicationController::searchSessions);
@@ -275,6 +284,7 @@ void MainWindow::applyLanguage()
     setWindowTitle(text(QStringLiteral("AI Chat Desktop"), QStringLiteral("AI 聊天桌面应用")));
     m_newChatButton->setText(text(QStringLiteral("New Chat"), QStringLiteral("新建会话")));
     m_renameChatButton->setText(text(QStringLiteral("Rename"), QStringLiteral("重命名")));
+    m_exportChatButton->setText(text(QStringLiteral("Export"), QStringLiteral("导出")));
     m_deleteChatButton->setText(text(QStringLiteral("Delete Chat"), QStringLiteral("删除会话")));
     m_sessionSearchEdit->setPlaceholderText(text(QStringLiteral("Search chats"), QStringLiteral("搜索会话")));
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
@@ -393,6 +403,63 @@ void MainWindow::renameCurrentChat()
     m_controller.renameCurrentSession(dialog.textValue());
 }
 
+void MainWindow::exportCurrentChat()
+{
+    if (m_controller.isGenerating()) {
+        return;
+    }
+
+    if (m_controller.currentSession().messages.isEmpty()) {
+        QMessageBox::information(this,
+                                 text(QStringLiteral("Export chat"), QStringLiteral("导出会话")),
+                                 text(QStringLiteral("There are no messages to export."),
+                                      QStringLiteral("当前会话没有可导出的消息。")));
+        return;
+    }
+
+    QString directoryPath = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    if (directoryPath.trimmed().isEmpty()) {
+        directoryPath = QDir::homePath();
+    }
+
+    QString fileName = m_controller.currentSession().title.trimmed();
+    if (fileName.isEmpty() || fileName == QStringLiteral("New Chat")) {
+        fileName = QStringLiteral("chat-export");
+    }
+
+    const QString invalidCharacters = QStringLiteral("\\/:*?\"<>|");
+    for (const QChar character : invalidCharacters) {
+        fileName.replace(character, QLatin1Char('-'));
+    }
+
+    const QString defaultPath = QDir(directoryPath).filePath(fileName + QStringLiteral(".md"));
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        text(QStringLiteral("Export chat"), QStringLiteral("导出会话")),
+        defaultPath,
+        QStringLiteral("Markdown (*.md)"));
+
+    if (filePath.trimmed().isEmpty()) {
+        return;
+    }
+
+    if (QFileInfo(filePath).suffix().isEmpty()) {
+        filePath += QStringLiteral(".md");
+    }
+
+    QString error;
+    if (!m_controller.exportCurrentSessionMarkdown(filePath, &error)) {
+        QMessageBox::warning(this,
+                             text(QStringLiteral("Export failed"), QStringLiteral("导出失败")),
+                             error);
+        return;
+    }
+
+    showStatusMessage(QStringLiteral("Chat exported to %1").arg(QFileInfo(filePath).fileName()),
+                      QStringLiteral("会话已导出到 %1").arg(QFileInfo(filePath).fileName()),
+                      4000);
+}
+
 void MainWindow::deleteCurrentChat()
 {
     if (m_controller.isGenerating()) {
@@ -456,6 +523,7 @@ void MainWindow::setGenerating(bool generating)
     m_messageInput->setEnabled(!generating);
     m_newChatButton->setEnabled(!generating);
     m_renameChatButton->setEnabled(!generating);
+    m_exportChatButton->setEnabled(!generating);
     m_deleteChatButton->setEnabled(!generating);
     m_systemPromptButton->setEnabled(!generating);
     m_settingsButton->setEnabled(!generating);
