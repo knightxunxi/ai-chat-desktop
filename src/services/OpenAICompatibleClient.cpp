@@ -27,6 +27,31 @@ QString yesNo(bool value)
     return value ? QStringLiteral("yes") : QStringLiteral("no");
 }
 
+RequestErrorCategory classifyNetworkError(QNetworkReply::NetworkError error)
+{
+    return error == QNetworkReply::NoError ? RequestErrorCategory::Unknown : RequestErrorCategory::Network;
+}
+
+QString errorCategoryName(RequestErrorCategory category)
+{
+    switch (category) {
+    case RequestErrorCategory::Network:
+        return QStringLiteral("network");
+    case RequestErrorCategory::Authentication:
+        return QStringLiteral("authentication");
+    case RequestErrorCategory::Quota:
+        return QStringLiteral("quota");
+    case RequestErrorCategory::Model:
+        return QStringLiteral("model");
+    case RequestErrorCategory::Server:
+        return QStringLiteral("server");
+    case RequestErrorCategory::Unknown:
+        return QStringLiteral("unknown");
+    }
+
+    return QStringLiteral("unknown");
+}
+
 } // namespace
 
 OpenAICompatibleClient::OpenAICompatibleClient(QObject *parent)
@@ -73,6 +98,24 @@ void OpenAICompatibleClient::cancel()
     m_streamParser.reset();
     m_errorBody.clear();
     m_doneReceived = false;
+}
+
+RequestErrorCategory OpenAICompatibleClient::classifyHttpStatus(int statusCode)
+{
+    if (statusCode == 401 || statusCode == 403) {
+        return RequestErrorCategory::Authentication;
+    }
+    if (statusCode == 402 || statusCode == 429) {
+        return RequestErrorCategory::Quota;
+    }
+    if (statusCode == 400 || statusCode == 404 || statusCode == 422) {
+        return RequestErrorCategory::Model;
+    }
+    if (statusCode >= 500) {
+        return RequestErrorCategory::Server;
+    }
+
+    return RequestErrorCategory::Unknown;
 }
 
 QUrl OpenAICompatibleClient::chatCompletionsUrl(const QString &baseUrl) const
@@ -187,17 +230,19 @@ void OpenAICompatibleClient::handleFinished()
         m_errorBody.append(remainingBody);
         const QString fallback = QStringLiteral("HTTP request failed with status %1.").arg(statusCode);
         const QString errorMessage = extractErrorMessage(m_errorBody, fallback);
+        const RequestErrorCategory category = classifyHttpStatus(statusCode);
         AppLogger::error(QStringLiteral("AIClient"),
-                         QStringLiteral("Chat request failed. url=%1 status=%2 error=%3")
-                             .arg(reply->url().toString(), QString::number(statusCode), errorMessage));
-        emit requestFailed(errorMessage);
+                         QStringLiteral("Chat request failed. url=%1 status=%2 category=%3 error=%4")
+                             .arg(reply->url().toString(), QString::number(statusCode), errorCategoryName(category), errorMessage));
+        emit requestFailed(errorMessage, category);
     } else if (reply->error() != QNetworkReply::NoError) {
         m_errorBody.append(remainingBody);
         const QString errorMessage = extractErrorMessage(m_errorBody, reply->errorString());
+        const RequestErrorCategory category = classifyNetworkError(reply->error());
         AppLogger::error(QStringLiteral("AIClient"),
-                         QStringLiteral("Chat request network error. url=%1 status=%2 networkError=%3 error=%4")
-                             .arg(reply->url().toString(), QString::number(statusCode), QString::number(reply->error()), errorMessage));
-        emit requestFailed(errorMessage);
+                         QStringLiteral("Chat request network error. url=%1 status=%2 networkError=%3 category=%4 error=%5")
+                             .arg(reply->url().toString(), QString::number(statusCode), QString::number(reply->error()), errorCategoryName(category), errorMessage));
+        emit requestFailed(errorMessage, category);
     } else {
         if (!remainingBody.isEmpty()) {
             const StreamParseResult result = m_streamParser.consume(remainingBody);
@@ -222,7 +267,7 @@ void OpenAICompatibleClient::handleFinished()
             AppLogger::warning(QStringLiteral("AIClient"),
                                QStringLiteral("Chat request stream ended unexpectedly. url=%1 status=%2")
                                    .arg(reply->url().toString(), QString::number(statusCode)));
-            emit requestFailed(errorMessage);
+            emit requestFailed(errorMessage, RequestErrorCategory::Server);
         } else {
             AppLogger::info(QStringLiteral("AIClient"),
                             QStringLiteral("Chat request finished. url=%1 status=%2")

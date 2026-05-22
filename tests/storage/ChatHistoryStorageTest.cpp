@@ -86,6 +86,15 @@ int main(int argc, char *argv[])
     assert(loadedById->messages.size() == 2);
     assert(loadedById->messages[0].content == QStringLiteral("Hello"));
 
+    session.messages.removeLast();
+    assertStorageResult(storage.saveSession(session, &error), error);
+    assertStorageResult(storage.replaceSessionMessages(session, &error), error);
+
+    loadedById = storage.loadSession(session.id, &error);
+    assert(loadedById.has_value());
+    assert(loadedById->messages.size() == 1);
+    assert(loadedById->messages[0].content == QStringLiteral("Hello"));
+
     std::optional<ChatSession> loaded = storage.loadLatestSession(&error);
     assert(loaded.has_value());
     assert(loaded->id == secondSession.id);

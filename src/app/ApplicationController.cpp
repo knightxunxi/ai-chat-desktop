@@ -195,6 +195,7 @@ void ApplicationController::startNewChat()
         return;
     }
 
+    setRetryAvailable(false);
     if (!hasPersistableCurrentSession()) {
         emit currentSessionChanged();
         return;
@@ -216,6 +217,7 @@ void ApplicationController::switchToSession(const QString &sessionId)
         return;
     }
 
+    setRetryAvailable(false);
     if (sessionId == m_session.id) {
         emit currentSessionChanged();
         return;
@@ -246,6 +248,7 @@ void ApplicationController::deleteCurrentSession()
         return;
     }
 
+    setRetryAvailable(false);
     const QString deletedSessionId = m_session.id;
     if (m_historyAvailable) {
         QString error;
@@ -301,6 +304,7 @@ void ApplicationController::sendMessage(const QString &content)
         return;
     }
 
+    setRetryAvailable(false);
     if (!m_config.isComplete()) {
         emit configurationMissing();
         return;
@@ -316,6 +320,12 @@ void ApplicationController::sendMessage(const QString &content)
     m_session.addMessage(MessageRole::User, trimmedContent);
     emit userMessageAdded(trimmedContent);
 
+    startAssistantRequest(trimmedContent);
+}
+
+void ApplicationController::startAssistantRequest(const QString &userContentForRetry)
+{
+    m_lastRequestUserContent = userContentForRetry;
     m_session.addMessage(MessageRole::Assistant, QString());
     m_currentAssistantContent.clear();
     emit assistantMessageStarted();
@@ -336,10 +346,34 @@ void ApplicationController::cancelCurrentRequest()
         m_session.messages.last().content = text(QStringLiteral("(Stopped)"), QStringLiteral("（已停止）"));
         emit assistantMessageUpdated(m_session.messages.last().content);
     }
+    setRetryAvailable(false);
     saveCurrentSession();
     emit statusMessage(QStringLiteral("Generation stopped."),
                        QStringLiteral("已停止生成。"),
                        2500);
+}
+
+void ApplicationController::retryLastRequest()
+{
+    if (m_isGenerating || !m_retryAvailable || m_retryUserContent.trimmed().isEmpty()) {
+        return;
+    }
+
+    if (!m_config.isComplete()) {
+        emit configurationMissing();
+        return;
+    }
+
+    const QString retryContent = m_retryUserContent;
+    setRetryAvailable(false);
+
+    if (!m_session.messages.isEmpty() && m_session.messages.last().role == MessageRole::Assistant) {
+        m_session.messages.removeLast();
+    }
+
+    m_currentAssistantContent.clear();
+    emit currentSessionChanged();
+    startAssistantRequest(retryContent);
 }
 
 void ApplicationController::handleTextDelta(const QString &delta)
@@ -355,6 +389,7 @@ void ApplicationController::handleTextDelta(const QString &delta)
 void ApplicationController::handleRequestFinished()
 {
     setGenerating(false);
+    setRetryAvailable(false);
     if (!m_session.messages.isEmpty() && m_session.messages.last().content.isEmpty()) {
         m_session.messages.last().content = text(QStringLiteral("(Empty response)"), QStringLiteral("（空回复）"));
         emit assistantMessageUpdated(m_session.messages.last().content);
@@ -363,10 +398,10 @@ void ApplicationController::handleRequestFinished()
     saveCurrentSession();
 }
 
-void ApplicationController::handleRequestFailed(const QString &message)
+void ApplicationController::handleRequestFailed(const QString &message, RequestErrorCategory category)
 {
     setGenerating(false);
-    const QString errorMessage = text(QStringLiteral("Request failed: %1"), QStringLiteral("请求失败：%1")).arg(message);
+    const QString errorMessage = requestFailureMessage(category, message);
     const QString displayMessage = m_currentAssistantContent.isEmpty()
                                        ? errorMessage
                                        : QStringLiteral("%1\n\n%2").arg(m_currentAssistantContent, errorMessage);
@@ -376,6 +411,10 @@ void ApplicationController::handleRequestFailed(const QString &message)
     }
 
     emit assistantMessageUpdated(displayMessage);
+    setRetryAvailable(true, m_lastRequestUserContent);
+    emit statusMessage(QStringLiteral("Request failed. You can retry the last message."),
+                       QStringLiteral("请求失败，可以重试上一条消息。"),
+                       5000);
     saveCurrentSession();
 }
 
@@ -387,6 +426,60 @@ void ApplicationController::setGenerating(bool generating)
 
     m_isGenerating = generating;
     emit generatingChanged(m_isGenerating);
+}
+
+void ApplicationController::setRetryAvailable(bool available, const QString &userContent)
+{
+    const bool nextAvailable = available && !userContent.trimmed().isEmpty();
+    const QString nextUserContent = nextAvailable ? userContent : QString();
+    if (m_retryAvailable == nextAvailable && m_retryUserContent == nextUserContent) {
+        return;
+    }
+
+    m_retryAvailable = nextAvailable;
+    m_retryUserContent = nextUserContent;
+    emit retryAvailableChanged(m_retryAvailable);
+}
+
+QString ApplicationController::requestFailureMessage(RequestErrorCategory category, const QString &detail) const
+{
+    QString summaryEnglish;
+    QString summaryChinese;
+
+    switch (category) {
+    case RequestErrorCategory::Network:
+        summaryEnglish = QStringLiteral("Network error. Check your connection or Base URL, then retry.");
+        summaryChinese = QStringLiteral("网络错误。请检查网络连接或 Base URL，然后重试。");
+        break;
+    case RequestErrorCategory::Authentication:
+        summaryEnglish = QStringLiteral("Authentication failed. Check whether the API Key is valid.");
+        summaryChinese = QStringLiteral("认证失败。请检查 API Key 是否有效。");
+        break;
+    case RequestErrorCategory::Quota:
+        summaryEnglish = QStringLiteral("Quota or rate limit reached. Check account quota or try again later.");
+        summaryChinese = QStringLiteral("额度不足或请求过于频繁。请检查账户额度，或稍后再试。");
+        break;
+    case RequestErrorCategory::Model:
+        summaryEnglish = QStringLiteral("Model or request configuration error. Check the model name and optional parameters.");
+        summaryChinese = QStringLiteral("模型或请求配置错误。请检查模型名称和可选参数。");
+        break;
+    case RequestErrorCategory::Server:
+        summaryEnglish = QStringLiteral("Service provider error. The server response was incomplete or unavailable.");
+        summaryChinese = QStringLiteral("服务商错误。服务器响应不完整或暂时不可用。");
+        break;
+    case RequestErrorCategory::Unknown:
+        summaryEnglish = QStringLiteral("Request failed.");
+        summaryChinese = QStringLiteral("请求失败。");
+        break;
+    }
+
+    const QString summary = text(summaryEnglish, summaryChinese);
+    const QString trimmedDetail = detail.trimmed();
+    if (trimmedDetail.isEmpty()) {
+        return summary;
+    }
+
+    return text(QStringLiteral("%1\n\nDetails: %2"), QStringLiteral("%1\n\n详细信息：%2")).arg(summary, trimmedDetail);
 }
 
 bool ApplicationController::saveCurrentSession(bool moveToTop)
@@ -403,13 +496,11 @@ bool ApplicationController::saveCurrentSession(bool moveToTop)
         return false;
     }
 
-    for (const ChatMessage &message : m_session.messages) {
-        if (!m_chatHistoryStorage.saveMessage(message, &error)) {
-            emit statusMessage(QStringLiteral("Failed to save chat history: %1").arg(error),
-                               QStringLiteral("保存聊天记录失败：%1").arg(error),
-                               6000);
-            return false;
-        }
+    if (!m_chatHistoryStorage.replaceSessionMessages(m_session, &error)) {
+        emit statusMessage(QStringLiteral("Failed to save chat history: %1").arg(error),
+                           QStringLiteral("保存聊天记录失败：%1").arg(error),
+                           6000);
+        return false;
     }
 
     if (m_sessionSearchQuery.isEmpty()) {

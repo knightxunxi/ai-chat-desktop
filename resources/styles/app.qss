@@ -92,6 +92,17 @@ QPushButton#sendButton:disabled {
     color: #7b8794;
 }
 
+QPushButton#retryButton {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    color: #334155;
+    font-weight: 600;
+}
+
+QPushButton#retryButton:hover {
+    background: #e2e8f0;
+}
+
 QListWidget#sessionList {
     border: none;
     background: transparent;

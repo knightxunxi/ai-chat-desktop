@@ -152,6 +152,54 @@ bool ChatHistoryStorage::saveMessage(const ChatMessage &message, QString *errorM
     return true;
 }
 
+bool ChatHistoryStorage::replaceSessionMessages(const ChatSession &session, QString *errorMessage)
+{
+    if (!ensureOpen(errorMessage)) {
+        return false;
+    }
+
+    QSqlDatabase database = QSqlDatabase::database(m_connectionName);
+    if (!database.transaction()) {
+        setError(errorMessage, database.lastError().text());
+        return false;
+    }
+
+    QSqlQuery deleteMessages(database);
+    deleteMessages.prepare(QStringLiteral("DELETE FROM messages WHERE session_id = :session_id"));
+    deleteMessages.bindValue(QStringLiteral(":session_id"), session.id);
+    if (!deleteMessages.exec()) {
+        database.rollback();
+        setError(errorMessage, deleteMessages.lastError().text());
+        return false;
+    }
+
+    QSqlQuery insertMessage(database);
+    insertMessage.prepare(QStringLiteral(
+        "INSERT INTO messages (id, session_id, role, content, created_at) "
+        "VALUES (:id, :session_id, :role, :content, :created_at)"));
+
+    for (const ChatMessage &message : session.messages) {
+        insertMessage.bindValue(QStringLiteral(":id"), message.id);
+        insertMessage.bindValue(QStringLiteral(":session_id"), message.sessionId);
+        insertMessage.bindValue(QStringLiteral(":role"), messageRoleToString(message.role));
+        insertMessage.bindValue(QStringLiteral(":content"), nonNullString(message.content));
+        insertMessage.bindValue(QStringLiteral(":created_at"), toIsoUtc(message.createdAt));
+
+        if (!insertMessage.exec()) {
+            database.rollback();
+            setError(errorMessage, insertMessage.lastError().text());
+            return false;
+        }
+    }
+
+    if (!database.commit()) {
+        setError(errorMessage, database.lastError().text());
+        return false;
+    }
+
+    return true;
+}
+
 QVector<ChatSession> ChatHistoryStorage::loadSessionSummaries(QString *errorMessage) const
 {
     if (!ensureOpen(errorMessage)) {

@@ -3,6 +3,7 @@
 #include "core/AppConfig.h"
 #include "core/ChatSession.h"
 #include "core/PromptTemplate.h"
+#include "services/RequestErrorCategory.h"
 #include "services/OpenAICompatibleClient.h"
 #include "storage/ChatHistoryStorage.h"
 #include "storage/ConfigStorage.h"
@@ -38,6 +39,7 @@ public slots:
     void deleteCurrentSession();
     void sendMessage(const QString &content);
     void cancelCurrentRequest();
+    void retryLastRequest();
 
 signals:
     void configChanged();
@@ -49,6 +51,7 @@ signals:
     void assistantMessageStarted();
     void assistantMessageUpdated(const QString &content);
     void generatingChanged(bool generating);
+    void retryAvailableChanged(bool available);
     void configurationMissing();
     void statusMessage(const QString &english, const QString &chinese, int timeoutMs);
     void startupWarning(const QString &english, const QString &chinese);
@@ -56,8 +59,11 @@ signals:
 private:
     void handleTextDelta(const QString &delta);
     void handleRequestFinished();
-    void handleRequestFailed(const QString &message);
+    void handleRequestFailed(const QString &message, RequestErrorCategory category);
+    void startAssistantRequest(const QString &userContentForRetry);
     void setGenerating(bool generating);
+    void setRetryAvailable(bool available, const QString &userContent = QString());
+    QString requestFailureMessage(RequestErrorCategory category, const QString &detail) const;
     bool saveCurrentSession(bool moveToTop = true);
     bool reloadSessionSummaries(QString *error = nullptr);
     void upsertCurrentSessionSummary(bool moveToTop);
@@ -73,7 +79,10 @@ private:
     PromptTemplateStorage m_promptTemplateStorage;
     OpenAICompatibleClient m_aiClient;
     QString m_currentAssistantContent;
+    QString m_lastRequestUserContent;
+    QString m_retryUserContent;
     QString m_sessionSearchQuery;
     bool m_historyAvailable = false;
     bool m_isGenerating = false;
+    bool m_retryAvailable = false;
 };

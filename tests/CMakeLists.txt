@@ -62,6 +62,7 @@ add_executable(OpenAICompatibleClientTest
     ${PROJECT_SOURCE_DIR}/src/services/AIClient.h
     ${PROJECT_SOURCE_DIR}/src/services/OpenAICompatibleClient.h
     ${PROJECT_SOURCE_DIR}/src/services/OpenAICompatibleClient.cpp
+    ${PROJECT_SOURCE_DIR}/src/services/RequestErrorCategory.h
     ${PROJECT_SOURCE_DIR}/src/services/StreamParser.h
     ${PROJECT_SOURCE_DIR}/src/services/StreamParser.cpp
     ${PROJECT_SOURCE_DIR}/src/support/AppLogger.h
