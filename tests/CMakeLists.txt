@@ -80,6 +80,28 @@ target_include_directories(ChatHistoryStorageTest PRIVATE
 
 add_test(NAME ChatHistoryStorageTest COMMAND ChatHistoryStorageTest)
 
+add_executable(ConfigStorageTest
+    storage/ConfigStorageTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/ConfigStorage.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/CredentialStorage.h
+    ${PROJECT_SOURCE_DIR}/src/storage/WindowsCredentialStorage.h
+    ${PROJECT_SOURCE_DIR}/src/storage/WindowsCredentialStorage.cpp
+)
+
+target_link_libraries(ConfigStorageTest PRIVATE
+    Qt6::Core
+)
+
+if(WIN32)
+    target_link_libraries(ConfigStorageTest PRIVATE Advapi32)
+endif()
+
+target_include_directories(ConfigStorageTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME ConfigStorageTest COMMAND ConfigStorageTest)
+
 add_executable(PromptTemplateStorageTest
     storage/PromptTemplateStorageTest.cpp
     ${PROJECT_SOURCE_DIR}/src/storage/PromptTemplateStorage.cpp

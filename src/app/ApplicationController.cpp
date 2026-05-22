@@ -88,7 +88,12 @@ bool ApplicationController::isGenerating() const
 void ApplicationController::saveConfig(const AppConfig &config)
 {
     m_config = config;
-    m_configStorage.save(m_config);
+    QString error;
+    if (!m_configStorage.save(m_config, &error)) {
+        emit statusMessage(QStringLiteral("Failed to save API Key securely: %1").arg(error),
+                           QStringLiteral("API Key 安全保存失败：%1").arg(error),
+                           6000);
+    }
     emit configChanged();
 }
 

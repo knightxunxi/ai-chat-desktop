@@ -9,6 +9,7 @@
 - OpenAI 兼容聊天接口。
 - DeepSeek 默认配置。
 - API Key、Base URL、模型名称配置。
+- API Key 使用 Windows Credential Manager 保存。
 - 中文/英文界面语言切换。
 - 当前会话多轮上下文。
 - 当前会话角色提示词。
@@ -72,6 +73,7 @@ Platform: Windows
 - [V2 Roadmap](docs/07-v2-roadmap.md)
 - [V2 验收与复盘](docs/08-v2-acceptance-notes.md)
 - [V3 Roadmap](docs/09-v3-roadmap.md)
+- [V3 API Key 安全存储方案](docs/10-v3-credential-storage-design.md)
 
 ## 构建方式
 
@@ -129,6 +131,7 @@ ctest --test-dir build-qt --output-on-failure
 - 核心模型。
 - SSE 流式响应解析。
 - OpenAI 兼容请求体构建。
+- Windows 凭据存储抽象和旧配置迁移。
 - SQLite 聊天记录存储。
 - 设置窗口基础行为。
 - 消息复制和 Markdown 展示行为。
@@ -160,7 +163,7 @@ V2 已完成基础聊天闭环、多会话、停止生成、消息复制、基�
 
 已知限制：
 
-- API Key 使用普通本地配置保存，尚未加密。
+- 当前 V3 只面向 Windows，暂未规划 macOS/Linux 迁移。
 - 多会话管理缺少重命名和搜索。
 - Markdown 展示仍是基础版本，复杂代码高亮暂未支持。
 - 日志只覆盖基础请求生命周期，尚未提供界面内日志查看。
