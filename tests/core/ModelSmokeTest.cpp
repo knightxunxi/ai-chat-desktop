@@ -10,6 +10,8 @@ int main()
     assert(config.baseUrl == QStringLiteral("https://api.deepseek.com"));
     assert(config.modelName == QStringLiteral("deepseek-v4-flash"));
     assert(config.language == AppLanguage::Chinese);
+    assert(!config.temperature.has_value());
+    assert(!config.maxTokens.has_value());
     assert(!config.isComplete());
 
     config.apiKey = QStringLiteral("test-key");

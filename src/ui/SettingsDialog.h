@@ -5,10 +5,13 @@
 #include <QDialog>
 
 class QComboBox;
+class QCheckBox;
 class QDialogButtonBox;
+class QDoubleSpinBox;
 class QFormLayout;
 class QLabel;
 class QLineEdit;
+class QSpinBox;
 
 class SettingsDialog : public QDialog
 {
@@ -24,6 +27,7 @@ private:
     void applyTexts();
     void applySelectedProviderPreset(int index);
     void updateCustomProviderVisibility();
+    void updateModelParameterStates();
     void accept() override;
 
     AppConfig m_initialConfig;
@@ -40,6 +44,10 @@ private:
     QLineEdit *m_baseUrlEdit = nullptr;
     QLineEdit *m_modelNameEdit = nullptr;
     QLineEdit *m_apiKeyEdit = nullptr;
+    QCheckBox *m_temperatureCheckBox = nullptr;
+    QDoubleSpinBox *m_temperatureSpinBox = nullptr;
+    QCheckBox *m_maxTokensCheckBox = nullptr;
+    QSpinBox *m_maxTokensSpinBox = nullptr;
     QComboBox *m_languageCombo = nullptr;
     QDialogButtonBox *m_buttonBox = nullptr;
 };

@@ -84,6 +84,8 @@ int main()
         config.baseUrl = QStringLiteral("https://example.com/v1");
         config.modelName = QStringLiteral("example-model");
         config.apiKey = QStringLiteral("secret-key");
+        config.temperature = 0.4;
+        config.maxTokens = 1024;
         config.language = AppLanguage::English;
 
         QString error;
@@ -98,6 +100,11 @@ int main()
         assert(loaded.baseUrl == config.baseUrl);
         assert(loaded.modelName == config.modelName);
         assert(loaded.apiKey == config.apiKey);
+        assert(loaded.temperature.has_value());
+        assert(loaded.temperature.value() > 0.39);
+        assert(loaded.temperature.value() < 0.41);
+        assert(loaded.maxTokens.has_value());
+        assert(loaded.maxTokens.value() == 1024);
         assert(loaded.language == AppLanguage::English);
 
         clearSettings(organizationName, applicationName);
@@ -154,6 +161,8 @@ int main()
         AppConfig config = AppConfig::defaultConfig();
         config.providerName = QStringLiteral("StillSaved");
         config.apiKey = QStringLiteral("not-persisted");
+        config.temperature = 0.8;
+        config.maxTokens = 4096;
 
         QString error;
         assert(!storage.save(config, &error));
@@ -161,6 +170,9 @@ int main()
 
         QSettings settings(organizationName, applicationName);
         assert(settings.value(QStringLiteral("api/providerName")).toString() == QStringLiteral("StillSaved"));
+        assert(settings.value(QStringLiteral("api/temperature")).toDouble() > 0.79);
+        assert(settings.value(QStringLiteral("api/temperature")).toDouble() < 0.81);
+        assert(settings.value(QStringLiteral("api/maxTokens")).toInt() == 4096);
         assert(!settings.contains(QStringLiteral("api/apiKey")));
 
         clearSettings(organizationName, applicationName);

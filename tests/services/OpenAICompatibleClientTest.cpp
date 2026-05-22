@@ -25,6 +25,8 @@ int main()
     const QJsonObject body = document.object();
     assert(body.value(QStringLiteral("model")).toString() == QStringLiteral("test-model"));
     assert(body.value(QStringLiteral("stream")).toBool());
+    assert(!body.contains(QStringLiteral("temperature")));
+    assert(!body.contains(QStringLiteral("max_tokens")));
 
     const QJsonArray messages = body.value(QStringLiteral("messages")).toArray();
     assert(messages.size() == 3);
@@ -33,6 +35,13 @@ int main()
     assert(messages[1].toObject().value(QStringLiteral("role")).toString() == QStringLiteral("user"));
     assert(messages[1].toObject().value(QStringLiteral("content")).toString() == QStringLiteral("Explain RAII."));
     assert(messages[2].toObject().value(QStringLiteral("role")).toString() == QStringLiteral("assistant"));
+
+    config.temperature = 0.7;
+    config.maxTokens = 2048;
+    const QJsonObject parameterBody = QJsonDocument::fromJson(OpenAICompatibleClient::buildRequestBody(config, session)).object();
+    assert(parameterBody.value(QStringLiteral("temperature")).toDouble() > 0.69);
+    assert(parameterBody.value(QStringLiteral("temperature")).toDouble() < 0.71);
+    assert(parameterBody.value(QStringLiteral("max_tokens")).toInt() == 2048);
 
     return 0;
 }

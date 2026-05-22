@@ -2,13 +2,16 @@
 
 #include "core/ProviderPreset.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSpinBox>
 #include <QVBoxLayout>
 
 namespace {
@@ -37,6 +40,12 @@ AppConfig SettingsDialog::config() const
     config.baseUrl = m_baseUrlEdit->text().trimmed();
     config.modelName = m_modelNameEdit->text().trimmed();
     config.apiKey = m_apiKeyEdit->text().trimmed();
+    if (m_temperatureCheckBox->isChecked()) {
+        config.temperature = m_temperatureSpinBox->value();
+    }
+    if (m_maxTokensCheckBox->isChecked()) {
+        config.maxTokens = m_maxTokensSpinBox->value();
+    }
     config.language = static_cast<AppLanguage>(m_languageCombo->currentData().toInt());
     return config;
 }
@@ -84,6 +93,27 @@ void SettingsDialog::setupUi()
     m_apiKeyEdit->setText(m_initialConfig.apiKey);
     m_apiKeyEdit->setEchoMode(QLineEdit::Password);
 
+    m_temperatureCheckBox = new QCheckBox(this);
+    m_temperatureCheckBox->setObjectName(QStringLiteral("temperatureCheckBox"));
+    m_temperatureCheckBox->setChecked(m_initialConfig.temperature.has_value());
+
+    m_temperatureSpinBox = new QDoubleSpinBox(this);
+    m_temperatureSpinBox->setObjectName(QStringLiteral("temperatureSpinBox"));
+    m_temperatureSpinBox->setRange(0.0, 2.0);
+    m_temperatureSpinBox->setDecimals(2);
+    m_temperatureSpinBox->setSingleStep(0.1);
+    m_temperatureSpinBox->setValue(m_initialConfig.temperature.value_or(1.0));
+
+    m_maxTokensCheckBox = new QCheckBox(this);
+    m_maxTokensCheckBox->setObjectName(QStringLiteral("maxTokensCheckBox"));
+    m_maxTokensCheckBox->setChecked(m_initialConfig.maxTokens.has_value());
+
+    m_maxTokensSpinBox = new QSpinBox(this);
+    m_maxTokensSpinBox->setObjectName(QStringLiteral("maxTokensSpinBox"));
+    m_maxTokensSpinBox->setRange(1, 200000);
+    m_maxTokensSpinBox->setSingleStep(256);
+    m_maxTokensSpinBox->setValue(m_initialConfig.maxTokens.value_or(4096));
+
     m_languageCombo = new QComboBox(this);
     m_languageCombo->addItem(QStringLiteral("中文"), static_cast<int>(AppLanguage::Chinese));
     m_languageCombo->addItem(QStringLiteral("English"), static_cast<int>(AppLanguage::English));
@@ -101,6 +131,8 @@ void SettingsDialog::setupUi()
     m_formLayout->addRow(m_baseUrlLabel, m_baseUrlEdit);
     m_formLayout->addRow(m_modelNameLabel, m_modelNameEdit);
     m_formLayout->addRow(m_apiKeyLabel, m_apiKeyEdit);
+    m_formLayout->addRow(m_temperatureCheckBox, m_temperatureSpinBox);
+    m_formLayout->addRow(m_maxTokensCheckBox, m_maxTokensSpinBox);
     m_formLayout->addRow(m_languageLabel, m_languageCombo);
 
     rootLayout->addLayout(m_formLayout);
@@ -109,9 +141,12 @@ void SettingsDialog::setupUi()
     connect(m_buttonBox, &QDialogButtonBox::accepted, this, &SettingsDialog::accept);
     connect(m_buttonBox, &QDialogButtonBox::rejected, this, &SettingsDialog::reject);
     connect(m_providerCombo, &QComboBox::currentIndexChanged, this, &SettingsDialog::applySelectedProviderPreset);
+    connect(m_temperatureCheckBox, &QCheckBox::toggled, this, &SettingsDialog::updateModelParameterStates);
+    connect(m_maxTokensCheckBox, &QCheckBox::toggled, this, &SettingsDialog::updateModelParameterStates);
     rootLayout->addWidget(m_buttonBox);
 
     updateCustomProviderVisibility();
+    updateModelParameterStates();
 }
 
 void SettingsDialog::applyTexts()
@@ -129,6 +164,8 @@ void SettingsDialog::applyTexts()
     m_baseUrlLabel->setText(QStringLiteral("Base URL"));
     m_modelNameLabel->setText(dialogText(language, QStringLiteral("Model"), QStringLiteral("模型名称")));
     m_apiKeyLabel->setText(QStringLiteral("API Key"));
+    m_temperatureCheckBox->setText(dialogText(language, QStringLiteral("Temperature"), QStringLiteral("随机性")));
+    m_maxTokensCheckBox->setText(dialogText(language, QStringLiteral("Max tokens"), QStringLiteral("最大输出")));
     m_languageLabel->setText(dialogText(language, QStringLiteral("Language"), QStringLiteral("界面语言")));
 
     m_buttonBox->button(QDialogButtonBox::Save)->setText(dialogText(language, QStringLiteral("Save"), QStringLiteral("保存")));
@@ -153,6 +190,12 @@ void SettingsDialog::updateCustomProviderVisibility()
     const bool isCustom = m_providerCombo->currentData().toString() == ProviderPresets::customId();
     m_customProviderLabel->setVisible(isCustom);
     m_customProviderEdit->setVisible(isCustom);
+}
+
+void SettingsDialog::updateModelParameterStates()
+{
+    m_temperatureSpinBox->setEnabled(m_temperatureCheckBox->isChecked());
+    m_maxTokensSpinBox->setEnabled(m_maxTokensCheckBox->isChecked());
 }
 
 void SettingsDialog::accept()

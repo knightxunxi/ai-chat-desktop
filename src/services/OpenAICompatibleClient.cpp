@@ -119,6 +119,12 @@ QByteArray OpenAICompatibleClient::buildRequestBody(const AppConfig &config, con
     body.insert(QStringLiteral("model"), config.modelName);
     body.insert(QStringLiteral("messages"), messages);
     body.insert(QStringLiteral("stream"), true);
+    if (config.temperature.has_value()) {
+        body.insert(QStringLiteral("temperature"), config.temperature.value());
+    }
+    if (config.maxTokens.has_value()) {
+        body.insert(QStringLiteral("max_tokens"), config.maxTokens.value());
+    }
 
     return QJsonDocument(body).toJson(QJsonDocument::Compact);
 }
