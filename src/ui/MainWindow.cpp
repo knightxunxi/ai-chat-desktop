@@ -141,11 +141,18 @@ void MainWindow::setupUi()
     m_messageInput->setObjectName(QStringLiteral("messageInput"));
     m_messageInput->setFixedHeight(88);
 
+    m_retryButton = new QPushButton(composer);
+    m_retryButton->setObjectName(QStringLiteral("retryButton"));
+    m_retryButton->setFixedSize(88, 44);
+    m_retryButton->setCursor(Qt::PointingHandCursor);
+    m_retryButton->setVisible(false);
+
     m_sendButton = new QPushButton(composer);
     m_sendButton->setObjectName(QStringLiteral("sendButton"));
     m_sendButton->setFixedSize(96, 44);
 
     composerLayout->addWidget(m_messageInput, 1);
+    composerLayout->addWidget(m_retryButton, 0, Qt::AlignBottom);
     composerLayout->addWidget(m_sendButton, 0, Qt::AlignBottom);
 
     mainLayout->addWidget(header);
@@ -158,6 +165,7 @@ void MainWindow::setupUi()
     setCentralWidget(central);
 
     connect(m_messageInput, &QTextEdit::textChanged, this, &MainWindow::updateSendButtonState);
+    connect(m_retryButton, &QPushButton::clicked, &m_controller, &ApplicationController::retryLastRequest);
     connect(m_sendButton, &QPushButton::clicked, this, &MainWindow::sendCurrentMessage);
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
     connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
@@ -194,6 +202,7 @@ void MainWindow::connectController()
     connect(&m_controller, &ApplicationController::assistantMessageStarted, this, &MainWindow::addAssistantPlaceholder);
     connect(&m_controller, &ApplicationController::assistantMessageUpdated, m_chatView, &ChatView::updateLastAssistantMessage);
     connect(&m_controller, &ApplicationController::generatingChanged, this, &MainWindow::setGenerating);
+    connect(&m_controller, &ApplicationController::retryAvailableChanged, this, &MainWindow::setRetryAvailable);
     connect(&m_controller, &ApplicationController::configurationMissing, this, &MainWindow::showConfigurationMissingWarning);
     connect(&m_controller, &ApplicationController::statusMessage, this, &MainWindow::showStatusMessage);
     connect(&m_controller, &ApplicationController::startupWarning, this, &MainWindow::showStartupWarning);
@@ -301,6 +310,7 @@ void MainWindow::applyLanguage()
     m_sessionSearchEdit->setPlaceholderText(text(QStringLiteral("Search chats"), QStringLiteral("搜索会话")));
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
+    m_retryButton->setText(text(QStringLiteral("Retry"), QStringLiteral("重试")));
     m_personaLabel->setText(text(QStringLiteral("Role: %1"), QStringLiteral("角色：%1")).arg(currentRoleDisplayName()));
     m_messageInput->setPlaceholderText(text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
     updateSendButtonAppearance();
@@ -539,8 +549,15 @@ void MainWindow::setGenerating(bool generating)
     m_deleteChatButton->setEnabled(!generating);
     m_systemPromptButton->setEnabled(!generating);
     m_settingsButton->setEnabled(!generating);
+    m_retryButton->setEnabled(!generating && m_retryButton->isVisible());
     updateSendButtonAppearance();
     updateSendButtonState();
+}
+
+void MainWindow::setRetryAvailable(bool available)
+{
+    m_retryButton->setVisible(available);
+    m_retryButton->setEnabled(available && !m_controller.isGenerating());
 }
 
 void MainWindow::showConfigurationMissingWarning()

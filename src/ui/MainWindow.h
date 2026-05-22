@@ -49,6 +49,7 @@ private:
     void addUserMessage(const QString &content);
     void addAssistantPlaceholder();
     void setGenerating(bool generating);
+    void setRetryAvailable(bool available);
     void showConfigurationMissingWarning();
     void showStatusMessage(const QString &english, const QString &chinese, int timeoutMs);
     void showStartupWarning(const QString &english, const QString &chinese);
@@ -63,6 +64,7 @@ private:
     QPushButton *m_systemPromptButton = nullptr;
     ChatView *m_chatView = nullptr;
     QTextEdit *m_messageInput = nullptr;
+    QPushButton *m_retryButton = nullptr;
     QPushButton *m_sendButton = nullptr;
     QPushButton *m_settingsButton = nullptr;
     QLabel *m_modelLabel = nullptr;

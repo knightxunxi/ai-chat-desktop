@@ -35,6 +35,7 @@ qt_add_executable(AIChatDesktop
     src/services/AIClient.h
     src/services/OpenAICompatibleClient.h
     src/services/OpenAICompatibleClient.cpp
+    src/services/RequestErrorCategory.h
     src/services/StreamParser.h
     src/services/StreamParser.cpp
     src/support/AppLogger.h

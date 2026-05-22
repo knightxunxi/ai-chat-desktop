@@ -18,6 +18,7 @@ public:
     bool initialize(QString *errorMessage = nullptr);
     bool saveSession(const ChatSession &session, QString *errorMessage = nullptr);
     bool saveMessage(const ChatMessage &message, QString *errorMessage = nullptr);
+    bool replaceSessionMessages(const ChatSession &session, QString *errorMessage = nullptr);
     QVector<ChatSession> loadSessionSummaries(QString *errorMessage = nullptr) const;
     QVector<ChatSession> searchSessionSummaries(const QString &query, QString *errorMessage = nullptr) const;
     std::optional<ChatSession> loadSession(const QString &sessionId, QString *errorMessage = nullptr) const;

@@ -2,6 +2,7 @@
 
 #include "core/AppConfig.h"
 #include "core/ChatSession.h"
+#include "services/RequestErrorCategory.h"
 
 #include <QObject>
 
@@ -19,5 +20,5 @@ public:
 signals:
     void textDeltaReceived(const QString &delta);
     void requestFinished();
-    void requestFailed(const QString &message);
+    void requestFailed(const QString &message, RequestErrorCategory category);
 };

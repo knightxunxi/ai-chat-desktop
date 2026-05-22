@@ -17,6 +17,7 @@ public:
     explicit OpenAICompatibleClient(QObject *parent = nullptr);
 
     static QByteArray buildRequestBody(const AppConfig &config, const ChatSession &session);
+    static RequestErrorCategory classifyHttpStatus(int statusCode);
 
     void sendChat(const AppConfig &config, const ChatSession &session) override;
     void cancel() override;

@@ -43,5 +43,15 @@ int main()
     assert(parameterBody.value(QStringLiteral("temperature")).toDouble() < 0.71);
     assert(parameterBody.value(QStringLiteral("max_tokens")).toInt() == 2048);
 
+    assert(OpenAICompatibleClient::classifyHttpStatus(401) == RequestErrorCategory::Authentication);
+    assert(OpenAICompatibleClient::classifyHttpStatus(403) == RequestErrorCategory::Authentication);
+    assert(OpenAICompatibleClient::classifyHttpStatus(402) == RequestErrorCategory::Quota);
+    assert(OpenAICompatibleClient::classifyHttpStatus(429) == RequestErrorCategory::Quota);
+    assert(OpenAICompatibleClient::classifyHttpStatus(400) == RequestErrorCategory::Model);
+    assert(OpenAICompatibleClient::classifyHttpStatus(404) == RequestErrorCategory::Model);
+    assert(OpenAICompatibleClient::classifyHttpStatus(422) == RequestErrorCategory::Model);
+    assert(OpenAICompatibleClient::classifyHttpStatus(500) == RequestErrorCategory::Server);
+    assert(OpenAICompatibleClient::classifyHttpStatus(418) == RequestErrorCategory::Unknown);
+
     return 0;
 }
