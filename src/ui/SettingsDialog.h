@@ -22,17 +22,21 @@ public:
 private:
     void setupUi();
     void applyTexts();
+    void applySelectedProviderPreset(int index);
+    void updateCustomProviderVisibility();
     void accept() override;
 
     AppConfig m_initialConfig;
     QFormLayout *m_formLayout = nullptr;
     QLabel *m_titleLabel = nullptr;
     QLabel *m_providerLabel = nullptr;
+    QLabel *m_customProviderLabel = nullptr;
     QLabel *m_baseUrlLabel = nullptr;
     QLabel *m_modelNameLabel = nullptr;
     QLabel *m_apiKeyLabel = nullptr;
     QLabel *m_languageLabel = nullptr;
-    QLineEdit *m_providerEdit = nullptr;
+    QComboBox *m_providerCombo = nullptr;
+    QLineEdit *m_customProviderEdit = nullptr;
     QLineEdit *m_baseUrlEdit = nullptr;
     QLineEdit *m_modelNameEdit = nullptr;
     QLineEdit *m_apiKeyEdit = nullptr;

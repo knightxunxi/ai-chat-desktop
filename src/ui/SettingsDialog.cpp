@@ -1,5 +1,7 @@
 #include "ui/SettingsDialog.h"
 
+#include "core/ProviderPreset.h"
+
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
@@ -29,7 +31,9 @@ SettingsDialog::SettingsDialog(const AppConfig &config, QWidget *parent)
 AppConfig SettingsDialog::config() const
 {
     AppConfig config;
-    config.providerName = m_providerEdit->text().trimmed();
+    const QString providerId = m_providerCombo->currentData().toString();
+    const std::optional<ProviderPreset> preset = ProviderPresets::findById(providerId);
+    config.providerName = preset.has_value() ? preset->name : m_customProviderEdit->text().trimmed();
     config.baseUrl = m_baseUrlEdit->text().trimmed();
     config.modelName = m_modelNameEdit->text().trimmed();
     config.apiKey = m_apiKeyEdit->text().trimmed();
@@ -54,8 +58,21 @@ void SettingsDialog::setupUi()
     m_formLayout->setContentsMargins(0, 0, 0, 0);
     m_formLayout->setSpacing(12);
 
-    m_providerEdit = new QLineEdit(this);
-    m_providerEdit->setText(m_initialConfig.providerName);
+    m_providerCombo = new QComboBox(this);
+    m_providerCombo->setObjectName(QStringLiteral("providerCombo"));
+    for (const ProviderPreset &preset : ProviderPresets::defaults()) {
+        m_providerCombo->addItem(preset.name, preset.id);
+    }
+    m_providerCombo->addItem(QStringLiteral("Custom"), ProviderPresets::customId());
+
+    const std::optional<ProviderPreset> initialPreset = ProviderPresets::findByName(m_initialConfig.providerName);
+    const QString initialProviderId = initialPreset.has_value() ? initialPreset->id : ProviderPresets::customId();
+    const int initialProviderIndex = m_providerCombo->findData(initialProviderId);
+    m_providerCombo->setCurrentIndex(initialProviderIndex < 0 ? 0 : initialProviderIndex);
+
+    m_customProviderEdit = new QLineEdit(this);
+    m_customProviderEdit->setObjectName(QStringLiteral("customProviderEdit"));
+    m_customProviderEdit->setText(initialPreset.has_value() ? QString() : m_initialConfig.providerName);
 
     m_baseUrlEdit = new QLineEdit(this);
     m_baseUrlEdit->setText(m_initialConfig.baseUrl);
@@ -73,12 +90,14 @@ void SettingsDialog::setupUi()
     m_languageCombo->setCurrentIndex(m_initialConfig.language == AppLanguage::English ? 1 : 0);
 
     m_providerLabel = new QLabel(this);
+    m_customProviderLabel = new QLabel(this);
     m_baseUrlLabel = new QLabel(this);
     m_modelNameLabel = new QLabel(this);
     m_apiKeyLabel = new QLabel(this);
     m_languageLabel = new QLabel(this);
 
-    m_formLayout->addRow(m_providerLabel, m_providerEdit);
+    m_formLayout->addRow(m_providerLabel, m_providerCombo);
+    m_formLayout->addRow(m_customProviderLabel, m_customProviderEdit);
     m_formLayout->addRow(m_baseUrlLabel, m_baseUrlEdit);
     m_formLayout->addRow(m_modelNameLabel, m_modelNameEdit);
     m_formLayout->addRow(m_apiKeyLabel, m_apiKeyEdit);
@@ -89,7 +108,10 @@ void SettingsDialog::setupUi()
     m_buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
     connect(m_buttonBox, &QDialogButtonBox::accepted, this, &SettingsDialog::accept);
     connect(m_buttonBox, &QDialogButtonBox::rejected, this, &SettingsDialog::reject);
+    connect(m_providerCombo, &QComboBox::currentIndexChanged, this, &SettingsDialog::applySelectedProviderPreset);
     rootLayout->addWidget(m_buttonBox);
+
+    updateCustomProviderVisibility();
 }
 
 void SettingsDialog::applyTexts()
@@ -99,6 +121,11 @@ void SettingsDialog::applyTexts()
 
     m_titleLabel->setText(dialogText(language, QStringLiteral("Settings"), QStringLiteral("设置")));
     m_providerLabel->setText(dialogText(language, QStringLiteral("Provider"), QStringLiteral("服务商")));
+    m_customProviderLabel->setText(dialogText(language, QStringLiteral("Custom name"), QStringLiteral("自定义名称")));
+    const int customIndex = m_providerCombo->findData(ProviderPresets::customId());
+    if (customIndex >= 0) {
+        m_providerCombo->setItemText(customIndex, dialogText(language, QStringLiteral("Custom"), QStringLiteral("自定义")));
+    }
     m_baseUrlLabel->setText(QStringLiteral("Base URL"));
     m_modelNameLabel->setText(dialogText(language, QStringLiteral("Model"), QStringLiteral("模型名称")));
     m_apiKeyLabel->setText(QStringLiteral("API Key"));
@@ -106,6 +133,26 @@ void SettingsDialog::applyTexts()
 
     m_buttonBox->button(QDialogButtonBox::Save)->setText(dialogText(language, QStringLiteral("Save"), QStringLiteral("保存")));
     m_buttonBox->button(QDialogButtonBox::Cancel)->setText(dialogText(language, QStringLiteral("Cancel"), QStringLiteral("取消")));
+}
+
+void SettingsDialog::applySelectedProviderPreset(int index)
+{
+    const QString providerId = m_providerCombo->itemData(index).toString();
+    const std::optional<ProviderPreset> preset = ProviderPresets::findById(providerId);
+    if (preset.has_value()) {
+        m_baseUrlEdit->setText(preset->baseUrl);
+        m_modelNameEdit->setText(preset->modelName);
+        m_customProviderEdit->clear();
+    }
+
+    updateCustomProviderVisibility();
+}
+
+void SettingsDialog::updateCustomProviderVisibility()
+{
+    const bool isCustom = m_providerCombo->currentData().toString() == ProviderPresets::customId();
+    m_customProviderLabel->setVisible(isCustom);
+    m_customProviderEdit->setVisible(isCustom);
 }
 
 void SettingsDialog::accept()

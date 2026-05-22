@@ -30,6 +30,8 @@ qt_add_executable(AIChatDesktop
     src/core/ChatSession.h
     src/core/MessageRole.h
     src/core/PromptTemplate.h
+    src/core/ProviderPreset.h
+    src/core/ProviderPreset.cpp
     src/services/AIClient.h
     src/services/OpenAICompatibleClient.h
     src/services/OpenAICompatibleClient.cpp

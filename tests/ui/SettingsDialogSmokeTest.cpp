@@ -1,6 +1,8 @@
 #include "ui/SettingsDialog.h"
 
 #include <QApplication>
+#include <QComboBox>
+#include <QLineEdit>
 
 #include <cassert>
 
@@ -20,6 +22,29 @@ int main(int argc, char *argv[])
     assert(readBack.modelName == config.modelName);
     assert(readBack.apiKey == config.apiKey);
     assert(readBack.language == AppLanguage::Chinese);
+
+    QComboBox *providerCombo = dialog.findChild<QComboBox *>(QStringLiteral("providerCombo"));
+    assert(providerCombo != nullptr);
+    const int openAIIndex = providerCombo->findText(QStringLiteral("OpenAI"));
+    assert(openAIIndex >= 0);
+    providerCombo->setCurrentIndex(openAIIndex);
+
+    const AppConfig openAIConfig = dialog.config();
+    assert(openAIConfig.providerName == QStringLiteral("OpenAI"));
+    assert(openAIConfig.baseUrl == QStringLiteral("https://api.openai.com/v1"));
+    assert(openAIConfig.modelName == QStringLiteral("gpt-4.1-mini"));
+
+    const int customIndex = providerCombo->findData(QStringLiteral("custom"));
+    assert(customIndex >= 0);
+    providerCombo->setCurrentIndex(customIndex);
+
+    QLineEdit *customProviderEdit = dialog.findChild<QLineEdit *>(QStringLiteral("customProviderEdit"));
+    assert(customProviderEdit != nullptr);
+    assert(!customProviderEdit->isHidden());
+    customProviderEdit->setText(QStringLiteral("Local Provider"));
+
+    const AppConfig customConfig = dialog.config();
+    assert(customConfig.providerName == QStringLiteral("Local Provider"));
 
     return 0;
 }
