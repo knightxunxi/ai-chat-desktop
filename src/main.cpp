@@ -50,6 +50,7 @@ void loadApplicationStyle(QApplication &app)
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
+    app.setQuitOnLastWindowClosed(true);
     QApplication::setApplicationName(QStringLiteral("AI Chat Desktop"));
     QApplication::setOrganizationName(QStringLiteral("AIChatDesktop"));
 
