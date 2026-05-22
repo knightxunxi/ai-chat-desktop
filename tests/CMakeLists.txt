@@ -80,6 +80,21 @@ target_include_directories(ChatHistoryStorageTest PRIVATE
 
 add_test(NAME ChatHistoryStorageTest COMMAND ChatHistoryStorageTest)
 
+add_executable(PromptTemplateStorageTest
+    storage/PromptTemplateStorageTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/PromptTemplateStorage.cpp
+)
+
+target_link_libraries(PromptTemplateStorageTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(PromptTemplateStorageTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME PromptTemplateStorageTest COMMAND PromptTemplateStorageTest)
+
 add_executable(SettingsDialogSmokeTest
     ui/SettingsDialogSmokeTest.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/SettingsDialog.cpp
@@ -95,6 +110,22 @@ target_include_directories(SettingsDialogSmokeTest PRIVATE
 )
 
 add_test(NAME SettingsDialogSmokeTest COMMAND SettingsDialogSmokeTest)
+
+add_executable(RolePromptDialogSmokeTest
+    ui/RolePromptDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/RolePromptDialog.cpp
+)
+
+target_link_libraries(RolePromptDialogSmokeTest PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+)
+
+target_include_directories(RolePromptDialogSmokeTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME RolePromptDialogSmokeTest COMMAND RolePromptDialogSmokeTest)
 
 add_executable(MessageWidgetTest
     ui/MessageWidgetTest.cpp

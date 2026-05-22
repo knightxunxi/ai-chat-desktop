@@ -256,7 +256,8 @@ QComboBox:focus {
     border-color: #2563eb;
 }
 
-QTextEdit#messageInput {
+QTextEdit#messageInput,
+QTextEdit#rolePromptEdit {
     padding: 10px 12px;
     border: 1px solid #cbd5e1;
     border-radius: 8px;
@@ -265,6 +266,7 @@ QTextEdit#messageInput {
     font-size: 14px;
 }
 
-QTextEdit#messageInput:focus {
+QTextEdit#messageInput:focus,
+QTextEdit#rolePromptEdit:focus {
     border-color: #2563eb;
 }

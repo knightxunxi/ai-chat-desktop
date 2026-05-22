@@ -30,6 +30,7 @@ private:
     void applyConfig();
     void applyLanguage();
     QString text(const QString &english, const QString &chinese) const;
+    QString currentRoleDisplayName() const;
     void updateSendButtonAppearance();
     void updateSendButtonState();
     void openSettingsDialog();
