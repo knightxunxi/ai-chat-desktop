@@ -12,6 +12,21 @@ target_include_directories(CoreModelSmokeTest PRIVATE
 
 add_test(NAME CoreModelSmokeTest COMMAND CoreModelSmokeTest)
 
+add_executable(ProviderPresetTest
+    core/ProviderPresetTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/core/ProviderPreset.cpp
+)
+
+target_link_libraries(ProviderPresetTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(ProviderPresetTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME ProviderPresetTest COMMAND ProviderPresetTest)
+
 add_executable(SessionSummaryListTest
     app/SessionSummaryListTest.cpp
     ${PROJECT_SOURCE_DIR}/src/app/SessionSummaryList.cpp
@@ -149,6 +164,7 @@ add_test(NAME PromptTemplateStorageTest COMMAND PromptTemplateStorageTest)
 
 add_executable(SettingsDialogSmokeTest
     ui/SettingsDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/core/ProviderPreset.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/SettingsDialog.cpp
 )
 
