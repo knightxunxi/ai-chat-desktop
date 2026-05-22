@@ -40,7 +40,7 @@ void ApplicationController::initialize()
     }
 
     m_historyAvailable = true;
-    m_sessionSummaries = m_chatHistoryStorage.loadSessionSummaries(&error);
+    reloadSessionSummaries(&error);
     if (m_sessionSummaries.isEmpty()) {
         m_session = ChatSession::createDefault();
         if (!error.isEmpty()) {
@@ -163,6 +163,25 @@ void ApplicationController::renameCurrentSession(const QString &title)
     emit currentSessionChanged();
 }
 
+void ApplicationController::searchSessions(const QString &query)
+{
+    m_sessionSearchQuery = query.trimmed();
+    if (!m_historyAvailable) {
+        m_sessionSummaries.clear();
+        emit sessionListChanged();
+        return;
+    }
+
+    QString error;
+    if (!reloadSessionSummaries(&error) && !error.isEmpty()) {
+        emit statusMessage(QStringLiteral("Failed to search chat sessions: %1").arg(error),
+                           QStringLiteral("搜索会话失败：%1").arg(error),
+                           6000);
+    }
+
+    emit sessionListChanged();
+}
+
 void ApplicationController::startNewChat()
 {
     if (m_isGenerating) {
@@ -240,11 +259,15 @@ void ApplicationController::deleteCurrentSession()
 
     m_currentAssistantContent.clear();
 
+    QString error;
+    if (!m_sessionSearchQuery.isEmpty()) {
+        reloadSessionSummaries(&error);
+    }
+
     if (m_sessionSummaries.isEmpty()) {
         m_session = ChatSession::createDefault();
         saveCurrentSession();
     } else {
-        QString error;
         const std::optional<ChatSession> nextSession = m_chatHistoryStorage.loadSession(m_sessionSummaries.first().id, &error);
         if (nextSession.has_value()) {
             m_session = nextSession.value();
@@ -382,9 +405,26 @@ bool ApplicationController::saveCurrentSession(bool moveToTop)
         }
     }
 
-    upsertCurrentSessionSummary(moveToTop);
+    if (m_sessionSearchQuery.isEmpty()) {
+        upsertCurrentSessionSummary(moveToTop);
+    } else {
+        reloadSessionSummaries(&error);
+    }
     emit sessionListChanged();
     return true;
+}
+
+bool ApplicationController::reloadSessionSummaries(QString *error)
+{
+    if (!m_historyAvailable) {
+        m_sessionSummaries.clear();
+        return false;
+    }
+
+    m_sessionSummaries = m_sessionSearchQuery.isEmpty()
+                             ? m_chatHistoryStorage.loadSessionSummaries(error)
+                             : m_chatHistoryStorage.searchSessionSummaries(m_sessionSearchQuery, error);
+    return error == nullptr || error->isEmpty();
 }
 
 void ApplicationController::upsertCurrentSessionSummary(bool moveToTop)

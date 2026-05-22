@@ -69,6 +69,17 @@ int main(int argc, char *argv[])
     assert(renamedSummaries[1].id == session.id);
     assert(renamedSummaries[1].title == QStringLiteral("Renamed Storage Test"));
 
+    const QVector<ChatSession> titleSearchResults = storage.searchSessionSummaries(QStringLiteral("renamed"), &error);
+    assert(titleSearchResults.size() == 1);
+    assert(titleSearchResults[0].id == session.id);
+
+    const QVector<ChatSession> messageSearchResults = storage.searchSessionSummaries(QStringLiteral("Later"), &error);
+    assert(messageSearchResults.size() == 1);
+    assert(messageSearchResults[0].id == secondSession.id);
+
+    const QVector<ChatSession> emptySearchResults = storage.searchSessionSummaries(QStringLiteral("not found"), &error);
+    assert(emptySearchResults.isEmpty());
+
     std::optional<ChatSession> loadedById = storage.loadSession(session.id, &error);
     assert(loadedById.has_value());
     assert(loadedById->title == QStringLiteral("Renamed Storage Test"));

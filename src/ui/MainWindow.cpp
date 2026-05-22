@@ -60,12 +60,17 @@ void MainWindow::setupUi()
     m_deleteChatButton = new QPushButton(sidebar);
     m_deleteChatButton->setObjectName(QStringLiteral("deleteChatButton"));
 
+    m_sessionSearchEdit = new QLineEdit(sidebar);
+    m_sessionSearchEdit->setObjectName(QStringLiteral("sessionSearchEdit"));
+    m_sessionSearchEdit->setClearButtonEnabled(true);
+
     m_sessionList = new QListWidget(sidebar);
     m_sessionList->setObjectName(QStringLiteral("sessionList"));
 
     sidebarLayout->addWidget(m_newChatButton);
     sidebarLayout->addWidget(m_renameChatButton);
     sidebarLayout->addWidget(m_deleteChatButton);
+    sidebarLayout->addWidget(m_sessionSearchEdit);
     sidebarLayout->addWidget(m_sessionList, 1);
 
     auto *mainPanel = new QWidget(central);
@@ -140,6 +145,7 @@ void MainWindow::setupUi()
     connect(m_renameChatButton, &QPushButton::clicked, this, &MainWindow::renameCurrentChat);
     connect(m_deleteChatButton, &QPushButton::clicked, this, &MainWindow::deleteCurrentChat);
     connect(m_sessionList, &QListWidget::itemClicked, this, &MainWindow::switchToSession);
+    connect(m_sessionSearchEdit, &QLineEdit::textChanged, &m_controller, &ApplicationController::searchSessions);
 
     auto *returnShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), m_messageInput);
     connect(returnShortcut, &QShortcut::activated, this, &MainWindow::sendCurrentMessage);
@@ -270,6 +276,7 @@ void MainWindow::applyLanguage()
     m_newChatButton->setText(text(QStringLiteral("New Chat"), QStringLiteral("新建会话")));
     m_renameChatButton->setText(text(QStringLiteral("Rename"), QStringLiteral("重命名")));
     m_deleteChatButton->setText(text(QStringLiteral("Delete Chat"), QStringLiteral("删除会话")));
+    m_sessionSearchEdit->setPlaceholderText(text(QStringLiteral("Search chats"), QStringLiteral("搜索会话")));
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
     m_personaLabel->setText(text(QStringLiteral("Role: %1"), QStringLiteral("角色：%1")).arg(currentRoleDisplayName()));

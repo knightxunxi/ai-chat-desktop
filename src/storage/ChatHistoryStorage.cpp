@@ -26,6 +26,14 @@ QString nonNullString(const QString &value)
     return value.isNull() ? QStringLiteral("") : value;
 }
 
+QString escapedLikePattern(QString value)
+{
+    value.replace(QLatin1Char('\\'), QStringLiteral("\\\\"));
+    value.replace(QLatin1Char('%'), QStringLiteral("\\%"));
+    value.replace(QLatin1Char('_'), QStringLiteral("\\_"));
+    return QStringLiteral("%") + value + QStringLiteral("%");
+}
+
 } // namespace
 
 ChatHistoryStorage::ChatHistoryStorage(const QString &databasePath)
@@ -146,9 +154,8 @@ bool ChatHistoryStorage::saveMessage(const ChatMessage &message, QString *errorM
 
 QVector<ChatSession> ChatHistoryStorage::loadSessionSummaries(QString *errorMessage) const
 {
-    QVector<ChatSession> sessions;
     if (!ensureOpen(errorMessage)) {
-        return sessions;
+        return {};
     }
 
     QSqlQuery query(QSqlDatabase::database(m_connectionName));
@@ -156,16 +163,59 @@ QVector<ChatSession> ChatHistoryStorage::loadSessionSummaries(QString *errorMess
             "SELECT id, title, system_prompt, created_at, updated_at "
             "FROM sessions ORDER BY updated_at DESC"))) {
         setError(errorMessage, query.lastError().text());
+        return {};
+    }
+
+    return readSessionSummaries(&query, errorMessage);
+}
+
+QVector<ChatSession> ChatHistoryStorage::searchSessionSummaries(const QString &queryText, QString *errorMessage) const
+{
+    const QString trimmedQuery = queryText.trimmed();
+    if (trimmedQuery.isEmpty()) {
+        return loadSessionSummaries(errorMessage);
+    }
+
+    if (!ensureOpen(errorMessage)) {
+        return {};
+    }
+
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral(
+        "SELECT s.id, s.title, s.system_prompt, s.created_at, s.updated_at "
+        "FROM sessions s "
+        "WHERE s.title LIKE :query ESCAPE '\\' "
+        "OR EXISTS ("
+        "    SELECT 1 FROM messages m "
+        "    WHERE m.session_id = s.id "
+        "    AND m.content LIKE :query ESCAPE '\\'"
+        ") "
+        "ORDER BY s.updated_at DESC"));
+    query.bindValue(QStringLiteral(":query"), escapedLikePattern(trimmedQuery));
+
+    if (!query.exec()) {
+        setError(errorMessage, query.lastError().text());
+        return {};
+    }
+
+    return readSessionSummaries(&query, errorMessage);
+}
+
+QVector<ChatSession> ChatHistoryStorage::readSessionSummaries(QSqlQuery *query, QString *errorMessage) const
+{
+    QVector<ChatSession> sessions;
+    if (query == nullptr) {
+        setError(errorMessage, QStringLiteral("Session query is null."));
         return sessions;
     }
 
-    while (query.next()) {
+    while (query->next()) {
         ChatSession session;
-        session.id = query.value(0).toString();
-        session.title = query.value(1).toString();
-        session.systemPrompt = query.value(2).toString();
-        session.createdAt = fromIsoUtc(query.value(3).toString());
-        session.updatedAt = fromIsoUtc(query.value(4).toString());
+        session.id = query->value(0).toString();
+        session.title = query->value(1).toString();
+        session.systemPrompt = query->value(2).toString();
+        session.createdAt = fromIsoUtc(query->value(3).toString());
+        session.updatedAt = fromIsoUtc(query->value(4).toString());
         sessions.append(session);
     }
 
