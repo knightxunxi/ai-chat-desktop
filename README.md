@@ -8,7 +8,7 @@
 
 - OpenAI 兼容聊天接口。
 - DeepSeek 和 OpenAI 服务商预设。
-- API Key、Base URL、模型名称和可选模型参数配置。
+- API Key、Base URL、模型名称和可手动输入的可选模型参数配置。
 - API Key 使用 Windows Credential Manager 保存。
 - 中文/英文界面语言切换。
 - 当前会话多轮上下文。
