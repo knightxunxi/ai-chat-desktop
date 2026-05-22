@@ -51,6 +51,7 @@ Platform: Windows
 ```text
 .
 ├─ docs/                 项目文档
+├─ learn/                架构学习、技术讲解和面试复盘资料
 ├─ resources/            Qt 资源和样式
 ├─ src/
 │  ├─ app/               应用控制层
@@ -77,6 +78,7 @@ Platform: Windows
 - [V3 API Key 安全存储方案](docs/10-v3-credential-storage-design.md)
 - [V3 验收与复盘](docs/11-v3-acceptance-notes.md)
 - [V3 Release Notes](docs/12-v3-release-notes.md)
+- [学习资料入口](learn/README.md)
 
 ## 构建方式
 
