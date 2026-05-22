@@ -46,5 +46,23 @@ int main(int argc, char *argv[])
     const AppConfig customConfig = dialog.config();
     assert(customConfig.providerName == QStringLiteral("Local Provider"));
 
+    QLineEdit *temperatureEdit = dialog.findChild<QLineEdit *>(QStringLiteral("temperatureEdit"));
+    QLineEdit *maxTokensEdit = dialog.findChild<QLineEdit *>(QStringLiteral("maxTokensEdit"));
+
+    assert(temperatureEdit != nullptr);
+    assert(maxTokensEdit != nullptr);
+    assert(!dialog.config().temperature.has_value());
+    assert(!dialog.config().maxTokens.has_value());
+
+    temperatureEdit->setText(QStringLiteral("0.7"));
+    maxTokensEdit->setText(QStringLiteral("2048"));
+
+    const AppConfig parameterConfig = dialog.config();
+    assert(parameterConfig.temperature.has_value());
+    assert(parameterConfig.temperature.value() > 0.69);
+    assert(parameterConfig.temperature.value() < 0.71);
+    assert(parameterConfig.maxTokens.has_value());
+    assert(parameterConfig.maxTokens.value() == 2048);
+
     return 0;
 }

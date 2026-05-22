@@ -2,6 +2,7 @@
 
 #include "core/AppLanguage.h"
 
+#include <optional>
 #include <QString>
 
 struct AppConfig {
@@ -9,6 +10,8 @@ struct AppConfig {
     QString baseUrl;
     QString modelName;
     QString apiKey;
+    std::optional<double> temperature;
+    std::optional<int> maxTokens;
     AppLanguage language = AppLanguage::Chinese;
 
     static AppConfig defaultConfig()

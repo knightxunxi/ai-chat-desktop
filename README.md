@@ -8,7 +8,7 @@
 
 - OpenAI 兼容聊天接口。
 - DeepSeek 和 OpenAI 服务商预设。
-- API Key、Base URL、模型名称配置。
+- API Key、Base URL、模型名称和可手动输入的可选模型参数配置。
 - API Key 使用 Windows Credential Manager 保存。
 - 中文/英文界面语言切换。
 - 当前会话多轮上下文。
@@ -132,6 +132,7 @@ ctest --test-dir build-qt --output-on-failure
 - 核心模型。
 - SSE 流式响应解析。
 - OpenAI 兼容请求体构建。
+- 模型参数请求体构建。
 - Windows 凭据存储抽象和旧配置迁移。
 - SQLite 聊天记录存储。
 - 设置窗口基础行为。
@@ -166,7 +167,7 @@ V2 已完成基础聊天闭环、多会话、停止生成、消息复制、基�
 已知限制：
 
 - 当前 V3 只面向 Windows，暂未规划 macOS/Linux 迁移。
-- 模型参数配置尚未实现。
+- 错误分类和重试入口尚未实现。
 - Markdown 展示仍是基础版本，复杂代码高亮暂未支持。
 - 日志只覆盖基础请求生命周期，尚未提供界面内日志查看。
 - 角色提示词模板仍是本地基础版本，尚未支持导入导出或云同步。

@@ -4,7 +4,9 @@
 
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDoubleValidator>
 #include <QFormLayout>
+#include <QIntValidator>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -16,6 +18,30 @@ namespace {
 QString dialogText(AppLanguage language, const QString &english, const QString &chinese)
 {
     return language == AppLanguage::English ? english : chinese;
+}
+
+std::optional<double> optionalDoubleFromText(const QString &text)
+{
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        return std::nullopt;
+    }
+
+    bool ok = false;
+    const double value = trimmed.toDouble(&ok);
+    return ok ? std::optional<double>(value) : std::nullopt;
+}
+
+std::optional<int> optionalIntFromText(const QString &text)
+{
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        return std::nullopt;
+    }
+
+    bool ok = false;
+    const int value = trimmed.toInt(&ok);
+    return ok ? std::optional<int>(value) : std::nullopt;
 }
 
 } // namespace
@@ -37,6 +63,8 @@ AppConfig SettingsDialog::config() const
     config.baseUrl = m_baseUrlEdit->text().trimmed();
     config.modelName = m_modelNameEdit->text().trimmed();
     config.apiKey = m_apiKeyEdit->text().trimmed();
+    config.temperature = optionalDoubleFromText(m_temperatureEdit->text());
+    config.maxTokens = optionalIntFromText(m_maxTokensEdit->text());
     config.language = static_cast<AppLanguage>(m_languageCombo->currentData().toInt());
     return config;
 }
@@ -84,6 +112,20 @@ void SettingsDialog::setupUi()
     m_apiKeyEdit->setText(m_initialConfig.apiKey);
     m_apiKeyEdit->setEchoMode(QLineEdit::Password);
 
+    m_temperatureEdit = new QLineEdit(this);
+    m_temperatureEdit->setObjectName(QStringLiteral("temperatureEdit"));
+    m_temperatureEdit->setValidator(new QDoubleValidator(0.0, 2.0, 2, m_temperatureEdit));
+    if (m_initialConfig.temperature.has_value()) {
+        m_temperatureEdit->setText(QString::number(m_initialConfig.temperature.value(), 'f', 2));
+    }
+
+    m_maxTokensEdit = new QLineEdit(this);
+    m_maxTokensEdit->setObjectName(QStringLiteral("maxTokensEdit"));
+    m_maxTokensEdit->setValidator(new QIntValidator(1, 200000, m_maxTokensEdit));
+    if (m_initialConfig.maxTokens.has_value()) {
+        m_maxTokensEdit->setText(QString::number(m_initialConfig.maxTokens.value()));
+    }
+
     m_languageCombo = new QComboBox(this);
     m_languageCombo->addItem(QStringLiteral("中文"), static_cast<int>(AppLanguage::Chinese));
     m_languageCombo->addItem(QStringLiteral("English"), static_cast<int>(AppLanguage::English));
@@ -94,6 +136,8 @@ void SettingsDialog::setupUi()
     m_baseUrlLabel = new QLabel(this);
     m_modelNameLabel = new QLabel(this);
     m_apiKeyLabel = new QLabel(this);
+    m_temperatureLabel = new QLabel(this);
+    m_maxTokensLabel = new QLabel(this);
     m_languageLabel = new QLabel(this);
 
     m_formLayout->addRow(m_providerLabel, m_providerCombo);
@@ -101,6 +145,8 @@ void SettingsDialog::setupUi()
     m_formLayout->addRow(m_baseUrlLabel, m_baseUrlEdit);
     m_formLayout->addRow(m_modelNameLabel, m_modelNameEdit);
     m_formLayout->addRow(m_apiKeyLabel, m_apiKeyEdit);
+    m_formLayout->addRow(m_temperatureLabel, m_temperatureEdit);
+    m_formLayout->addRow(m_maxTokensLabel, m_maxTokensEdit);
     m_formLayout->addRow(m_languageLabel, m_languageCombo);
 
     rootLayout->addLayout(m_formLayout);
@@ -129,6 +175,10 @@ void SettingsDialog::applyTexts()
     m_baseUrlLabel->setText(QStringLiteral("Base URL"));
     m_modelNameLabel->setText(dialogText(language, QStringLiteral("Model"), QStringLiteral("模型名称")));
     m_apiKeyLabel->setText(QStringLiteral("API Key"));
+    m_temperatureLabel->setText(dialogText(language, QStringLiteral("Temperature"), QStringLiteral("随机性")));
+    m_temperatureEdit->setPlaceholderText(dialogText(language, QStringLiteral("Optional, 0-2"), QStringLiteral("可选，0-2")));
+    m_maxTokensLabel->setText(dialogText(language, QStringLiteral("Max tokens"), QStringLiteral("最大输出")));
+    m_maxTokensEdit->setPlaceholderText(dialogText(language, QStringLiteral("Optional integer"), QStringLiteral("可选整数")));
     m_languageLabel->setText(dialogText(language, QStringLiteral("Language"), QStringLiteral("界面语言")));
 
     m_buttonBox->button(QDialogButtonBox::Save)->setText(dialogText(language, QStringLiteral("Save"), QStringLiteral("保存")));

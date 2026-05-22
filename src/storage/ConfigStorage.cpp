@@ -12,6 +12,8 @@ constexpr auto ProviderNameKey = "api/providerName";
 constexpr auto BaseUrlKey = "api/baseUrl";
 constexpr auto ModelNameKey = "api/modelName";
 constexpr auto ApiKeyKey = "api/apiKey";
+constexpr auto TemperatureKey = "api/temperature";
+constexpr auto MaxTokensKey = "api/maxTokens";
 constexpr auto LanguageKey = "ui/language";
 constexpr auto DefaultOrganizationName = "AIChatDesktop";
 constexpr auto DefaultApplicationName = "AIChatDesktop";
@@ -54,6 +56,12 @@ AppConfig ConfigStorage::load() const
     config.baseUrl = settings.value(BaseUrlKey, defaults.baseUrl).toString();
     config.modelName = settings.value(ModelNameKey, defaults.modelName).toString();
     config.apiKey = m_credentialStorage->readApiKey();
+    if (settings.contains(TemperatureKey)) {
+        config.temperature = settings.value(TemperatureKey).toDouble();
+    }
+    if (settings.contains(MaxTokensKey)) {
+        config.maxTokens = settings.value(MaxTokensKey).toInt();
+    }
     config.language = appLanguageFromString(settings.value(LanguageKey, appLanguageToString(defaults.language)).toString());
 
     const QString legacyApiKey = settings.value(ApiKeyKey).toString();
@@ -80,6 +88,16 @@ bool ConfigStorage::save(const AppConfig &config, QString *error) const
     settings.setValue(ProviderNameKey, config.providerName);
     settings.setValue(BaseUrlKey, config.baseUrl);
     settings.setValue(ModelNameKey, config.modelName);
+    if (config.temperature.has_value()) {
+        settings.setValue(TemperatureKey, config.temperature.value());
+    } else {
+        settings.remove(TemperatureKey);
+    }
+    if (config.maxTokens.has_value()) {
+        settings.setValue(MaxTokensKey, config.maxTokens.value());
+    } else {
+        settings.remove(MaxTokensKey);
+    }
     settings.remove(ApiKeyKey);
     settings.setValue(LanguageKey, appLanguageToString(config.language));
     settings.sync();

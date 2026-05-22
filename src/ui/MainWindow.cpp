@@ -4,6 +4,8 @@
 #include "ui/RolePromptDialog.h"
 #include "ui/SettingsDialog.h"
 
+#include <QCloseEvent>
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -33,6 +35,16 @@ MainWindow::MainWindow(QWidget *parent)
     connectController();
     m_controller.initialize();
     updateSendButtonState();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (m_controller.isGenerating()) {
+        m_controller.cancelCurrentRequest();
+    }
+
+    event->accept();
+    QCoreApplication::quit();
 }
 
 void MainWindow::setupUi()

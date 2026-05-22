@@ -34,12 +34,16 @@ private:
     QLabel *m_baseUrlLabel = nullptr;
     QLabel *m_modelNameLabel = nullptr;
     QLabel *m_apiKeyLabel = nullptr;
+    QLabel *m_temperatureLabel = nullptr;
+    QLabel *m_maxTokensLabel = nullptr;
     QLabel *m_languageLabel = nullptr;
     QComboBox *m_providerCombo = nullptr;
     QLineEdit *m_customProviderEdit = nullptr;
     QLineEdit *m_baseUrlEdit = nullptr;
     QLineEdit *m_modelNameEdit = nullptr;
     QLineEdit *m_apiKeyEdit = nullptr;
+    QLineEdit *m_temperatureEdit = nullptr;
+    QLineEdit *m_maxTokensEdit = nullptr;
     QComboBox *m_languageCombo = nullptr;
     QDialogButtonBox *m_buttonBox = nullptr;
 };
