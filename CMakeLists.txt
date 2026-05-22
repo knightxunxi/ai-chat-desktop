@@ -40,6 +40,8 @@ qt_add_executable(AIChatDesktop
     src/services/StreamParser.cpp
     src/support/AppLogger.h
     src/support/AppLogger.cpp
+    src/support/LogFileReader.h
+    src/support/LogFileReader.cpp
     src/storage/CredentialStorage.h
     src/storage/WindowsCredentialStorage.h
     src/storage/WindowsCredentialStorage.cpp
@@ -53,6 +55,8 @@ qt_add_executable(AIChatDesktop
     src/storage/PromptTemplateStorage.cpp
     src/ui/ChatView.h
     src/ui/ChatView.cpp
+    src/ui/LogViewerDialog.h
+    src/ui/LogViewerDialog.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
     src/ui/MessageWidget.h

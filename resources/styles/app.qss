@@ -256,6 +256,27 @@ QLabel#settingsTitle {
     font-weight: 700;
 }
 
+QLabel#logViewerTitle {
+    color: #111827;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+QLabel#logPathLabel {
+    color: #5f6c7b;
+    font-size: 12px;
+}
+
+QPlainTextEdit#logViewerText {
+    padding: 10px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #0f172a;
+    color: #e2e8f0;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 12px;
+}
+
 QLineEdit,
 QComboBox {
     min-height: 34px;

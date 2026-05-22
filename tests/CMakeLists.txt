@@ -95,6 +95,21 @@ target_include_directories(AppLoggerTest PRIVATE
 
 add_test(NAME AppLoggerTest COMMAND AppLoggerTest)
 
+add_executable(LogFileReaderTest
+    support/LogFileReaderTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/LogFileReader.cpp
+)
+
+target_link_libraries(LogFileReaderTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(LogFileReaderTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME LogFileReaderTest COMMAND LogFileReaderTest)
+
 add_executable(ChatHistoryStorageTest
     storage/ChatHistoryStorageTest.cpp
     ${PROJECT_SOURCE_DIR}/src/storage/ChatHistoryStorage.cpp

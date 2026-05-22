@@ -1,6 +1,8 @@
 #include "ui/MainWindow.h"
 
+#include "support/AppLogger.h"
 #include "ui/ChatView.h"
+#include "ui/LogViewerDialog.h"
 #include "ui/RolePromptDialog.h"
 #include "ui/SettingsDialog.h"
 
@@ -122,11 +124,15 @@ void MainWindow::setupUi()
     m_systemPromptButton = new QPushButton(header);
     m_systemPromptButton->setObjectName(QStringLiteral("systemPromptButton"));
 
+    m_logButton = new QPushButton(header);
+    m_logButton->setObjectName(QStringLiteral("logButton"));
+
     m_settingsButton = new QPushButton(header);
     m_settingsButton->setObjectName(QStringLiteral("settingsButton"));
 
     headerLayout->addWidget(titleGroup, 1);
     headerLayout->addWidget(m_systemPromptButton);
+    headerLayout->addWidget(m_logButton);
     headerLayout->addWidget(m_settingsButton);
 
     m_chatView = new ChatView(mainPanel);
@@ -168,6 +174,7 @@ void MainWindow::setupUi()
     connect(m_retryButton, &QPushButton::clicked, &m_controller, &ApplicationController::retryLastRequest);
     connect(m_sendButton, &QPushButton::clicked, this, &MainWindow::sendCurrentMessage);
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
+    connect(m_logButton, &QPushButton::clicked, this, &MainWindow::openLogViewerDialog);
     connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
     connect(m_newChatButton, &QPushButton::clicked, this, &MainWindow::startNewChat);
     connect(m_renameChatButton, &QPushButton::clicked, this, &MainWindow::renameCurrentChat);
@@ -309,6 +316,7 @@ void MainWindow::applyLanguage()
     m_deleteChatButton->setText(text(QStringLiteral("Delete Chat"), QStringLiteral("删除会话")));
     m_sessionSearchEdit->setPlaceholderText(text(QStringLiteral("Search chats"), QStringLiteral("搜索会话")));
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
+    m_logButton->setText(text(QStringLiteral("Logs"), QStringLiteral("日志")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
     m_retryButton->setText(text(QStringLiteral("Retry"), QStringLiteral("重试")));
     m_personaLabel->setText(text(QStringLiteral("Role: %1"), QStringLiteral("角色：%1")).arg(currentRoleDisplayName()));
@@ -375,6 +383,12 @@ void MainWindow::openSettingsDialog()
     }
 
     m_controller.saveConfig(dialog.config());
+}
+
+void MainWindow::openLogViewerDialog()
+{
+    LogViewerDialog dialog(AppLogger::logFilePath(), m_controller.config().language, this);
+    dialog.exec();
 }
 
 void MainWindow::editSystemPrompt()
@@ -549,6 +563,7 @@ void MainWindow::setGenerating(bool generating)
     m_deleteChatButton->setEnabled(!generating);
     m_systemPromptButton->setEnabled(!generating);
     m_settingsButton->setEnabled(!generating);
+    m_logButton->setEnabled(true);
     m_retryButton->setEnabled(!generating && m_retryButton->isVisible());
     updateSendButtonAppearance();
     updateSendButtonState();
