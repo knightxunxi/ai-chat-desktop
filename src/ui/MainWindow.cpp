@@ -369,20 +369,21 @@ void MainWindow::renameCurrentChat()
     const QString currentTitle = m_controller.currentSession().title == QStringLiteral("New Chat")
                                      ? QString()
                                      : m_controller.currentSession().title;
-    bool accepted = false;
-    const QString nextTitle = QInputDialog::getText(
-        this,
-        text(QStringLiteral("Rename chat"), QStringLiteral("重命名会话")),
-        text(QStringLiteral("Chat title"), QStringLiteral("会话标题")),
-        QLineEdit::Normal,
-        currentTitle,
-        &accepted);
+    QInputDialog dialog(this);
+    dialog.setWindowTitle(text(QStringLiteral("Rename chat"), QStringLiteral("重命名会话")));
+    dialog.setLabelText(text(QStringLiteral("Chat title"), QStringLiteral("会话标题")));
+    dialog.setInputMode(QInputDialog::TextInput);
+    dialog.setTextEchoMode(QLineEdit::Normal);
+    dialog.setTextValue(currentTitle);
+    dialog.setOkButtonText(QStringLiteral("确认"));
+    dialog.setCancelButtonText(QStringLiteral("取消"));
+    dialog.setFixedSize(500, 300);
 
-    if (!accepted) {
+    if (dialog.exec() != QDialog::Accepted) {
         return;
     }
 
-    m_controller.renameCurrentSession(nextTitle);
+    m_controller.renameCurrentSession(dialog.textValue());
 }
 
 void MainWindow::deleteCurrentChat()
