@@ -27,6 +27,7 @@ qt_add_executable(AIChatDesktop
     src/core/ChatMessage.h
     src/core/ChatSession.h
     src/core/MessageRole.h
+    src/core/PromptTemplate.h
     src/services/AIClient.h
     src/services/OpenAICompatibleClient.h
     src/services/OpenAICompatibleClient.cpp
@@ -38,12 +39,16 @@ qt_add_executable(AIChatDesktop
     src/storage/ConfigStorage.cpp
     src/storage/ChatHistoryStorage.h
     src/storage/ChatHistoryStorage.cpp
+    src/storage/PromptTemplateStorage.h
+    src/storage/PromptTemplateStorage.cpp
     src/ui/ChatView.h
     src/ui/ChatView.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
     src/ui/MessageWidget.h
     src/ui/MessageWidget.cpp
+    src/ui/RolePromptDialog.h
+    src/ui/RolePromptDialog.cpp
     src/ui/SettingsDialog.h
     src/ui/SettingsDialog.cpp
 )

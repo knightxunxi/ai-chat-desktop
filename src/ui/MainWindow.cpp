@@ -1,11 +1,11 @@
 #include "ui/MainWindow.h"
 
 #include "ui/ChatView.h"
+#include "ui/RolePromptDialog.h"
 #include "ui/SettingsDialog.h"
 
 #include <QFrame>
 #include <QHBoxLayout>
-#include <QInputDialog>
 #include <QKeySequence>
 #include <QLabel>
 #include <QListWidget>
@@ -147,6 +147,7 @@ void MainWindow::connectController()
         applyConfig();
         applyLanguage();
     });
+    connect(&m_controller, &ApplicationController::promptTemplatesChanged, this, &MainWindow::applyLanguage);
     connect(&m_controller, &ApplicationController::sessionListChanged, this, &MainWindow::populateSessionList);
     connect(&m_controller, &ApplicationController::currentSessionChanged, this, [this]() {
         populateChatView();
@@ -263,9 +264,7 @@ void MainWindow::applyLanguage()
     m_deleteChatButton->setText(text(QStringLiteral("Delete Chat"), QStringLiteral("删除会话")));
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
-    m_personaLabel->setText(m_controller.currentSession().hasSystemPrompt()
-                                ? text(QStringLiteral("Role: Custom prompt"), QStringLiteral("角色：自定义提示词"))
-                                : text(QStringLiteral("Role: Default assistant"), QStringLiteral("角色：默认助手")));
+    m_personaLabel->setText(text(QStringLiteral("Role: %1"), QStringLiteral("角色：%1")).arg(currentRoleDisplayName()));
     m_messageInput->setPlaceholderText(text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
     updateSendButtonAppearance();
 
@@ -279,6 +278,22 @@ void MainWindow::applyLanguage()
 QString MainWindow::text(const QString &english, const QString &chinese) const
 {
     return m_controller.config().language == AppLanguage::English ? english : chinese;
+}
+
+QString MainWindow::currentRoleDisplayName() const
+{
+    const QString systemPrompt = m_controller.currentSession().systemPrompt.trimmed();
+    if (systemPrompt.isEmpty()) {
+        return text(QStringLiteral("Default assistant"), QStringLiteral("默认助手"));
+    }
+
+    for (const PromptTemplate &promptTemplate : m_controller.promptTemplates()) {
+        if (promptTemplate.content.trimmed() == systemPrompt) {
+            return promptTemplate.name;
+        }
+    }
+
+    return text(QStringLiteral("Custom prompt"), QStringLiteral("自定义提示词"));
 }
 
 void MainWindow::updateSendButtonAppearance()
@@ -321,16 +336,13 @@ void MainWindow::editSystemPrompt()
         return;
     }
 
-    bool accepted = false;
-    const QString prompt = QInputDialog::getMultiLineText(
-        this,
-        text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")),
-        text(QStringLiteral("Set the system prompt for this chat:"), QStringLiteral("设置当前会话的系统提示词：")),
-        m_controller.currentSession().systemPrompt,
-        &accepted);
-
-    if (accepted) {
-        m_controller.setSystemPrompt(prompt);
+    RolePromptDialog dialog(m_controller.currentSession().systemPrompt,
+                            m_controller.promptTemplates(),
+                            m_controller.config().language,
+                            this);
+    if (dialog.exec() == QDialog::Accepted) {
+        m_controller.savePromptTemplates(dialog.templates());
+        m_controller.setSystemPrompt(dialog.prompt());
     }
 }
 

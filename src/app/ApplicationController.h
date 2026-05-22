@@ -2,9 +2,11 @@
 
 #include "core/AppConfig.h"
 #include "core/ChatSession.h"
+#include "core/PromptTemplate.h"
 #include "services/OpenAICompatibleClient.h"
 #include "storage/ChatHistoryStorage.h"
 #include "storage/ConfigStorage.h"
+#include "storage/PromptTemplateStorage.h"
 
 #include <QObject>
 #include <QVector>
@@ -21,10 +23,12 @@ public:
     const AppConfig &config() const;
     const ChatSession &currentSession() const;
     const QVector<ChatSession> &sessionSummaries() const;
+    const QVector<PromptTemplate> &promptTemplates() const;
     bool isGenerating() const;
 
 public slots:
     void saveConfig(const AppConfig &config);
+    void savePromptTemplates(const QVector<PromptTemplate> &templates);
     void setSystemPrompt(const QString &prompt);
     void startNewChat();
     void switchToSession(const QString &sessionId);
@@ -34,6 +38,7 @@ public slots:
 
 signals:
     void configChanged();
+    void promptTemplatesChanged();
     void sessionListChanged();
     void currentSessionChanged();
     void currentChatCleared();
@@ -58,8 +63,10 @@ private:
     AppConfig m_config;
     ChatSession m_session;
     QVector<ChatSession> m_sessionSummaries;
+    QVector<PromptTemplate> m_promptTemplates;
     ConfigStorage m_configStorage;
     ChatHistoryStorage m_chatHistoryStorage;
+    PromptTemplateStorage m_promptTemplateStorage;
     OpenAICompatibleClient m_aiClient;
     QString m_currentAssistantContent;
     bool m_historyAvailable = false;

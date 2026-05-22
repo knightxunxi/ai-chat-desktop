@@ -15,6 +15,15 @@ void ApplicationController::initialize()
     m_config = m_configStorage.load();
     emit configChanged();
 
+    QString templateError;
+    m_promptTemplates = m_promptTemplateStorage.load(&templateError);
+    if (!templateError.isEmpty()) {
+        emit startupWarning(
+            QStringLiteral("Prompt templates are unavailable. Default templates will be used.\n\n%1").arg(templateError),
+            QStringLiteral("角色提示词模板不可用，将使用默认模板。\n\n%1").arg(templateError));
+    }
+    emit promptTemplatesChanged();
+
     QString error;
     if (!m_chatHistoryStorage.initialize(&error)) {
         m_session = ChatSession::createDefault();
@@ -66,6 +75,11 @@ const QVector<ChatSession> &ApplicationController::sessionSummaries() const
     return m_sessionSummaries;
 }
 
+const QVector<PromptTemplate> &ApplicationController::promptTemplates() const
+{
+    return m_promptTemplates;
+}
+
 bool ApplicationController::isGenerating() const
 {
     return m_isGenerating;
@@ -76,6 +90,21 @@ void ApplicationController::saveConfig(const AppConfig &config)
     m_config = config;
     m_configStorage.save(m_config);
     emit configChanged();
+}
+
+void ApplicationController::savePromptTemplates(const QVector<PromptTemplate> &templates)
+{
+    m_promptTemplates = templates;
+
+    QString error;
+    if (!m_promptTemplateStorage.save(m_promptTemplates, &error)) {
+        emit statusMessage(QStringLiteral("Failed to save prompt templates: %1").arg(error),
+                           QStringLiteral("保存角色提示词模板失败：%1").arg(error),
+                           6000);
+        return;
+    }
+
+    emit promptTemplatesChanged();
 }
 
 void ApplicationController::setSystemPrompt(const QString &prompt)
