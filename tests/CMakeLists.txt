@@ -95,6 +95,21 @@ target_include_directories(ChatHistoryStorageTest PRIVATE
 
 add_test(NAME ChatHistoryStorageTest COMMAND ChatHistoryStorageTest)
 
+add_executable(ChatSessionExporterTest
+    storage/ChatSessionExporterTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/ChatSessionExporter.cpp
+)
+
+target_link_libraries(ChatSessionExporterTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(ChatSessionExporterTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME ChatSessionExporterTest COMMAND ChatSessionExporterTest)
+
 add_executable(ConfigStorageTest
     storage/ConfigStorageTest.cpp
     ${PROJECT_SOURCE_DIR}/src/storage/ConfigStorage.cpp

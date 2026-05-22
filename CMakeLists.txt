@@ -44,6 +44,8 @@ qt_add_executable(AIChatDesktop
     src/storage/ConfigStorage.cpp
     src/storage/ChatHistoryStorage.h
     src/storage/ChatHistoryStorage.cpp
+    src/storage/ChatSessionExporter.h
+    src/storage/ChatSessionExporter.cpp
     src/storage/PromptTemplateStorage.h
     src/storage/PromptTemplateStorage.cpp
     src/ui/ChatView.h

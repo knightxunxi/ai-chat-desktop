@@ -2,6 +2,8 @@
 
 #include "app/SessionSummaryList.h"
 
+#include "storage/ChatSessionExporter.h"
+
 #include <QDateTime>
 
 ApplicationController::ApplicationController(QObject *parent)
@@ -85,6 +87,11 @@ const QVector<PromptTemplate> &ApplicationController::promptTemplates() const
 bool ApplicationController::isGenerating() const
 {
     return m_isGenerating;
+}
+
+bool ApplicationController::exportCurrentSessionMarkdown(const QString &filePath, QString *error) const
+{
+    return ChatSessionExporter::writeMarkdown(m_session, filePath, error);
 }
 
 void ApplicationController::saveConfig(const AppConfig &config)
