@@ -75,6 +75,8 @@ Platform: Windows
 - [V2 验收与复盘](docs/08-v2-acceptance-notes.md)
 - [V3 Roadmap](docs/09-v3-roadmap.md)
 - [V3 API Key 安全存储方案](docs/10-v3-credential-storage-design.md)
+- [V3 验收与复盘](docs/11-v3-acceptance-notes.md)
+- [V3 Release Notes](docs/12-v3-release-notes.md)
 
 ## 构建方式
 
@@ -160,11 +162,11 @@ Copy-Item build-release-qt\AIChatDesktop.exe release\AIChatDesktop\
 windeployqt release\AIChatDesktop\AIChatDesktop.exe
 ```
 
-发布前请在 `release\AIChatDesktop\AIChatDesktop.exe` 中手工验证 API 请求、语言切换、聊天记录恢复、停止生成、消息复制、Markdown 展示和角色提示词模板。
+发布前请在 `release\AIChatDesktop\AIChatDesktop.exe` 中手工验证 API 请求、语言切换、聊天记录恢复、停止生成、消息复制、Markdown 展示、角色提示词模板、错误重试和应用内日志查看。
 
 ## 当前版本状态
 
-当前 main 已进入 V3 后期，已完成安全存储、会话管理增强、服务商预设、模型参数、错误重试和应用内日志查看。
+当前 main 已完成 V3，覆盖安全存储、会话管理增强、服务商预设、模型参数、错误重试、应用内日志查看和发布准备文档。
 
 已知限制：
 
@@ -174,12 +176,12 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 
 ## 后续方向
 
-V2 验收和复盘见 [V2 验收与复盘](docs/08-v2-acceptance-notes.md)。
+V3 验收和复盘见 [V3 验收与复盘](docs/11-v3-acceptance-notes.md)。
 
-V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)。
+V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)，发布说明见 [V3 Release Notes](docs/12-v3-release-notes.md)。
 
 候选方向：
 
-- V3 验收与发布准备。
+- V3 Release 包手工验收和 GitHub Release 发布。
 - Markdown 代码高亮增强。
 - 角色提示词模板导入导出。

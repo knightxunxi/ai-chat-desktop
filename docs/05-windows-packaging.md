@@ -1,6 +1,6 @@
 # Windows 打包说明
 
-本文档对应 V1 阶段 8 的 TASK-019，用于生成一个可在 Windows 上运行的发布目录。
+本文档用于生成一个可在 Windows 上运行的发布目录。当前发布说明已同步到 V3 / `0.3.0`。
 
 ## 1. 前置条件
 
@@ -69,12 +69,14 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 & "D:\QT\6.10.2\mingw_64\bin\windeployqt.exe" release\AIChatDesktop\AIChatDesktop.exe
 ```
 
-本轮执行结果：
+本轮 V3 发布准备执行结果：
 
 - `build-release-qt` 构建通过。
-- `ctest --test-dir build-release-qt --output-on-failure` 通过，5 个测试全部通过。
+- `ctest --test-dir build-release-qt --output-on-failure` 通过，15 个测试全部通过。
 - `windeployqt release\AIChatDesktop\AIChatDesktop.exe` 执行成功。
-- `windeployqt` 提示未找到 `dxcompiler.dll` 和 `dxil.dll`，并跳过 `qopensslbackend.dll`。当前应用使用 Windows TLS 后端 `qschannelbackend.dll`，但发布前仍建议在目标机器上验证 HTTPS 请求。
+- 发布目录启动/关闭 smoke check 通过。
+- 已生成 `release\AIChatDesktop-0.3.0-windows.zip`。
+- `windeployqt` 提示未找到 `dxcompiler.dll` 和 `dxil.dll`，并跳过 `qopensslbackend.dll`。当前发布目录包含 `qschannelbackend.dll`，但发布前仍建议在目标机器上验证 HTTPS 请求。
 
 ## 4. 发布前检查
 
@@ -85,17 +87,19 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 - 语言切换后界面文案刷新。
 - 发送消息可以收到流式回复。
 - 生成中点击停止可以取消当前请求。
-- 消息复制、Markdown 代码块展示和角色提示词模板可用。
-- 日志文件能记录请求开始和完成。
+- 错误 API Key 或错误模型名时提示清楚，失败后可以重试。
+- 消息复制、Markdown 代码块展示、角色提示词模板可用。
+- 会话重命名、搜索和 Markdown 导出可用。
+- 日志文件能记录请求开始和完成，应用内日志窗口可查看并打开日志目录。
 - 关闭重启后配置和最近会话恢复。
-- 缺少 API Key 或错误 API Key 时提示清楚。
+- 关闭主窗口后进程正常退出，不继续占用 `AIChatDesktop.exe`。
 
 如果要上传 GitHub Release，建议只上传发布目录压缩包，不提交 `release/` 目录到 Git。当前 `.gitignore` 已忽略 `release/`。
 
 推荐压缩命令：
 
 ```powershell
-Compress-Archive -Path release\AIChatDesktop\* -DestinationPath release\AIChatDesktop-0.2.0-windows.zip -Force
+Compress-Archive -Path release\AIChatDesktop\* -DestinationPath release\AIChatDesktop-0.3.0-windows.zip -Force
 ```
 
 压缩包生成后，建议解压到一个临时目录再运行一次，确认没有依赖遗漏。
@@ -131,29 +135,30 @@ cmake -S . -B build-release-qt -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -
 
 ## 6. 发布说明草稿
 
-版本：0.2.0
+版本：0.3.0
 
-V2 能力：
+V3 能力：
 
 - OpenAI 兼容聊天接口。
-- DeepSeek 默认配置。
-- API Key、Base URL、模型名称配置。
+- DeepSeek、OpenAI 和自定义服务商预设。
+- API Key、Base URL、模型名称和可选模型参数配置。
+- API Key 使用 Windows Credential Manager 保存。
 - 中文/英文界面语言。
 - 当前会话多轮上下文。
 - 当前会话角色提示词。
 - 流式回复展示。
 - 本地配置和聊天记录保存。
-- 多会话列表、新建、切换和删除。
+- 多会话列表、新建、切换、重命名、搜索、导出和删除。
 - 停止生成。
 - 消息复制。
+- 当前会话导出为 Markdown。
 - AI 消息基础 Markdown 渲染和代码块展示。
-- 基础日志记录。
+- 错误分类提示和失败重试。
+- 基础日志记录、应用内日志查看和打开日志目录。
 - 角色提示词模板。
 
 已知限制：
 
-- API Key 仍使用普通本地配置保存。
-- 多会话暂不支持重命名和搜索。
+- 当前版本只面向 Windows。
 - Markdown 暂不支持复杂代码高亮。
-- 日志暂不支持应用内查看。
 - 角色提示词模板暂不支持导入导出和云同步。
