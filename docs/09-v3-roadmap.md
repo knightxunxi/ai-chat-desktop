@@ -21,7 +21,7 @@ V3 涉及的主要技术类型：
 | Qt 6 Widgets | 桌面 GUI | 设置、会话管理、日志查看、导出入口 |
 | Qt Network | HTTP/S API 调用 | OpenAI 兼容聊天接口、多服务商请求 |
 | Qt SQL / SQLite | 本地结构化存储 | 聊天会话、消息、会话元数据 |
-| Qt Keychain 或 Windows Credential Manager | 安全凭据存储 | API Key 安全保存 |
+| Windows Credential Manager / Win32 Credential Management API | 安全凭据存储 | API Key 安全保存 |
 | QSettings | 非敏感配置 | 语言、Base URL、模型、UI 偏好 |
 | JSON | 轻量配置文件 | 服务商预设、角色模板导入导出 |
 | QFile / QTextStream | 文件读写 | 日志、导出 Markdown/JSON |
@@ -62,7 +62,9 @@ V3 涉及的主要技术类型：
 - 用户账号系统。
 - 插件市场。
 - 自动更新系统。
-- 移动端或 Web 端。
+- 移动端、Web 端或 macOS/Linux 平台迁移。
+
+当前 V3 只面向 Windows 桌面使用场景，安全凭据存储优先采用 Windows Credential Manager。后续如果需要迁移到其他平台，再单独设计平台适配层。
 
 ## 4. 推荐里程碑
 
@@ -74,8 +76,8 @@ V3 涉及的主要技术类型：
 
 任务：
 
-- 调研 Qt Keychain 与 Windows Credential Manager。
-- 设计 `CredentialStorage` 接口。
+- 调研 Windows Credential Manager 与继续使用 `QSettings` 的差异。
+- 设计面向 Windows Credential Manager 的 `CredentialStorage` 接口。
 - 保留配置兼容迁移路径。
 - 确认日志、导出和错误信息不泄露 API Key。
 
@@ -181,12 +183,13 @@ V3 涉及的主要技术类型：
 
 范围：
 
-- 比较 Qt Keychain、Windows Credential Manager 和继续使用 `QSettings` 的差异。
+- 比较 Windows Credential Manager 和继续使用 `QSettings` 的差异。
+- 明确 Win32 Credential Management API 的读写、删除和错误处理方案。
 - 形成技术方案和风险说明。
 
 验证：
 
-- 输出安全存储方案文档。
+- 输出 Windows API Key 安全存储方案文档。
 
 ### V3-TASK-003 新增 CredentialStorage 抽象
 
@@ -194,6 +197,7 @@ V3 涉及的主要技术类型：
 
 - 创建凭据存储接口。
 - 将 API Key 读写从 `ConfigStorage` 中拆出。
+- 为自动化测试准备内存实现或 fake 实现。
 
 验证：
 
@@ -204,8 +208,9 @@ V3 涉及的主要技术类型：
 
 范围：
 
-- 接入选定的系统凭据方案。
+- 接入 Windows Credential Manager。
 - 迁移或清理旧 `QSettings` API Key。
+- CMake 在 Windows 构建中链接 `Advapi32`。
 
 验证：
 
@@ -324,7 +329,7 @@ V3-TASK-012
 
 ## 7. 风险点
 
-- API Key 安全存储涉及平台差异，Windows 方案不一定能直接迁移到 macOS/Linux。
+- 当前 V3 只实现 Windows Credential Manager。未来如果迁移 macOS/Linux，需要重新设计平台适配和验收范围。
 - 凭据迁移需要谨慎，避免用户已有配置丢失。
 - 会话搜索如果直接扫描大量消息，后续可能需要索引优化。
 - 多服务商参数差异较大，请求体构建需要保持兼容。

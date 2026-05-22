@@ -35,6 +35,9 @@ qt_add_executable(AIChatDesktop
     src/services/StreamParser.cpp
     src/support/AppLogger.h
     src/support/AppLogger.cpp
+    src/storage/CredentialStorage.h
+    src/storage/WindowsCredentialStorage.h
+    src/storage/WindowsCredentialStorage.cpp
     src/storage/ConfigStorage.h
     src/storage/ConfigStorage.cpp
     src/storage/ChatHistoryStorage.h
@@ -66,6 +69,10 @@ target_link_libraries(AIChatDesktop PRIVATE
     Qt6::Network
     Qt6::Sql
 )
+
+if(WIN32)
+    target_link_libraries(AIChatDesktop PRIVATE Advapi32)
+endif()
 
 target_include_directories(AIChatDesktop PRIVATE
     src
