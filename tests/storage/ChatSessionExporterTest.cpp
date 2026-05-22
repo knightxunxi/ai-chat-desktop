@@ -24,6 +24,8 @@ int main()
     const QString markdown = ChatSessionExporter::toMarkdown(session);
     assert(markdown.contains(QStringLiteral("# Export Test")));
     assert(markdown.contains(QStringLiteral("- Session ID: session-1")));
+    assert(markdown.contains(QStringLiteral("- Created: 2026-05-22T09:02:03.000+08:00")));
+    assert(markdown.contains(QStringLiteral("- Time: 2026-05-22T09:02:13.000+08:00")));
     assert(markdown.contains(QStringLiteral("## Role Prompt")));
     assert(markdown.contains(QStringLiteral("Be concise.")));
     assert(markdown.contains(QStringLiteral("- Role: user")));

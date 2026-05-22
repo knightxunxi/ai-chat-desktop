@@ -14,13 +14,13 @@ QString displayTitle(const ChatSession &session)
     return title.isEmpty() ? QStringLiteral("Untitled Chat") : title;
 }
 
-QString isoUtc(const QDateTime &dateTime)
+QString isoBeijingTime(const QDateTime &dateTime)
 {
     if (!dateTime.isValid()) {
         return QStringLiteral("unknown");
     }
 
-    return dateTime.toUTC().toString(Qt::ISODateWithMs);
+    return dateTime.toUTC().addSecs(8 * 60 * 60).toString(QStringLiteral("yyyy-MM-dd'T'HH:mm:ss.zzz'+08:00'"));
 }
 
 QString roleLabel(MessageRole role)
@@ -56,8 +56,8 @@ QString toMarkdown(const ChatSession &session)
 
     stream << "# " << displayTitle(session) << "\n\n";
     stream << "- Session ID: " << session.id << '\n';
-    stream << "- Created: " << isoUtc(session.createdAt) << '\n';
-    stream << "- Updated: " << isoUtc(session.updatedAt) << "\n\n";
+    stream << "- Created: " << isoBeijingTime(session.createdAt) << '\n';
+    stream << "- Updated: " << isoBeijingTime(session.updatedAt) << "\n\n";
 
     if (session.hasSystemPrompt()) {
         stream << "## Role Prompt\n\n";
@@ -74,7 +74,7 @@ QString toMarkdown(const ChatSession &session)
         const ChatMessage &message = session.messages.at(index);
         stream << "### Message " << (index + 1) << "\n\n";
         stream << "- Role: " << roleLabel(message.role) << '\n';
-        stream << "- Time: " << isoUtc(message.createdAt) << "\n\n";
+        stream << "- Time: " << isoBeijingTime(message.createdAt) << "\n\n";
         stream << message.content;
         if (!message.content.endsWith(QLatin1Char('\n'))) {
             stream << '\n';
