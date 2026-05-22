@@ -99,6 +99,11 @@ QListWidget#sessionList {
     color: #1f2933;
 }
 
+QLineEdit#sessionSearchEdit {
+    min-height: 32px;
+    padding: 5px 9px;
+}
+
 QListWidget#sessionList::item {
     min-height: 36px;
     padding: 6px 10px;

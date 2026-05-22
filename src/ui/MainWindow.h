@@ -10,6 +10,7 @@ class QLabel;
 class QListWidget;
 class QListWidgetItem;
 class QPushButton;
+class QLineEdit;
 class QTextEdit;
 
 class MainWindow : public QMainWindow
@@ -49,6 +50,7 @@ private:
 
     ApplicationController m_controller;
     QListWidget *m_sessionList = nullptr;
+    QLineEdit *m_sessionSearchEdit = nullptr;
     QPushButton *m_newChatButton = nullptr;
     QPushButton *m_renameChatButton = nullptr;
     QPushButton *m_deleteChatButton = nullptr;

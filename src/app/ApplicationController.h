@@ -31,6 +31,7 @@ public slots:
     void savePromptTemplates(const QVector<PromptTemplate> &templates);
     void setSystemPrompt(const QString &prompt);
     void renameCurrentSession(const QString &title);
+    void searchSessions(const QString &query);
     void startNewChat();
     void switchToSession(const QString &sessionId);
     void deleteCurrentSession();
@@ -57,6 +58,7 @@ private:
     void handleRequestFailed(const QString &message);
     void setGenerating(bool generating);
     bool saveCurrentSession(bool moveToTop = true);
+    bool reloadSessionSummaries(QString *error = nullptr);
     void upsertCurrentSessionSummary(bool moveToTop);
     bool hasPersistableCurrentSession() const;
     QString text(const QString &english, const QString &chinese) const;
@@ -70,6 +72,7 @@ private:
     PromptTemplateStorage m_promptTemplateStorage;
     OpenAICompatibleClient m_aiClient;
     QString m_currentAssistantContent;
+    QString m_sessionSearchQuery;
     bool m_historyAvailable = false;
     bool m_isGenerating = false;
 };
