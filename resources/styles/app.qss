@@ -106,8 +106,8 @@ QListWidget#sessionList::item {
 }
 
 QListWidget#sessionList::item:selected {
-    background: #ffffff;
-    color: #111827;
+    background: #111827;
+    color: #ffffff;
 }
 
 QFrame#chatHeader {

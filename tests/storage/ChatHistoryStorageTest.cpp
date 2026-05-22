@@ -60,8 +60,18 @@ int main(int argc, char *argv[])
     assert(summaries[0].messages.isEmpty());
     assert(summaries[1].id == session.id);
 
+    session.title = QStringLiteral("Renamed Storage Test");
+    assertStorageResult(storage.saveSession(session, &error), error);
+
+    const QVector<ChatSession> renamedSummaries = storage.loadSessionSummaries(&error);
+    assert(renamedSummaries.size() == 2);
+    assert(renamedSummaries[0].id == secondSession.id);
+    assert(renamedSummaries[1].id == session.id);
+    assert(renamedSummaries[1].title == QStringLiteral("Renamed Storage Test"));
+
     std::optional<ChatSession> loadedById = storage.loadSession(session.id, &error);
     assert(loadedById.has_value());
+    assert(loadedById->title == QStringLiteral("Renamed Storage Test"));
     assert(loadedById->messages.size() == 2);
     assert(loadedById->messages[0].content == QStringLiteral("Hello"));
 

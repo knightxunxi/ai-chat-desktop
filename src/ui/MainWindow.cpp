@@ -6,8 +6,10 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QKeySequence>
 #include <QLabel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMessageBox>
@@ -52,6 +54,9 @@ void MainWindow::setupUi()
     m_newChatButton = new QPushButton(sidebar);
     m_newChatButton->setObjectName(QStringLiteral("newChatButton"));
 
+    m_renameChatButton = new QPushButton(sidebar);
+    m_renameChatButton->setObjectName(QStringLiteral("renameChatButton"));
+
     m_deleteChatButton = new QPushButton(sidebar);
     m_deleteChatButton->setObjectName(QStringLiteral("deleteChatButton"));
 
@@ -59,6 +64,7 @@ void MainWindow::setupUi()
     m_sessionList->setObjectName(QStringLiteral("sessionList"));
 
     sidebarLayout->addWidget(m_newChatButton);
+    sidebarLayout->addWidget(m_renameChatButton);
     sidebarLayout->addWidget(m_deleteChatButton);
     sidebarLayout->addWidget(m_sessionList, 1);
 
@@ -131,6 +137,7 @@ void MainWindow::setupUi()
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
     connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
     connect(m_newChatButton, &QPushButton::clicked, this, &MainWindow::startNewChat);
+    connect(m_renameChatButton, &QPushButton::clicked, this, &MainWindow::renameCurrentChat);
     connect(m_deleteChatButton, &QPushButton::clicked, this, &MainWindow::deleteCurrentChat);
     connect(m_sessionList, &QListWidget::itemClicked, this, &MainWindow::switchToSession);
 
@@ -261,6 +268,7 @@ void MainWindow::applyLanguage()
 {
     setWindowTitle(text(QStringLiteral("AI Chat Desktop"), QStringLiteral("AI 聊天桌面应用")));
     m_newChatButton->setText(text(QStringLiteral("New Chat"), QStringLiteral("新建会话")));
+    m_renameChatButton->setText(text(QStringLiteral("Rename"), QStringLiteral("重命名")));
     m_deleteChatButton->setText(text(QStringLiteral("Delete Chat"), QStringLiteral("删除会话")));
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
@@ -352,6 +360,32 @@ void MainWindow::startNewChat()
     m_controller.startNewChat();
 }
 
+void MainWindow::renameCurrentChat()
+{
+    if (m_controller.isGenerating()) {
+        return;
+    }
+
+    const QString currentTitle = m_controller.currentSession().title == QStringLiteral("New Chat")
+                                     ? QString()
+                                     : m_controller.currentSession().title;
+    QInputDialog dialog(this);
+    dialog.setWindowTitle(text(QStringLiteral("Rename chat"), QStringLiteral("重命名会话")));
+    dialog.setLabelText(text(QStringLiteral("Chat title"), QStringLiteral("会话标题")));
+    dialog.setInputMode(QInputDialog::TextInput);
+    dialog.setTextEchoMode(QLineEdit::Normal);
+    dialog.setTextValue(currentTitle);
+    dialog.setOkButtonText(QStringLiteral("确认"));
+    dialog.setCancelButtonText(QStringLiteral("取消"));
+    dialog.setFixedSize(500, 300);
+
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+
+    m_controller.renameCurrentSession(dialog.textValue());
+}
+
 void MainWindow::deleteCurrentChat()
 {
     if (m_controller.isGenerating()) {
@@ -414,6 +448,7 @@ void MainWindow::setGenerating(bool generating)
 {
     m_messageInput->setEnabled(!generating);
     m_newChatButton->setEnabled(!generating);
+    m_renameChatButton->setEnabled(!generating);
     m_deleteChatButton->setEnabled(!generating);
     m_systemPromptButton->setEnabled(!generating);
     m_settingsButton->setEnabled(!generating);

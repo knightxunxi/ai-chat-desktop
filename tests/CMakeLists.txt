@@ -12,6 +12,21 @@ target_include_directories(CoreModelSmokeTest PRIVATE
 
 add_test(NAME CoreModelSmokeTest COMMAND CoreModelSmokeTest)
 
+add_executable(SessionSummaryListTest
+    app/SessionSummaryListTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/SessionSummaryList.cpp
+)
+
+target_link_libraries(SessionSummaryListTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(SessionSummaryListTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME SessionSummaryListTest COMMAND SessionSummaryListTest)
+
 add_executable(StreamParserTest
     services/StreamParserTest.cpp
     ${PROJECT_SOURCE_DIR}/src/services/StreamParser.cpp
