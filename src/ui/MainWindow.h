@@ -39,6 +39,7 @@ private:
     void updateSendButtonAppearance();
     void updateSendButtonState();
     void openSettingsDialog();
+    void openLogViewerDialog();
     void editSystemPrompt();
     void startNewChat();
     void renameCurrentChat();
@@ -62,6 +63,7 @@ private:
     QPushButton *m_exportChatButton = nullptr;
     QPushButton *m_deleteChatButton = nullptr;
     QPushButton *m_systemPromptButton = nullptr;
+    QPushButton *m_logButton = nullptr;
     ChatView *m_chatView = nullptr;
     QTextEdit *m_messageInput = nullptr;
     QPushButton *m_retryButton = nullptr;
