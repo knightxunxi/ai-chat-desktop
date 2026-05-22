@@ -84,6 +84,9 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 - 设置窗口可以保存配置。
 - 语言切换后界面文案刷新。
 - 发送消息可以收到流式回复。
+- 生成中点击停止可以取消当前请求。
+- 消息复制、Markdown 代码块展示和角色提示词模板可用。
+- 日志文件能记录请求开始和完成。
 - 关闭重启后配置和最近会话恢复。
 - 缺少 API Key 或错误 API Key 时提示清楚。
 
@@ -92,7 +95,7 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 推荐压缩命令：
 
 ```powershell
-Compress-Archive -Path release\AIChatDesktop\* -DestinationPath release\AIChatDesktop-0.1.0-windows.zip -Force
+Compress-Archive -Path release\AIChatDesktop\* -DestinationPath release\AIChatDesktop-0.2.0-windows.zip -Force
 ```
 
 压缩包生成后，建议解压到一个临时目录再运行一次，确认没有依赖遗漏。
@@ -128,9 +131,9 @@ cmake -S . -B build-release-qt -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -
 
 ## 6. 发布说明草稿
 
-版本：0.1.0
+版本：0.2.0
 
-V1 能力：
+V2 能力：
 
 - OpenAI 兼容聊天接口。
 - DeepSeek 默认配置。
@@ -140,10 +143,17 @@ V1 能力：
 - 当前会话角色提示词。
 - 流式回复展示。
 - 本地配置和聊天记录保存。
+- 多会话列表、新建、切换和删除。
+- 停止生成。
+- 消息复制。
+- AI 消息基础 Markdown 渲染和代码块展示。
+- 基础日志记录。
+- 角色提示词模板。
 
 已知限制：
 
-- 支持基础多会话列表和切换，暂不支持重命名、删除、搜索等完整会话管理。
-- 暂不支持停止生成。
-- 暂不支持 Markdown 渲染。
 - API Key 仍使用普通本地配置保存。
+- 多会话暂不支持重命名和搜索。
+- Markdown 暂不支持复杂代码高亮。
+- 日志暂不支持应用内查看。
+- 角色提示词模板暂不支持导入导出和云同步。
