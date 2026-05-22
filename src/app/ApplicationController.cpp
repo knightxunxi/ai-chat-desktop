@@ -1,5 +1,7 @@
 #include "app/ApplicationController.h"
 
+#include "app/SessionSummaryList.h"
+
 #include <QDateTime>
 
 ApplicationController::ApplicationController(QObject *parent)
@@ -129,20 +131,50 @@ void ApplicationController::setSystemPrompt(const QString &prompt)
     emit currentSessionChanged();
 }
 
+void ApplicationController::renameCurrentSession(const QString &title)
+{
+    if (m_isGenerating) {
+        return;
+    }
+
+    const QString trimmedTitle = title.trimmed();
+    if (trimmedTitle.isEmpty()) {
+        emit statusMessage(QStringLiteral("Chat title cannot be empty."),
+                           QStringLiteral("会话标题不能为空。"),
+                           3000);
+        return;
+    }
+
+    if (m_session.title == trimmedTitle) {
+        emit currentSessionChanged();
+        return;
+    }
+
+    const QString previousTitle = m_session.title;
+    m_session.title = trimmedTitle;
+    if (!saveCurrentSession(false)) {
+        m_session.title = previousTitle;
+        emit statusMessage(QStringLiteral("Failed to rename the chat session."),
+                           QStringLiteral("重命名会话失败。"),
+                           6000);
+        return;
+    }
+
+    emit currentSessionChanged();
+}
+
 void ApplicationController::startNewChat()
 {
     if (m_isGenerating) {
         return;
     }
 
-    if (m_session.messages.isEmpty() && !m_session.hasSystemPrompt()) {
+    if (!hasPersistableCurrentSession()) {
         emit currentSessionChanged();
         return;
     }
 
-    if (hasPersistableCurrentSession()) {
-        saveCurrentSession();
-    }
+    saveCurrentSession(false);
 
     m_session = ChatSession::createDefault();
     m_currentAssistantContent.clear();
@@ -164,7 +196,7 @@ void ApplicationController::switchToSession(const QString &sessionId)
     }
 
     if (hasPersistableCurrentSession()) {
-        saveCurrentSession();
+        saveCurrentSession(false);
     }
 
     QString error;
@@ -327,7 +359,7 @@ void ApplicationController::setGenerating(bool generating)
     emit generatingChanged(m_isGenerating);
 }
 
-bool ApplicationController::saveCurrentSession()
+bool ApplicationController::saveCurrentSession(bool moveToTop)
 {
     if (!m_historyAvailable) {
         return false;
@@ -350,35 +382,21 @@ bool ApplicationController::saveCurrentSession()
         }
     }
 
-    upsertCurrentSessionSummary(true);
+    upsertCurrentSessionSummary(moveToTop);
     emit sessionListChanged();
     return true;
 }
 
 void ApplicationController::upsertCurrentSessionSummary(bool moveToTop)
 {
-    int existingIndex = -1;
-    for (int index = 0; index < m_sessionSummaries.size(); ++index) {
-        if (m_sessionSummaries[index].id == m_session.id) {
-            existingIndex = index;
-            break;
-        }
-    }
-
-    if (existingIndex >= 0) {
-        m_sessionSummaries.removeAt(existingIndex);
-    }
-
-    if (moveToTop || existingIndex < 0) {
-        m_sessionSummaries.prepend(m_session);
-    } else {
-        m_sessionSummaries.insert(existingIndex, m_session);
-    }
+    SessionSummaryList::upsert(&m_sessionSummaries, m_session, moveToTop);
 }
 
 bool ApplicationController::hasPersistableCurrentSession() const
 {
-    return !m_session.messages.isEmpty() || m_session.hasSystemPrompt();
+    const QString title = m_session.title.trimmed();
+    const bool hasCustomTitle = !title.isEmpty() && title != QStringLiteral("New Chat");
+    return !m_session.messages.isEmpty() || m_session.hasSystemPrompt() || hasCustomTitle;
 }
 
 QString ApplicationController::text(const QString &english, const QString &chinese) const

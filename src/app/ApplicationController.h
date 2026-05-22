@@ -30,6 +30,7 @@ public slots:
     void saveConfig(const AppConfig &config);
     void savePromptTemplates(const QVector<PromptTemplate> &templates);
     void setSystemPrompt(const QString &prompt);
+    void renameCurrentSession(const QString &title);
     void startNewChat();
     void switchToSession(const QString &sessionId);
     void deleteCurrentSession();
@@ -55,7 +56,7 @@ private:
     void handleRequestFinished();
     void handleRequestFailed(const QString &message);
     void setGenerating(bool generating);
-    bool saveCurrentSession();
+    bool saveCurrentSession(bool moveToTop = true);
     void upsertCurrentSessionSummary(bool moveToTop);
     bool hasPersistableCurrentSession() const;
     QString text(const QString &english, const QString &chinese) const;
