@@ -71,6 +71,7 @@ Platform: Windows
 - [V1 复盘与 V2 规划](docs/06-v1-retrospective.md)
 - [V2 Roadmap](docs/07-v2-roadmap.md)
 - [V2 验收与复盘](docs/08-v2-acceptance-notes.md)
+- [V3 Roadmap](docs/09-v3-roadmap.md)
 
 ## 构建方式
 
@@ -169,7 +170,9 @@ V2 已完成基础聊天闭环、多会话、停止生成、消息复制、基�
 
 V2 验收和复盘见 [V2 验收与复盘](docs/08-v2-acceptance-notes.md)。
 
-V3 候选方向：
+V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)。
+
+候选方向：
 
 - API Key 安全存储。
 - 会话重命名、搜索和导出。
