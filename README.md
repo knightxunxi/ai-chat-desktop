@@ -79,6 +79,7 @@ Platform: Windows
 - [V3 验收与复盘](docs/11-v3-acceptance-notes.md)
 - [V3 Release Notes](docs/12-v3-release-notes.md)
 - [V4 Roadmap](docs/13-v4-roadmap.md)
+- [代码格式规范](docs/14-code-style.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -157,6 +158,7 @@ ctest --test-dir build-qt --output-on-failure
 - 基础日志写入和敏感字段脱敏。
 - 日志最近内容读取。
 - 角色提示词模板保存和选择。
+- 应用启动/关闭 smoke test。
 
 ## Windows 打包
 
