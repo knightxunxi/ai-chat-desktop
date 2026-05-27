@@ -81,6 +81,7 @@ Platform: Windows
 - [V3 Release Notes](docs/12-v3-release-notes.md)
 - [V4 Roadmap](docs/13-v4-roadmap.md)
 - [代码格式规范](docs/14-code-style.md)
+- [小工具集成方案](docs/15-tool-integration-design.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
