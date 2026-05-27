@@ -21,7 +21,8 @@
 - 消息复制。
 - 当前会话导出为 Markdown。
 - AI 消息基础 Markdown 渲染。
-- 角色提示词模板。
+- AI 代码块独立复制。
+- 角色提示词模板和 JSON 导入导出。
 - 错误分类提示和失败重试。
 - 基础日志记录、应用内日志查看和打开日志目录。
 - Windows Release 打包说明。
@@ -79,6 +80,8 @@ Platform: Windows
 - [V3 验收与复盘](docs/11-v3-acceptance-notes.md)
 - [V3 Release Notes](docs/12-v3-release-notes.md)
 - [V4 Roadmap](docs/13-v4-roadmap.md)
+- [代码格式规范](docs/14-code-style.md)
+- [小工具集成方案](docs/15-tool-integration-design.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -157,6 +160,7 @@ ctest --test-dir build-qt --output-on-failure
 - 基础日志写入和敏感字段脱敏。
 - 日志最近内容读取。
 - 角色提示词模板保存和选择。
+- 应用启动/关闭 smoke test。
 
 ## Windows 打包
 

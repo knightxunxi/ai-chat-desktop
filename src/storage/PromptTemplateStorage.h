@@ -15,6 +15,10 @@ public:
     QString filePath() const;
 
     static QVector<PromptTemplate> defaultTemplates();
+    static QVector<PromptTemplate> importTemplates(const QString &filePath, QString *error = nullptr);
+    static bool exportTemplates(const QString &filePath, const QVector<PromptTemplate> &templates, QString *error = nullptr);
+    static QVector<PromptTemplate> mergeTemplates(const QVector<PromptTemplate> &currentTemplates,
+                                                  const QVector<PromptTemplate> &importedTemplates);
 
 private:
     QString resolvedFilePath() const;

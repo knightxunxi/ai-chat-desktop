@@ -1,7 +1,11 @@
 #include "ui/RolePromptDialog.h"
 
+#include "storage/PromptTemplateStorage.h"
+
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -88,6 +92,10 @@ void RolePromptDialog::setupUi()
 
     m_saveTemplateButton = new QPushButton(text(QStringLiteral("Save Template"), QStringLiteral("保存模板")), this);
     m_deleteTemplateButton = new QPushButton(text(QStringLiteral("Delete Template"), QStringLiteral("删除模板")), this);
+    m_importTemplatesButton = new QPushButton(text(QStringLiteral("Import"), QStringLiteral("导入")), this);
+    m_importTemplatesButton->setObjectName(QStringLiteral("importTemplatesButton"));
+    m_exportTemplatesButton = new QPushButton(text(QStringLiteral("Export"), QStringLiteral("导出")), this);
+    m_exportTemplatesButton->setObjectName(QStringLiteral("exportTemplatesButton"));
     m_clearPromptButton = new QPushButton(text(QStringLiteral("Clear Prompt"), QStringLiteral("清空提示词")), this);
 
     auto *buttonBox = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -99,6 +107,8 @@ void RolePromptDialog::setupUi()
     bottomActions->setSpacing(10);
     bottomActions->addWidget(m_saveTemplateButton);
     bottomActions->addWidget(m_deleteTemplateButton);
+    bottomActions->addWidget(m_importTemplatesButton);
+    bottomActions->addWidget(m_exportTemplatesButton);
     bottomActions->addWidget(m_clearPromptButton);
     bottomActions->addStretch(1);
     bottomActions->addWidget(buttonBox);
@@ -110,6 +120,8 @@ void RolePromptDialog::setupUi()
     connect(m_templateCombo, &QComboBox::currentIndexChanged, this, &RolePromptDialog::applySelectedTemplate);
     connect(m_saveTemplateButton, &QPushButton::clicked, this, &RolePromptDialog::saveCurrentTemplate);
     connect(m_deleteTemplateButton, &QPushButton::clicked, this, &RolePromptDialog::deleteSelectedTemplate);
+    connect(m_importTemplatesButton, &QPushButton::clicked, this, &RolePromptDialog::importTemplates);
+    connect(m_exportTemplatesButton, &QPushButton::clicked, this, &RolePromptDialog::exportTemplates);
     connect(m_clearPromptButton, &QPushButton::clicked, this, &RolePromptDialog::clearPrompt);
     connect(buttonBox, &QDialogButtonBox::accepted, this, &RolePromptDialog::accept);
     connect(buttonBox, &QDialogButtonBox::rejected, this, &RolePromptDialog::reject);
@@ -233,6 +245,70 @@ void RolePromptDialog::deleteSelectedTemplate()
     m_promptEdit->clear();
 }
 
+void RolePromptDialog::importTemplates()
+{
+    const QString filePath = QFileDialog::getOpenFileName(
+        this,
+        text(QStringLiteral("Import prompt templates"), QStringLiteral("导入角色提示词模板")),
+        QString(),
+        QStringLiteral("JSON (*.json)"));
+    if (filePath.trimmed().isEmpty()) {
+        return;
+    }
+
+    QString error;
+    const QVector<PromptTemplate> importedTemplates = PromptTemplateStorage::importTemplates(filePath, &error);
+    if (!error.isEmpty()) {
+        QMessageBox::warning(this, text(QStringLiteral("Import failed"), QStringLiteral("导入失败")), error);
+        return;
+    }
+
+    if (importedTemplates.isEmpty()) {
+        QMessageBox::information(this,
+                                 text(QStringLiteral("Import prompt templates"), QStringLiteral("导入角色提示词模板")),
+                                 text(QStringLiteral("No valid prompt templates were found."),
+                                      QStringLiteral("未找到有效的角色提示词模板。")));
+        return;
+    }
+
+    const int previousCount = m_templates.size();
+    m_templates = PromptTemplateStorage::mergeTemplates(m_templates, importedTemplates);
+    refreshTemplateCombo();
+
+    QMessageBox::information(this,
+                             text(QStringLiteral("Import prompt templates"), QStringLiteral("导入角色提示词模板")),
+                             text(QStringLiteral("Imported %1 prompt template(s)."),
+                                  QStringLiteral("已导入 %1 个角色提示词模板。"))
+                                 .arg(m_templates.size() - previousCount));
+}
+
+void RolePromptDialog::exportTemplates()
+{
+    QString filePath = QFileDialog::getSaveFileName(
+        this,
+        text(QStringLiteral("Export prompt templates"), QStringLiteral("导出角色提示词模板")),
+        QStringLiteral("prompt-templates.json"),
+        QStringLiteral("JSON (*.json)"));
+    if (filePath.trimmed().isEmpty()) {
+        return;
+    }
+
+    if (QFileInfo(filePath).suffix().isEmpty()) {
+        filePath += QStringLiteral(".json");
+    }
+
+    QString error;
+    if (!PromptTemplateStorage::exportTemplates(filePath, m_templates, &error)) {
+        QMessageBox::warning(this, text(QStringLiteral("Export failed"), QStringLiteral("导出失败")), error);
+        return;
+    }
+
+    QMessageBox::information(this,
+                             text(QStringLiteral("Export prompt templates"), QStringLiteral("导出角色提示词模板")),
+                             text(QStringLiteral("Prompt templates were exported."),
+                                  QStringLiteral("角色提示词模板已导出。")));
+}
+
 void RolePromptDialog::clearPrompt()
 {
     m_templateCombo->setCurrentIndex(0);
@@ -243,4 +319,5 @@ void RolePromptDialog::clearPrompt()
 void RolePromptDialog::updateTemplateActions()
 {
     m_deleteTemplateButton->setEnabled(findTemplateIndex(selectedTemplateId()) >= 0);
+    m_exportTemplatesButton->setEnabled(!m_templates.isEmpty());
 }

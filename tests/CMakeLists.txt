@@ -197,6 +197,7 @@ add_test(NAME SettingsDialogSmokeTest COMMAND SettingsDialogSmokeTest)
 
 add_executable(RolePromptDialogSmokeTest
     ui/RolePromptDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/PromptTemplateStorage.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/RolePromptDialog.cpp
 )
 
@@ -243,3 +244,20 @@ target_link_libraries(StyleResourceTest PRIVATE
 )
 
 add_test(NAME StyleResourceTest COMMAND StyleResourceTest)
+
+if(WIN32)
+    find_program(POWERSHELL_EXECUTABLE NAMES pwsh powershell)
+    if(POWERSHELL_EXECUTABLE)
+        add_test(
+            NAME AppLaunchSmokeTest
+            COMMAND ${POWERSHELL_EXECUTABLE}
+                    -NoProfile
+                    -ExecutionPolicy
+                    Bypass
+                    -File
+                    ${CMAKE_CURRENT_SOURCE_DIR}/ui/AppLaunchSmokeTest.ps1
+                    $<TARGET_FILE:AIChatDesktop>
+        )
+        set_tests_properties(AppLaunchSmokeTest PROPERTIES TIMEOUT 30)
+    endif()
+endif()

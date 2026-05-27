@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QLabel>
+#include <QPlainTextEdit>
 #include <QPushButton>
 
 #include <cassert>
@@ -34,12 +35,26 @@ int main(int argc, char *argv[])
     assert(userContentLabel->textFormat() == Qt::PlainText);
     assert(userMessage.content() == QStringLiteral("**not markdown**"));
 
-    MessageWidget codeMessage(MessageRole::Assistant, QStringLiteral("```cpp\nint main() { return 0; }\n```"));
-    auto *codeContentLabel = codeMessage.findChild<QLabel *>(QStringLiteral("messageContent"));
-    assert(codeContentLabel != nullptr);
-    assert(codeContentLabel->text().contains(QStringLiteral("<pre")));
-    assert(codeContentLabel->text().contains(QStringLiteral("#f1f5f9")));
-    assert(codeMessage.content() == QStringLiteral("```cpp\nint main() { return 0; }\n```"));
+    const QString codeMarkdown = QStringLiteral("Before\n```cpp\nint main() { return 0; }\n```\nAfter");
+    MessageWidget codeMessage(MessageRole::Assistant, codeMarkdown);
+    auto *codeBlock = codeMessage.findChild<QPlainTextEdit *>(QStringLiteral("messageCodeBlock"));
+    auto *copyCodeButton = codeMessage.findChild<QPushButton *>(QStringLiteral("copyCodeButton"));
+    auto *languageLabel = codeMessage.findChild<QLabel *>(QStringLiteral("messageCodeLanguage"));
+    const QList<QLabel *> codeTextLabels = codeMessage.findChildren<QLabel *>(QStringLiteral("messageContent"));
+    assert(codeBlock != nullptr);
+    assert(copyCodeButton != nullptr);
+    assert(languageLabel != nullptr);
+    assert(languageLabel->text() == QStringLiteral("cpp"));
+    assert(codeBlock->toPlainText() == QStringLiteral("int main() { return 0; }"));
+    assert(codeTextLabels.size() == 2);
+    assert(codeTextLabels[0]->textFormat() == Qt::RichText);
+    assert(codeTextLabels[0]->text().contains(QStringLiteral("Before")));
+    assert(codeTextLabels[1]->text().contains(QStringLiteral("After")));
+    assert(codeMessage.content() == codeMarkdown);
+
+    QApplication::clipboard()->clear();
+    copyCodeButton->click();
+    assert(QApplication::clipboard()->text() == QStringLiteral("int main() { return 0; }"));
 
     message.setContent(QString());
     assert(!copyButton->isEnabled());
