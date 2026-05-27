@@ -2,11 +2,16 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QPlainTextEdit>
 #include <QPushButton>
+#include <QStringList>
 #include <QTextDocument>
 #include <QVBoxLayout>
+#include <QVector>
+#include <QtGlobal>
 
 namespace {
 
@@ -61,6 +66,78 @@ QString renderAssistantMarkdown(const QString &content)
     return html;
 }
 
+QString removeTrailingNewline(QString value)
+{
+    if (value.endsWith(QLatin1Char('\n'))) {
+        value.chop(1);
+    }
+
+    return value;
+}
+
+struct ContentPart {
+    bool codeBlock = false;
+    QString language;
+    QString text;
+};
+
+QVector<ContentPart> splitAssistantContent(const QString &content)
+{
+    QVector<ContentPart> parts;
+    QString textBuffer;
+    QString codeBuffer;
+    QString language;
+    bool inCodeBlock = false;
+
+    const QStringList lines = content.split(QLatin1Char('\n'), Qt::KeepEmptyParts);
+    for (const QString &line : lines) {
+        const QString trimmed = line.trimmed();
+        if (!inCodeBlock && trimmed.startsWith(QStringLiteral("```"))) {
+            const QString text = removeTrailingNewline(textBuffer);
+            if (!text.isEmpty()) {
+                parts.append(ContentPart{false, QString(), text});
+            }
+
+            textBuffer.clear();
+            codeBuffer.clear();
+            language = trimmed.mid(3).trimmed();
+            inCodeBlock = true;
+            continue;
+        }
+
+        if (inCodeBlock && trimmed == QStringLiteral("```")) {
+            parts.append(ContentPart{true, language, removeTrailingNewline(codeBuffer)});
+            codeBuffer.clear();
+            language.clear();
+            inCodeBlock = false;
+            continue;
+        }
+
+        if (inCodeBlock) {
+            codeBuffer += line + QLatin1Char('\n');
+        } else {
+            textBuffer += line + QLatin1Char('\n');
+        }
+    }
+
+    if (inCodeBlock) {
+        parts.append(ContentPart{true, language, removeTrailingNewline(codeBuffer)});
+    } else {
+        const QString text = removeTrailingNewline(textBuffer);
+        if (!text.isEmpty()) {
+            parts.append(ContentPart{false, QString(), text});
+        }
+    }
+
+    return parts;
+}
+
+int codeBlockHeight(const QString &code)
+{
+    const int lineCount = qMax(1, code.count(QLatin1Char('\n')) + 1);
+    return qBound(54, 28 + lineCount * 18, 260);
+}
+
 } // namespace
 
 MessageWidget::MessageWidget(MessageRole role, const QString &content, QWidget *parent)
@@ -86,19 +163,16 @@ MessageWidget::MessageWidget(MessageRole role, const QString &content, QWidget *
     m_copyButton->setFixedHeight(24);
     m_copyButton->setCursor(Qt::PointingHandCursor);
 
-    m_contentLabel = new QLabel(this);
-    m_contentLabel->setObjectName(QStringLiteral("messageContent"));
-    m_contentLabel->setWordWrap(true);
-    m_contentLabel->setTextFormat(m_role == MessageRole::Assistant ? Qt::RichText : Qt::PlainText);
-    m_contentLabel->setOpenExternalLinks(true);
-    m_contentLabel->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
+    m_contentLayout = new QVBoxLayout();
+    m_contentLayout->setContentsMargins(0, 0, 0, 0);
+    m_contentLayout->setSpacing(8);
 
     headerLayout->addWidget(m_roleLabel);
     headerLayout->addStretch(1);
     headerLayout->addWidget(m_copyButton);
 
     layout->addLayout(headerLayout);
-    layout->addWidget(m_contentLabel);
+    layout->addLayout(m_contentLayout);
 
     connect(m_copyButton, &QPushButton::clicked, this, &MessageWidget::copyContentToClipboard);
 
@@ -118,16 +192,108 @@ QString MessageWidget::content() const
 void MessageWidget::setContent(const QString &content)
 {
     m_content = content;
-    m_contentLabel->setText(m_role == MessageRole::Assistant ? renderAssistantMarkdown(m_content) : m_content);
+    rebuildContent();
     m_copyButton->setEnabled(!m_content.isEmpty());
 }
 
 void MessageWidget::copyContentToClipboard() const
+{
+    copyTextToClipboard(content());
+}
+
+void MessageWidget::copyTextToClipboard(const QString &text) const
 {
     QClipboard *clipboard = QApplication::clipboard();
     if (clipboard == nullptr) {
         return;
     }
 
-    clipboard->setText(content());
+    clipboard->setText(text);
+}
+
+void MessageWidget::rebuildContent()
+{
+    clearContentWidgets();
+
+    if (m_content.isEmpty()) {
+        return;
+    }
+
+    if (m_role != MessageRole::Assistant) {
+        addTextSegment(m_content);
+        return;
+    }
+
+    const QVector<ContentPart> parts = splitAssistantContent(m_content);
+    for (const ContentPart &part : parts) {
+        if (part.codeBlock) {
+            addCodeBlock(part.language, part.text);
+        } else {
+            addTextSegment(part.text);
+        }
+    }
+}
+
+void MessageWidget::clearContentWidgets()
+{
+    while (m_contentLayout->count() > 0) {
+        QLayoutItem *item = m_contentLayout->takeAt(0);
+        delete item->widget();
+        delete item;
+    }
+}
+
+void MessageWidget::addTextSegment(const QString &text)
+{
+    auto *contentLabel = new QLabel(this);
+    contentLabel->setObjectName(QStringLiteral("messageContent"));
+    contentLabel->setWordWrap(true);
+    contentLabel->setTextFormat(m_role == MessageRole::Assistant ? Qt::RichText : Qt::PlainText);
+    contentLabel->setOpenExternalLinks(true);
+    contentLabel->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::LinksAccessibleByMouse);
+    contentLabel->setText(m_role == MessageRole::Assistant ? renderAssistantMarkdown(text) : text);
+    m_contentLayout->addWidget(contentLabel);
+}
+
+void MessageWidget::addCodeBlock(const QString &language, const QString &code)
+{
+    auto *codeFrame = new QFrame(this);
+    codeFrame->setObjectName(QStringLiteral("messageCodeBlockFrame"));
+
+    auto *layout = new QVBoxLayout(codeFrame);
+    layout->setContentsMargins(10, 8, 10, 10);
+    layout->setSpacing(6);
+
+    auto *headerLayout = new QHBoxLayout();
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setSpacing(8);
+
+    auto *languageLabel = new QLabel(language.isEmpty() ? QStringLiteral("Code") : language, codeFrame);
+    languageLabel->setObjectName(QStringLiteral("messageCodeLanguage"));
+
+    auto *copyCodeButton = new QPushButton(QStringLiteral("Copy code"), codeFrame);
+    copyCodeButton->setObjectName(QStringLiteral("copyCodeButton"));
+    copyCodeButton->setToolTip(QStringLiteral("Copy code block"));
+    copyCodeButton->setFixedHeight(24);
+    copyCodeButton->setCursor(Qt::PointingHandCursor);
+    copyCodeButton->setEnabled(!code.isEmpty());
+
+    auto *codeEdit = new QPlainTextEdit(codeFrame);
+    codeEdit->setObjectName(QStringLiteral("messageCodeBlock"));
+    codeEdit->setPlainText(code);
+    codeEdit->setReadOnly(true);
+    codeEdit->setLineWrapMode(QPlainTextEdit::NoWrap);
+    codeEdit->setFixedHeight(codeBlockHeight(code));
+
+    headerLayout->addWidget(languageLabel);
+    headerLayout->addStretch(1);
+    headerLayout->addWidget(copyCodeButton);
+
+    layout->addLayout(headerLayout);
+    layout->addWidget(codeEdit);
+    m_contentLayout->addWidget(codeFrame);
+
+    connect(copyCodeButton, &QPushButton::clicked, this, [this, code]() {
+        copyTextToClipboard(code);
+    });
 }
