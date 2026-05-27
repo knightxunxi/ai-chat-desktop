@@ -182,15 +182,17 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 
 ## 当前版本状态
 
-当前 main 已完成 V3，覆盖安全存储、会话管理增强、服务商预设、模型参数、错误重试、应用内日志查看和发布准备文档。
+当前 main 已完成 V4，覆盖安全存储、会话管理增强、服务商预设、模型参数、错误重试、应用内日志查看、GitHub Actions CI、基础代码规范、UI smoke test、代码块复制、角色提示词模板导入导出和小工具集成方案。
 
 已知限制：
 
-- 当前 V3 只面向 Windows，暂未规划 macOS/Linux 迁移。
+- 当前版本只面向 Windows，暂未规划 macOS/Linux 迁移。
 - Markdown 展示仍是基础版本，复杂代码高亮暂未支持。
-- 角色提示词模板仍是本地基础版本，尚未支持导入导出或云同步。
+- 角色提示词模板仍是本地版本，暂未支持云同步。
 
 ## 后续方向
+
+V4 详细计划见 [V4 Roadmap](docs/13-v4-roadmap.md)，小工具扩展方案见 [小工具集成方案](docs/15-tool-integration-design.md)。
 
 V3 验收和复盘见 [V3 验收与复盘](docs/11-v3-acceptance-notes.md)。
 
@@ -198,6 +200,6 @@ V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)，发布说明见 [V3 Rel
 
 候选方向：
 
-- GitHub Actions CI 和基础工程规范。
 - Markdown 代码高亮增强。
-- 角色提示词模板导入导出。
+- 小工具入口和首批本地工具。
+- 会话标签、收藏、归档。
