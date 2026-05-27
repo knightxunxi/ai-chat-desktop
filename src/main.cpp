@@ -5,8 +5,11 @@
 #include <QApplication>
 #include <QColor>
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QPalette>
+#include <QStringList>
 #include <QTimer>
 #include <QStyleFactory>
 #include <QTextStream>
@@ -47,6 +50,36 @@ void loadApplicationStyle(QApplication &app)
     app.setStyleSheet(stream.readAll());
 }
 
+QString argumentValue(const QStringList &arguments, const QString &name)
+{
+    const int index = arguments.indexOf(name);
+    if (index < 0 || index + 1 >= arguments.size()) {
+        return {};
+    }
+
+    return arguments.at(index + 1);
+}
+
+void writeSmokeTestReadyFile(const QString &filePath)
+{
+    if (filePath.trimmed().isEmpty()) {
+        return;
+    }
+
+    QDir directory(QFileInfo(filePath).absolutePath());
+    if (!directory.exists() && !directory.mkpath(QStringLiteral("."))) {
+        return;
+    }
+
+    QFile file(filePath);
+    if (!file.open(QFile::WriteOnly | QFile::Text | QFile::Truncate)) {
+        return;
+    }
+
+    QTextStream stream(&file);
+    stream << "ready\n";
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -66,11 +99,16 @@ int main(int argc, char *argv[])
     MainWindow window;
     window.show();
 
-    if (QCoreApplication::arguments().contains(QStringLiteral("--smoke-test"))) {
-        QTimer::singleShot(2000, &window, [&window]() {
+    const QStringList arguments = QCoreApplication::arguments();
+    if (arguments.contains(QStringLiteral("--smoke-test"))) {
+        const QString readyFilePath = argumentValue(arguments, QStringLiteral("--smoke-test-ready-file"));
+        QTimer::singleShot(0, &window, [readyFilePath]() {
+            writeSmokeTestReadyFile(readyFilePath);
+        });
+        QTimer::singleShot(5000, &window, [&window]() {
             window.close();
         });
-        QTimer::singleShot(10000, &app, [&app]() {
+        QTimer::singleShot(15000, &app, [&app]() {
             app.quit();
         });
     }

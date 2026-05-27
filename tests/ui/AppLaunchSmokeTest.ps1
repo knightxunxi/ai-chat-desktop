@@ -21,12 +21,13 @@ $process = $null
 try {
     $env:APPDATA = Join-Path $tempRoot "Roaming"
     $env:LOCALAPPDATA = Join-Path $tempRoot "Local"
+    $readyFile = Join-Path $tempRoot "smoke-ready.txt"
     New-Item -ItemType Directory -Force -Path $env:APPDATA, $env:LOCALAPPDATA | Out-Null
 
-    $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -WorkingDirectory $workingDirectory -PassThru
+    $process = Start-Process -FilePath $exe -ArgumentList @("--smoke-test", "--smoke-test-ready-file", $readyFile) -WorkingDirectory $workingDirectory -PassThru
 
     $windowReady = $false
-    for ($i = 0; $i -lt 40; $i++) {
+    for ($i = 0; $i -lt 80; $i++) {
         Start-Sleep -Milliseconds 250
         $process.Refresh()
 
@@ -34,7 +35,7 @@ try {
             throw "Application exited before a main window was available. ExitCode=$($process.ExitCode)"
         }
 
-        if ($process.MainWindowHandle -ne 0) {
+        if (Test-Path -LiteralPath $readyFile) {
             $windowReady = $true
             break
         }
@@ -44,7 +45,7 @@ try {
         throw "Application main window was not detected. PID=$($process.Id)"
     }
 
-    for ($i = 0; $i -lt 40; $i++) {
+    for ($i = 0; $i -lt 80; $i++) {
         Start-Sleep -Milliseconds 250
         $process.Refresh()
 

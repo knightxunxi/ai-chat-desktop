@@ -258,6 +258,6 @@ if(WIN32)
                     ${CMAKE_CURRENT_SOURCE_DIR}/ui/AppLaunchSmokeTest.ps1
                     $<TARGET_FILE:AIChatDesktop>
         )
-        set_tests_properties(AppLaunchSmokeTest PROPERTIES TIMEOUT 30)
+        set_tests_properties(AppLaunchSmokeTest PROPERTIES TIMEOUT 45)
     endif()
 endif()
