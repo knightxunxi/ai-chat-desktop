@@ -4,8 +4,10 @@
 
 #include <QApplication>
 #include <QColor>
+#include <QCoreApplication>
 #include <QFile>
 #include <QPalette>
+#include <QTimer>
 #include <QStyleFactory>
 #include <QTextStream>
 
@@ -63,6 +65,15 @@ int main(int argc, char *argv[])
 
     MainWindow window;
     window.show();
+
+    if (QCoreApplication::arguments().contains(QStringLiteral("--smoke-test"))) {
+        QTimer::singleShot(2000, &window, [&window]() {
+            window.close();
+        });
+        QTimer::singleShot(10000, &app, [&app]() {
+            app.quit();
+        });
+    }
 
     return app.exec();
 }

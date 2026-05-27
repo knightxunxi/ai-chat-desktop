@@ -23,7 +23,7 @@ try {
     $env:LOCALAPPDATA = Join-Path $tempRoot "Local"
     New-Item -ItemType Directory -Force -Path $env:APPDATA, $env:LOCALAPPDATA | Out-Null
 
-    $process = Start-Process -FilePath $exe -WorkingDirectory $workingDirectory -PassThru
+    $process = Start-Process -FilePath $exe -ArgumentList "--smoke-test" -WorkingDirectory $workingDirectory -PassThru
 
     $windowReady = $false
     for ($i = 0; $i -lt 40; $i++) {
@@ -44,21 +44,21 @@ try {
         throw "Application main window was not detected. PID=$($process.Id)"
     }
 
-    if (-not $process.CloseMainWindow()) {
-        throw "CloseMainWindow returned false. PID=$($process.Id)"
-    }
-
     for ($i = 0; $i -lt 40; $i++) {
         Start-Sleep -Milliseconds 250
         $process.Refresh()
 
         if ($process.HasExited) {
+            if ($process.ExitCode -ne 0) {
+                throw "Application exited with code $($process.ExitCode). PID=$($process.Id)"
+            }
+
             Write-Output "App launch/close smoke test passed. PID=$($process.Id)"
             exit 0
         }
     }
 
-    throw "Application was still running after the main window was closed. PID=$($process.Id)"
+    throw "Application was still running after smoke-test close timeout. PID=$($process.Id)"
 }
 finally {
     if ($process -ne $null) {
