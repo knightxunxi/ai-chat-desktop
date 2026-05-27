@@ -78,6 +78,7 @@ Platform: Windows
 - [V3 API Key 安全存储方案](docs/10-v3-credential-storage-design.md)
 - [V3 验收与复盘](docs/11-v3-acceptance-notes.md)
 - [V3 Release Notes](docs/12-v3-release-notes.md)
+- [V4 Roadmap](docs/13-v4-roadmap.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -130,6 +131,15 @@ Windows 上通常位于：
 ```powershell
 ctest --test-dir build-qt --output-on-failure
 ```
+
+## CI
+
+项目使用 GitHub Actions 执行基础 CI：
+
+- pull request 自动触发。
+- 推送到 `main` 自动触发。
+- Windows Debug 和 Release 构建。
+- 构建完成后运行 CTest。
 
 当前测试覆盖：
 
@@ -184,6 +194,6 @@ V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)，发布说明见 [V3 Rel
 
 候选方向：
 
-- V3 Release 包手工验收和 GitHub Release 发布。
+- GitHub Actions CI 和基础工程规范。
 - Markdown 代码高亮增强。
 - 角色提示词模板导入导出。

@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_VERSION: "6.10.2"
+
+jobs:
+  windows:
+    name: Windows ${{ matrix.build_type }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type:
+          - Debug
+          - Release
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Configure
+        shell: pwsh
+        run: >
+          cmake
+          -S .
+          -B build-ci-${{ matrix.build_type }}
+          -G "Visual Studio 17 2022"
+          -A x64
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build-ci-${{ matrix.build_type }} --config ${{ matrix.build_type }}
+
+      - name: Test
+        shell: pwsh
+        run: ctest --test-dir build-ci-${{ matrix.build_type }} -C ${{ matrix.build_type }} --output-on-failure
