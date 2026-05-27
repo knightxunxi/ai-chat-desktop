@@ -35,5 +35,33 @@ int main()
     assert(loaded[0].name == QStringLiteral("Code Reviewer"));
     assert(loaded[0].content == QStringLiteral("Review C++ code for correctness."));
 
+    const QString exportPath = directory.filePath(QStringLiteral("exported-templates.json"));
+    assert(PromptTemplateStorage::exportTemplates(exportPath, templates, &error));
+    assert(error.isEmpty());
+
+    const QVector<PromptTemplate> imported = PromptTemplateStorage::importTemplates(exportPath, &error);
+    assert(error.isEmpty());
+    assert(imported.size() == 2);
+    assert(imported[1].name == QStringLiteral("Writer"));
+
+    QVector<PromptTemplate> duplicateTemplates;
+    duplicateTemplates.append(PromptTemplate{
+        templates[0].id,
+        templates[0].name,
+        QStringLiteral("Imported duplicate content.")
+    });
+    duplicateTemplates.append(PromptTemplate::create(QStringLiteral("Fresh Template"), QStringLiteral("Fresh content.")));
+
+    const QVector<PromptTemplate> merged = PromptTemplateStorage::mergeTemplates(templates, duplicateTemplates);
+    assert(merged.size() == 4);
+    assert(merged[2].id != templates[0].id);
+    assert(merged[2].name.startsWith(QStringLiteral("Code Reviewer")));
+    assert(merged[2].content == QStringLiteral("Imported duplicate content."));
+    assert(merged[3].name == QStringLiteral("Fresh Template"));
+
+    const QVector<PromptTemplate> missingImport = PromptTemplateStorage::importTemplates(directory.filePath(QStringLiteral("missing.json")), &error);
+    assert(missingImport.isEmpty());
+    assert(!error.isEmpty());
+
     return 0;
 }

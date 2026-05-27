@@ -197,6 +197,7 @@ add_test(NAME SettingsDialogSmokeTest COMMAND SettingsDialogSmokeTest)
 
 add_executable(RolePromptDialogSmokeTest
     ui/RolePromptDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/PromptTemplateStorage.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/RolePromptDialog.cpp
 )
 

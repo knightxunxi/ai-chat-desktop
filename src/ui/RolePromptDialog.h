@@ -34,6 +34,8 @@ private:
     void applySelectedTemplate(int index);
     void saveCurrentTemplate();
     void deleteSelectedTemplate();
+    void importTemplates();
+    void exportTemplates();
     void clearPrompt();
     void updateTemplateActions();
 
@@ -45,5 +47,7 @@ private:
     QTextEdit *m_promptEdit = nullptr;
     QPushButton *m_saveTemplateButton = nullptr;
     QPushButton *m_deleteTemplateButton = nullptr;
+    QPushButton *m_importTemplatesButton = nullptr;
+    QPushButton *m_exportTemplatesButton = nullptr;
     QPushButton *m_clearPromptButton = nullptr;
 };
