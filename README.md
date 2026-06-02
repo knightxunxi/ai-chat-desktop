@@ -87,14 +87,15 @@ Platform: Windows
 - [V5 Roadmap](docs/16-v5-roadmap.md)
 - [会话组织增强设计](docs/17-session-organization-design.md)
 - [V5 验收记录](docs/18-v5-acceptance-notes.md)
-<<<<<<< Updated upstream
 - [V6 Roadmap](docs/19-v6-roadmap.md)
 - [V6 本地交互安全设计](docs/20-v6-local-interaction-security.md)
 - [V6 验收记录](docs/21-v6-acceptance-notes.md)
 - [Agent 与电脑交互后续规划](docs/22-agent-automation-roadmap.md)
-=======
 - [V7 Roadmap](docs/19-v7-roadmap.md)
->>>>>>> Stashed changes
+- [V7 Agent 安全设计](docs/23-v7-agent-safety-design.md)
+- [V7 验收记录](docs/24-v7-acceptance-notes.md)
+- [V7 手工验证脚本](docs/25-v7-manual-test-script.md)
+- [V8 Agent 工作目录规划](docs/26-v8-agent-workspace-roadmap.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -176,6 +177,8 @@ ctest --test-dir build-qt --output-on-failure
 - 本地工具逻辑和工具窗口 smoke test。
 - 受控文件交互服务和文件工具窗口 smoke test。
 - 会话收藏、归档和筛选。
+- Agent 工具目录、计划解析、计划 Prompt 生成、计划预览和低风险步骤执行。
+- Agent 默认工作目录配置和工作目录策略。
 - 应用启动/关闭 smoke test。
 
 ## Windows 打包
@@ -200,6 +203,8 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 
 当前版本已完成 V6，覆盖本地工具系统、JSON/Markdown/文本处理工具、工具窗口、会话收藏、会话归档、会话筛选和受控文件交互工具。
 
+当前 V7 开发分支已启动受控 Agent 基础能力，已完成 Agent 安全设计、工具目录、计划模型、计划解析器、计划 Prompt 生成器、真实 AI 计划生成入口、计划预览窗口和低风险文本工具单步执行；文件工具步骤仍保留专用文件选择确认流程，不从计划参数直接执行。
+
 已知限制：
 
 - 当前版本只面向 Windows，暂未规划 macOS/Linux 迁移。
@@ -216,7 +221,9 @@ V6 详细计划见 [V6 Roadmap](docs/19-v6-roadmap.md)，安全边界见 [V6 本
 
 V5 详细计划见 [V5 Roadmap](docs/16-v5-roadmap.md)，验收记录见 [V5 验收记录](docs/18-v5-acceptance-notes.md)。
 
-V7 详细计划见 [V7 Roadmap](docs/19-v7-roadmap.md)，重点是 AI 生成结构化任务计划、工具建议、用户确认和单步受控执行。V7 依赖 V6 受控文件工具能力；如果 V6 尚未合并，应先做计划解析和预览，不进入命令执行。
+V7 详细计划见 [V7 Roadmap](docs/19-v7-roadmap.md)，Agent 安全边界见 [V7 Agent 安全设计](docs/23-v7-agent-safety-design.md)，当前验收记录见 [V7 验收记录](docs/24-v7-acceptance-notes.md)，合并前手工检查见 [V7 手工验证脚本](docs/25-v7-manual-test-script.md)。V7 重点是 AI 生成结构化任务计划、工具建议、用户确认和单步受控执行。
+
+V8 详细计划见 [V8 Agent 工作目录规划](docs/26-v8-agent-workspace-roadmap.md)，重点是默认工作目录、自动文件生成、连续执行和文件内容提示词注入防护。
 
 V4 详细计划见 [V4 Roadmap](docs/13-v4-roadmap.md)，小工具扩展方案见 [小工具集成方案](docs/15-tool-integration-design.md)。
 
@@ -228,10 +235,6 @@ V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)，发布说明见 [V3 Rel
 
 - Markdown 代码高亮增强。
 - 会话标签和 SQLite FTS 全文搜索。
-<<<<<<< Updated upstream
 - AI 任务拆解和受控工具调用。
 - 受控命令执行。
-=======
 - 受控本地文件/系统交互工具。
-- AI 任务拆解和受控工具调用。
->>>>>>> Stashed changes

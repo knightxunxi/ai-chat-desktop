@@ -57,8 +57,12 @@ src/support     日志、日志读取等通用能力
 
 代表文件：
 
-- `ApplicationController.h/.cpp`：处理初始化、发送消息、停止生成、重试、切换会话、保存配置、收藏归档和筛选等流程。
+- `ApplicationController.h/.cpp`：处理初始化、发送消息、停止生成、重试、切换会话、保存配置、收藏归档、筛选和 Agent 计划生成等流程。
 - `SessionSummaryList.h/.cpp`：维护会话列表排序规则。
+- `AgentPlan.h/.cpp`：Agent 结构化计划和步骤状态。
+- `AgentPlanParser.h/.cpp`：解析并校验 AI 返回的 JSON 计划。
+- `AgentPlanPromptBuilder.h/.cpp`：把用户目标和工具目录整理为计划生成提示词。
+- `AgentPlanExecutor.h/.cpp`：执行用户确认后的低风险文本工具步骤。
 
 控制层的作用是把多个模块串起来。例如发送消息时，它会：
 
@@ -109,10 +113,13 @@ src/support     日志、日志读取等通用能力
 - `JsonFormatTool.h` / `JsonCompactTool.h`：JSON 格式化和压缩。
 - `MarkdownCleanupTool.h` / `TextCleanupTool.h`：Markdown 和普通文本清理。
 - `FileInteractionService.h/.cpp`：受控文件交互服务，提供文本读取、目录列出、文本保存、路径打开前校验和日志路径摘要。
+- `AgentToolCatalog.h/.cpp`：Agent 可见工具目录，定义工具 ID、风险等级、输入限制和敏感结果标记。
 
 这一层不依赖主窗口，不直接访问剪贴板，也不直接发送消息。工具窗口只负责调用工具并展示结果。
 
 V6 文件工具的关键边界是：路径由用户通过选择框提供，工具输出只展示或插入聊天输入框，不自动发送给 AI，不执行脚本或系统命令。
+
+V7 Agent 的关键边界是：AI 只能生成计划和建议工具；本地解析器校验计划；用户确认后才执行低风险文本工具；文件工具仍需要走专用文件选择流程。
 
 ### `src/support`
 

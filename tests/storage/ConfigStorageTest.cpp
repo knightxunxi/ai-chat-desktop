@@ -87,6 +87,7 @@ int main()
         config.temperature = 0.4;
         config.maxTokens = 1024;
         config.language = AppLanguage::English;
+        config.agentWorkspaceDirectory = QStringLiteral("D:/agent-workspace");
 
         QString error;
         assert(storage.save(config, &error));
@@ -106,6 +107,7 @@ int main()
         assert(loaded.maxTokens.has_value());
         assert(loaded.maxTokens.value() == 1024);
         assert(loaded.language == AppLanguage::English);
+        assert(loaded.agentWorkspaceDirectory == config.agentWorkspaceDirectory);
 
         clearSettings(organizationName, applicationName);
     }
@@ -173,6 +175,7 @@ int main()
         assert(settings.value(QStringLiteral("api/temperature")).toDouble() > 0.79);
         assert(settings.value(QStringLiteral("api/temperature")).toDouble() < 0.81);
         assert(settings.value(QStringLiteral("api/maxTokens")).toInt() == 4096);
+        assert(!settings.value(QStringLiteral("agent/workspaceDirectory")).toString().trimmed().isEmpty());
         assert(!settings.contains(QStringLiteral("api/apiKey")));
 
         clearSettings(organizationName, applicationName);

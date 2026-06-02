@@ -1,6 +1,7 @@
 #include "ui/MainWindow.h"
 
 #include "support/AppLogger.h"
+#include "ui/AgentPlanDialog.h"
 #include "ui/ChatView.h"
 #include "ui/FileToolsDialog.h"
 #include "ui/LogViewerDialog.h"
@@ -164,6 +165,9 @@ void MainWindow::setupUi()
     m_fileToolsButton = new QPushButton(header);
     m_fileToolsButton->setObjectName(QStringLiteral("fileToolsButton"));
 
+    m_agentPlanButton = new QPushButton(header);
+    m_agentPlanButton->setObjectName(QStringLiteral("agentPlanButton"));
+
     m_logButton = new QPushButton(header);
     m_logButton->setObjectName(QStringLiteral("logButton"));
 
@@ -174,6 +178,7 @@ void MainWindow::setupUi()
     headerLayout->addWidget(m_systemPromptButton);
     headerLayout->addWidget(m_toolsButton);
     headerLayout->addWidget(m_fileToolsButton);
+    headerLayout->addWidget(m_agentPlanButton);
     headerLayout->addWidget(m_logButton);
     headerLayout->addWidget(m_settingsButton);
 
@@ -218,6 +223,7 @@ void MainWindow::setupUi()
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
     connect(m_toolsButton, &QPushButton::clicked, this, &MainWindow::openToolsDialog);
     connect(m_fileToolsButton, &QPushButton::clicked, this, &MainWindow::openFileToolsDialog);
+    connect(m_agentPlanButton, &QPushButton::clicked, this, &MainWindow::generateAgentPlan);
     connect(m_logButton, &QPushButton::clicked, this, &MainWindow::openLogViewerDialog);
     connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
     connect(m_newChatButton, &QPushButton::clicked, this, &MainWindow::startNewChat);
@@ -272,6 +278,7 @@ void MainWindow::connectController()
     connect(&m_controller, &ApplicationController::configurationMissing, this, &MainWindow::showConfigurationMissingWarning);
     connect(&m_controller, &ApplicationController::statusMessage, this, &MainWindow::showStatusMessage);
     connect(&m_controller, &ApplicationController::startupWarning, this, &MainWindow::showStartupWarning);
+    connect(&m_controller, &ApplicationController::agentPlanReady, this, &MainWindow::openAgentPlanDialog);
 }
 
 void MainWindow::populateSessionList()
@@ -378,6 +385,7 @@ void MainWindow::applyLanguage()
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
     m_toolsButton->setText(text(QStringLiteral("Tools"), QStringLiteral("工具")));
     m_fileToolsButton->setText(text(QStringLiteral("File Tools"), QStringLiteral("文件工具")));
+    m_agentPlanButton->setText(text(QStringLiteral("Agent Plan"), QStringLiteral("Agent 计划")));
     m_logButton->setText(text(QStringLiteral("Logs"), QStringLiteral("日志")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
     m_retryButton->setText(text(QStringLiteral("Retry"), QStringLiteral("重试")));
@@ -496,6 +504,19 @@ void MainWindow::openFileToolsDialog()
 {
     FileToolsDialog dialog(m_controller.config().language, this);
     connect(&dialog, &FileToolsDialog::outputInsertionRequested, this, &MainWindow::insertToolOutputIntoInput);
+    dialog.exec();
+}
+
+void MainWindow::generateAgentPlan()
+{
+    m_controller.generateAgentPlan(m_messageInput->toPlainText());
+}
+
+void MainWindow::openAgentPlanDialog(const AgentPlan &plan)
+{
+    AgentPlanDialog dialog(plan, defaultAgentToolCatalog(), m_controller.config().language, this);
+    connect(&dialog, &AgentPlanDialog::outputInsertionRequested, this, &MainWindow::insertToolOutputIntoInput);
+    connect(&dialog, &AgentPlanDialog::continuePlanningRequested, &m_controller, &ApplicationController::generateAgentPlan);
     dialog.exec();
 }
 
@@ -709,6 +730,7 @@ void MainWindow::setGenerating(bool generating)
     m_systemPromptButton->setEnabled(!generating);
     m_toolsButton->setEnabled(true);
     m_fileToolsButton->setEnabled(true);
+    m_agentPlanButton->setEnabled(!generating);
     m_settingsButton->setEnabled(!generating);
     m_logButton->setEnabled(true);
     m_retryButton->setEnabled(!generating && m_retryButton->isVisible());

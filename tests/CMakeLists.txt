@@ -42,6 +42,73 @@ target_include_directories(SessionSummaryListTest PRIVATE
 
 add_test(NAME SessionSummaryListTest COMMAND SessionSummaryListTest)
 
+add_executable(AgentPlanParserTest
+    app/AgentPlanParserTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanParser.h
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+)
+
+target_link_libraries(AgentPlanParserTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AgentPlanParserTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentPlanParserTest COMMAND AgentPlanParserTest)
+
+add_executable(AgentPlanExecutorTest
+    app/AgentPlanExecutorTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanExecutor.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanExecutor.h
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonCompactTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonFormatTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/LocalTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/MarkdownCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+)
+
+target_link_libraries(AgentPlanExecutorTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AgentPlanExecutorTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentPlanExecutorTest COMMAND AgentPlanExecutorTest)
+
+add_executable(AgentPlanPromptBuilderTest
+    app/AgentPlanPromptBuilderTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanPromptBuilder.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanPromptBuilder.h
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+)
+
+target_link_libraries(AgentPlanPromptBuilderTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AgentPlanPromptBuilderTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentPlanPromptBuilderTest COMMAND AgentPlanPromptBuilderTest)
+
 add_executable(StreamParserTest
     services/StreamParserTest.cpp
     ${PROJECT_SOURCE_DIR}/src/services/StreamParser.cpp
@@ -127,6 +194,38 @@ target_include_directories(FileInteractionServiceTest PRIVATE
 )
 
 add_test(NAME FileInteractionServiceTest COMMAND FileInteractionServiceTest)
+
+add_executable(AgentToolCatalogTest
+    tools/AgentToolCatalogTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+)
+
+target_link_libraries(AgentToolCatalogTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AgentToolCatalogTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentToolCatalogTest COMMAND AgentToolCatalogTest)
+
+add_executable(WorkspacePolicyTest
+    tools/WorkspacePolicyTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.h
+)
+
+target_link_libraries(WorkspacePolicyTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(WorkspacePolicyTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME WorkspacePolicyTest COMMAND WorkspacePolicyTest)
 
 add_executable(LocalToolContractTest
     tools/LocalToolContractTest.cpp
@@ -306,6 +405,38 @@ target_include_directories(ToolsDialogSmokeTest PRIVATE
 )
 
 add_test(NAME ToolsDialogSmokeTest COMMAND ToolsDialogSmokeTest)
+
+add_executable(AgentPlanDialogSmokeTest
+    ui/AgentPlanDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanExecutor.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanExecutor.h
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonCompactTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonFormatTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/LocalTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/MarkdownCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+    ${PROJECT_SOURCE_DIR}/src/ui/AgentPlanDialog.h
+    ${PROJECT_SOURCE_DIR}/src/ui/AgentPlanDialog.cpp
+)
+
+target_link_libraries(AgentPlanDialogSmokeTest PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+)
+
+target_include_directories(AgentPlanDialogSmokeTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentPlanDialogSmokeTest COMMAND AgentPlanDialogSmokeTest)
 
 add_executable(FileToolsDialogSmokeTest
     ui/FileToolsDialogSmokeTest.cpp

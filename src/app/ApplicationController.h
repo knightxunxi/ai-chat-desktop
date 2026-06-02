@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/AgentPlan.h"
 #include "core/AppConfig.h"
 #include "core/ChatSession.h"
 #include "core/PromptTemplate.h"
@@ -69,6 +70,8 @@ public slots:
     void cancelCurrentRequest();
     // 功能：重新发送上一条失败请求；使用模块：MainWindow 重试按钮。
     void retryLastRequest();
+    // 功能：根据用户目标生成 Agent 结构化计划；使用模块：MainWindow 计划按钮。
+    void generateAgentPlan(const QString &goal, int continuationDepth = 0);
 
 signals:
     void configChanged();          // 功能：配置变化通知；使用模块：MainWindow 刷新模型和语言。
@@ -85,8 +88,15 @@ signals:
     void configurationMissing();                         // 功能：缺少必要配置；使用模块：MainWindow 弹出设置提示。
     void statusMessage(const QString &english, const QString &chinese, int timeoutMs); // 功能：状态栏消息；使用模块：MainWindow。
     void startupWarning(const QString &english, const QString &chinese); // 功能：启动期警告；使用模块：MainWindow 延迟弹窗。
+    void agentPlanReady(const AgentPlan &plan); // 功能：Agent 计划生成成功；使用模块：MainWindow 打开计划预览窗口。
 
 private:
+    enum class ActiveRequestKind {
+        None,
+        ChatMessage,
+        AgentPlan
+    };
+
     // 功能：处理流式文本增量；使用模块：OpenAICompatibleClient::textDeltaReceived 信号。
     void handleTextDelta(const QString &delta);
     // 功能：处理请求正常结束；使用模块：OpenAICompatibleClient::requestFinished 信号。
@@ -124,10 +134,13 @@ private:
     PromptTemplateStorage m_promptTemplateStorage; // 功能：模板读写；使用模块：initialize/savePromptTemplates。
     OpenAICompatibleClient m_aiClient;          // 功能：实际网络请求客户端；使用模块：startAssistantRequest/cancelCurrentRequest。
     QString m_currentAssistantContent;          // 功能：流式回复累积内容；使用模块：handleTextDelta。
+    QString m_agentPlanResponseBuffer;          // 功能：Agent 计划流式响应缓存；使用模块：计划生成完成后解析 JSON。
+    int m_pendingAgentPlanContinuationDepth = 0; // 功能：当前计划请求的继续轮次；使用模块：解析成功后写入 AgentPlan。
     QString m_lastRequestUserContent;           // 功能：记录最近请求的用户文本；使用模块：失败后重试。
     QString m_retryUserContent;                 // 功能：当前可重试的用户文本；使用模块：retryLastRequest。
     QString m_sessionSearchQuery;               // 功能：当前搜索关键字；使用模块：reloadSessionSummaries。
     bool m_historyAvailable = false;            // 功能：历史库是否可用；使用模块：保存/搜索时降级处理。
     bool m_isGenerating = false;                // 功能：是否正在请求 AI；使用模块：按钮状态和操作保护。
     bool m_retryAvailable = false;              // 功能：是否允许重试；使用模块：MainWindow 重试按钮。
+    ActiveRequestKind m_activeRequestKind = ActiveRequestKind::None; // 功能：区分普通聊天和 Agent 计划请求。
 };

@@ -193,6 +193,17 @@ V6 文件交互的关键实现：
 
 这部分没有让 AI 自动操作电脑，而是先建立“用户选择路径、程序校验、用户确认、日志记录”的低风险边界。
 
+V7 开始增加受控 Agent 的基础模块：
+
+- `AgentToolCatalog`：定义 AI 可建议的工具 ID、风险等级、输入限制和是否可能包含敏感结果。
+- `AgentPlan`：保存 AI 生成的结构化计划和步骤状态。
+- `AgentPlanParser`：解析 AI 返回的 JSON 计划，并校验步骤数量、必填字段、工具 ID、参数类型和风险等级。
+- `AgentPlanPromptBuilder`：把用户目标和工具目录整理成要求 AI 返回 JSON 计划的提示词。
+- `AgentPlanExecutor`：执行用户确认后的低风险文本工具步骤，文件工具仍走专用文件选择流程。
+- `AgentPlanDialog`：展示计划、步骤详情、风险、参数和执行输出。
+
+这里的重点是“不信任模型输出”。AI 返回的计划必须先经过本地解析器和工具目录校验，不能直接变成工具执行。
+
 ## 10. Windows Credential Manager
 
 API Key 属于敏感信息，不适合写入普通配置文件。
@@ -279,12 +290,16 @@ ctest --test-dir build-qt --output-on-failure
 - 本地工具逻辑。
 - 工具窗口 smoke test。
 - 会话收藏、归档和筛选。
+- Agent 工具目录和计划解析。
+- Agent 计划 Prompt 生成。
+- Agent 计划预览和低风险步骤执行。
+- Agent 继续规划基础流程。
 
 面试表达：
 
 > 本项目把可测试的逻辑尽量从 UI 中抽出来，例如 SSE 解析、请求体构建、存储、导出、日志读取等都可以通过 CTest 自动化验证。
 
-当前 V6 测试数量为 22 个。
+当前 V7 开发分支测试数量为 27 个。
 
 ## 14. windeployqt
 
