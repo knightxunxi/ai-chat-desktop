@@ -13,6 +13,8 @@ int main(int argc, char *argv[])
     const QString style = QString::fromUtf8(styleFile.readAll());
     assert(style.contains(QStringLiteral("QWidget#centralRoot")));
     assert(style.contains(QStringLiteral("QPushButton#sendButton[stopMode=\"true\"]")));
+    assert(style.contains(QStringLiteral("QFrame#sessionFilterBar")));
+    assert(style.contains(QStringLiteral("QFrame#sessionFilterBar QPushButton:checked")));
 
     return 0;
 }

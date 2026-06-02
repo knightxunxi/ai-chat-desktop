@@ -110,6 +110,24 @@ target_include_directories(LogFileReaderTest PRIVATE
 
 add_test(NAME LogFileReaderTest COMMAND LogFileReaderTest)
 
+add_executable(FileInteractionServiceTest
+    tools/FileInteractionServiceTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/FileInteractionService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/FileInteractionService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+)
+
+target_link_libraries(FileInteractionServiceTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(FileInteractionServiceTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME FileInteractionServiceTest COMMAND FileInteractionServiceTest)
+
 add_executable(LocalToolContractTest
     tools/LocalToolContractTest.cpp
 )
@@ -288,6 +306,27 @@ target_include_directories(ToolsDialogSmokeTest PRIVATE
 )
 
 add_test(NAME ToolsDialogSmokeTest COMMAND ToolsDialogSmokeTest)
+
+add_executable(FileToolsDialogSmokeTest
+    ui/FileToolsDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/FileInteractionService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/FileInteractionService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+    ${PROJECT_SOURCE_DIR}/src/ui/FileToolsDialog.h
+    ${PROJECT_SOURCE_DIR}/src/ui/FileToolsDialog.cpp
+)
+
+target_link_libraries(FileToolsDialogSmokeTest PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+)
+
+target_include_directories(FileToolsDialogSmokeTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME FileToolsDialogSmokeTest COMMAND FileToolsDialogSmokeTest)
 
 add_executable(MessageWidgetTest
     ui/MessageWidgetTest.cpp
