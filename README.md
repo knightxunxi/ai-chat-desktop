@@ -87,10 +87,14 @@ Platform: Windows
 - [V5 Roadmap](docs/16-v5-roadmap.md)
 - [会话组织增强设计](docs/17-session-organization-design.md)
 - [V5 验收记录](docs/18-v5-acceptance-notes.md)
+<<<<<<< Updated upstream
 - [V6 Roadmap](docs/19-v6-roadmap.md)
 - [V6 本地交互安全设计](docs/20-v6-local-interaction-security.md)
 - [V6 验收记录](docs/21-v6-acceptance-notes.md)
 - [Agent 与电脑交互后续规划](docs/22-agent-automation-roadmap.md)
+=======
+- [V7 Roadmap](docs/19-v7-roadmap.md)
+>>>>>>> Stashed changes
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -212,6 +216,8 @@ V6 详细计划见 [V6 Roadmap](docs/19-v6-roadmap.md)，安全边界见 [V6 本
 
 V5 详细计划见 [V5 Roadmap](docs/16-v5-roadmap.md)，验收记录见 [V5 验收记录](docs/18-v5-acceptance-notes.md)。
 
+V7 详细计划见 [V7 Roadmap](docs/19-v7-roadmap.md)，重点是 AI 生成结构化任务计划、工具建议、用户确认和单步受控执行。V7 依赖 V6 受控文件工具能力；如果 V6 尚未合并，应先做计划解析和预览，不进入命令执行。
+
 V4 详细计划见 [V4 Roadmap](docs/13-v4-roadmap.md)，小工具扩展方案见 [小工具集成方案](docs/15-tool-integration-design.md)。
 
 V3 验收和复盘见 [V3 验收与复盘](docs/11-v3-acceptance-notes.md)。
@@ -222,5 +228,10 @@ V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)，发布说明见 [V3 Rel
 
 - Markdown 代码高亮增强。
 - 会话标签和 SQLite FTS 全文搜索。
+<<<<<<< Updated upstream
 - AI 任务拆解和受控工具调用。
 - 受控命令执行。
+=======
+- 受控本地文件/系统交互工具。
+- AI 任务拆解和受控工具调用。
+>>>>>>> Stashed changes
