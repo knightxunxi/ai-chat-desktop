@@ -67,6 +67,10 @@ private:
     void openToolsDialog();
     // 功能：打开文件工具窗口；使用模块：文件工具按钮。
     void openFileToolsDialog();
+    // 功能：根据当前输入生成 Agent 计划；使用模块：Agent 计划按钮。
+    void generateAgentPlan();
+    // 功能：打开 Agent 计划预览窗口；使用模块：ApplicationController::agentPlanReady 信号。
+    void openAgentPlanDialog(const AgentPlan &plan);
     // 功能：把工具输出插入聊天输入框；使用模块：ToolsDialog::outputInsertionRequested 信号。
     void insertToolOutputIntoInput(const QString &output);
     // 功能：打开角色提示词窗口；使用模块：角色提示词按钮。
@@ -119,6 +123,7 @@ private:
     QPushButton *m_systemPromptButton = nullptr; // 功能：角色提示词入口；使用模块：顶部工具区。
     QPushButton *m_toolsButton = nullptr;     // 功能：本地工具入口；使用模块：顶部工具区。
     QPushButton *m_fileToolsButton = nullptr; // 功能：文件工具入口；使用模块：顶部工具区。
+    QPushButton *m_agentPlanButton = nullptr; // 功能：Agent 计划入口；使用模块：顶部工具区。
     QPushButton *m_logButton = nullptr;      // 功能：日志窗口入口；使用模块：顶部工具区。
     ChatView *m_chatView = nullptr;          // 功能：聊天消息列表视图；使用模块：主内容区。
     QTextEdit *m_messageInput = nullptr;     // 功能：用户输入框；使用模块：底部输入区。

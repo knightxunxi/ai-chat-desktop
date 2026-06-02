@@ -65,6 +65,7 @@ AppConfig SettingsDialog::config() const
     config.apiKey = m_apiKeyEdit->text().trimmed();
     config.temperature = optionalDoubleFromText(m_temperatureEdit->text());
     config.maxTokens = optionalIntFromText(m_maxTokensEdit->text());
+    config.agentWorkspaceDirectory = m_agentWorkspaceEdit->text().trimmed();
     config.language = static_cast<AppLanguage>(m_languageCombo->currentData().toInt());
     return config;
 }
@@ -126,6 +127,12 @@ void SettingsDialog::setupUi()
         m_maxTokensEdit->setText(QString::number(m_initialConfig.maxTokens.value()));
     }
 
+    m_agentWorkspaceEdit = new QLineEdit(this);
+    m_agentWorkspaceEdit->setObjectName(QStringLiteral("agentWorkspaceEdit"));
+    m_agentWorkspaceEdit->setText(m_initialConfig.agentWorkspaceDirectory.trimmed().isEmpty()
+                                      ? AppConfig::defaultAgentWorkspaceDirectory()
+                                      : m_initialConfig.agentWorkspaceDirectory);
+
     m_languageCombo = new QComboBox(this);
     m_languageCombo->addItem(QStringLiteral("中文"), static_cast<int>(AppLanguage::Chinese));
     m_languageCombo->addItem(QStringLiteral("English"), static_cast<int>(AppLanguage::English));
@@ -138,6 +145,7 @@ void SettingsDialog::setupUi()
     m_apiKeyLabel = new QLabel(this);
     m_temperatureLabel = new QLabel(this);
     m_maxTokensLabel = new QLabel(this);
+    m_agentWorkspaceLabel = new QLabel(this);
     m_languageLabel = new QLabel(this);
 
     m_formLayout->addRow(m_providerLabel, m_providerCombo);
@@ -147,6 +155,7 @@ void SettingsDialog::setupUi()
     m_formLayout->addRow(m_apiKeyLabel, m_apiKeyEdit);
     m_formLayout->addRow(m_temperatureLabel, m_temperatureEdit);
     m_formLayout->addRow(m_maxTokensLabel, m_maxTokensEdit);
+    m_formLayout->addRow(m_agentWorkspaceLabel, m_agentWorkspaceEdit);
     m_formLayout->addRow(m_languageLabel, m_languageCombo);
 
     rootLayout->addLayout(m_formLayout);
@@ -179,6 +188,8 @@ void SettingsDialog::applyTexts()
     m_temperatureEdit->setPlaceholderText(dialogText(language, QStringLiteral("Optional, 0-2"), QStringLiteral("可选，0-2")));
     m_maxTokensLabel->setText(dialogText(language, QStringLiteral("Max tokens"), QStringLiteral("最大输出")));
     m_maxTokensEdit->setPlaceholderText(dialogText(language, QStringLiteral("Optional integer"), QStringLiteral("可选整数")));
+    m_agentWorkspaceLabel->setText(dialogText(language, QStringLiteral("Agent workspace"), QStringLiteral("Agent 工作目录")));
+    m_agentWorkspaceEdit->setPlaceholderText(AppConfig::defaultAgentWorkspaceDirectory());
     m_languageLabel->setText(dialogText(language, QStringLiteral("Language"), QStringLiteral("界面语言")));
 
     m_buttonBox->button(QDialogButtonBox::Save)->setText(dialogText(language, QStringLiteral("Save"), QStringLiteral("保存")));
@@ -216,6 +227,10 @@ void SettingsDialog::accept()
                        QStringLiteral("Provider, Base URL, and model are required."),
                        QStringLiteral("服务商、Base URL 和模型名称不能为空。")));
         return;
+    }
+
+    if (nextConfig.agentWorkspaceDirectory.trimmed().isEmpty()) {
+        m_agentWorkspaceEdit->setText(AppConfig::defaultAgentWorkspaceDirectory());
     }
 
     QDialog::accept();

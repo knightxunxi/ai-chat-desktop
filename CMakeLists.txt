@@ -20,6 +20,14 @@ qt_standard_project_setup()
 
 qt_add_executable(AIChatDesktop
     src/main.cpp
+    src/app/AgentPlan.h
+    src/app/AgentPlan.cpp
+    src/app/AgentPlanExecutor.h
+    src/app/AgentPlanExecutor.cpp
+    src/app/AgentPlanParser.h
+    src/app/AgentPlanParser.cpp
+    src/app/AgentPlanPromptBuilder.h
+    src/app/AgentPlanPromptBuilder.cpp
     src/app/ApplicationController.h
     src/app/ApplicationController.cpp
     src/app/SessionSummaryList.h
@@ -43,6 +51,8 @@ qt_add_executable(AIChatDesktop
     src/support/AppLogger.cpp
     src/support/LogFileReader.h
     src/support/LogFileReader.cpp
+    src/tools/AgentToolCatalog.h
+    src/tools/AgentToolCatalog.cpp
     src/tools/FileInteractionService.h
     src/tools/FileInteractionService.cpp
     src/tools/JsonCompactTool.h
@@ -53,6 +63,8 @@ qt_add_executable(AIChatDesktop
     src/tools/TextCleanupTool.h
     src/tools/TextTools.cpp
     src/tools/ToolResult.h
+    src/tools/WorkspacePolicy.h
+    src/tools/WorkspacePolicy.cpp
     src/storage/CredentialStorage.h
     src/storage/WindowsCredentialStorage.h
     src/storage/WindowsCredentialStorage.cpp
@@ -66,6 +78,8 @@ qt_add_executable(AIChatDesktop
     src/storage/PromptTemplateStorage.cpp
     src/ui/ChatView.h
     src/ui/ChatView.cpp
+    src/ui/AgentPlanDialog.h
+    src/ui/AgentPlanDialog.cpp
     src/ui/FileToolsDialog.h
     src/ui/FileToolsDialog.cpp
     src/ui/LogViewerDialog.h

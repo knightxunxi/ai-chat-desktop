@@ -2,6 +2,8 @@
 
 #include "core/AppLanguage.h"
 
+#include <QDir>
+#include <QStandardPaths>
 #include <optional>
 #include <QString>
 
@@ -15,6 +17,18 @@ struct AppConfig {
     std::optional<double> temperature;  // 功能：可选采样温度；使用模块：请求体构造时决定是否写入 JSON。
     std::optional<int> maxTokens;       // 功能：可选最大输出 token 数；使用模块：请求体构造时决定是否写入 JSON。
     AppLanguage language = AppLanguage::Chinese; // 功能：界面语言；使用模块：各 UI 组件选择中文或英文文案。
+    QString agentWorkspaceDirectory;    // 功能：Agent 默认工作目录；使用模块：后续自动文件生成和工作目录策略。
+
+    // 功能：返回默认 Agent 工作目录；使用模块：默认配置和工作目录策略。
+    static QString defaultAgentWorkspaceDirectory()
+    {
+        QString baseDirectory = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+        if (baseDirectory.trimmed().isEmpty()) {
+            baseDirectory = QDir::homePath();
+        }
+
+        return QDir(baseDirectory).filePath(QStringLiteral("AIChatDesktop/workspace"));
+    }
 
     // 功能：生成默认配置；使用模块：ConfigStorage 在本地无配置时提供初始值。
     static AppConfig defaultConfig()
@@ -24,6 +38,7 @@ struct AppConfig {
         config.baseUrl = QStringLiteral("https://api.deepseek.com");
         config.modelName = QStringLiteral("deepseek-v4-flash");
         config.language = AppLanguage::Chinese;
+        config.agentWorkspaceDirectory = defaultAgentWorkspaceDirectory();
         return config;
     }
 

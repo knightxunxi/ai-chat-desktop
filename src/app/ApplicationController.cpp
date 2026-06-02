@@ -1,8 +1,12 @@
 #include "app/ApplicationController.h"
 
+#include "app/AgentPlanParser.h"
+#include "app/AgentPlanPromptBuilder.h"
 #include "app/SessionSummaryList.h"
 
 #include "storage/ChatSessionExporter.h"
+#include "support/AppLogger.h"
+#include "tools/AgentToolCatalog.h"
 
 #include <QDateTime>
 
@@ -438,6 +442,7 @@ void ApplicationController::sendMessage(const QString &content)
 
 void ApplicationController::startAssistantRequest(const QString &userContentForRetry)
 {
+    m_activeRequestKind = ActiveRequestKind::ChatMessage;
     m_lastRequestUserContent = userContentForRetry;
     m_session.addMessage(MessageRole::Assistant, QString());
     m_currentAssistantContent.clear();
@@ -447,20 +452,88 @@ void ApplicationController::startAssistantRequest(const QString &userContentForR
     m_aiClient.sendChat(m_config, m_session);
 }
 
+void ApplicationController::generateAgentPlan(const QString &goal, int continuationDepth)
+{
+    if (m_isGenerating) {
+        return;
+    }
+
+    const QString trimmedGoal = goal.trimmed();
+    if (trimmedGoal.isEmpty()) {
+        emit statusMessage(QStringLiteral("Type a goal before generating an Agent plan."),
+                           QStringLiteral("生成 Agent 计划前，请先输入目标。"),
+                           3000);
+        return;
+    }
+
+    if (!m_config.isComplete()) {
+        emit configurationMissing();
+        return;
+    }
+
+    if (continuationDepth > AgentPlanMaxContinuationDepth) {
+        emit statusMessage(QStringLiteral("Agent continuation limit reached."),
+                           QStringLiteral("Agent 继续规划次数已达到上限。"),
+                           4000);
+        return;
+    }
+
+    setRetryAvailable(false);
+    m_agentPlanResponseBuffer.clear();
+    m_pendingAgentPlanContinuationDepth = continuationDepth;
+
+    const QVector<AgentToolDescriptor> catalog = defaultAgentToolCatalog();
+    const QString planningPrompt = AgentPlanPromptBuilder::buildPlanningPrompt(
+        trimmedGoal,
+        catalog,
+        m_config.language,
+        AgentPlanParser::DefaultMaxPlanSteps);
+
+    ChatSession planningSession = ChatSession::createDefault();
+    planningSession.title = QStringLiteral("Agent Plan");
+    planningSession.addMessage(MessageRole::User, planningPrompt);
+
+    m_activeRequestKind = ActiveRequestKind::AgentPlan;
+    AppLogger::info(QStringLiteral("AgentPlan"),
+                    QStringLiteral("Agent plan request started. goalLength=%1 tools=%2 maxSteps=%3")
+                        .arg(trimmedGoal.size())
+                        .arg(catalog.size())
+                        .arg(AgentPlanParser::DefaultMaxPlanSteps));
+
+    setGenerating(true);
+    m_aiClient.sendChat(m_config, planningSession);
+
+    emit statusMessage(QStringLiteral("Generating Agent plan..."),
+                       QStringLiteral("正在生成 Agent 计划..."),
+                       3000);
+}
+
 void ApplicationController::cancelCurrentRequest()
 {
     if (!m_isGenerating) {
         return;
     }
 
+    const ActiveRequestKind requestKind = m_activeRequestKind;
     m_aiClient.cancel();
     setGenerating(false);
+    if (requestKind == ActiveRequestKind::AgentPlan) {
+        m_agentPlanResponseBuffer.clear();
+        m_pendingAgentPlanContinuationDepth = 0;
+        m_activeRequestKind = ActiveRequestKind::None;
+        emit statusMessage(QStringLiteral("Agent plan generation stopped."),
+                           QStringLiteral("Agent 计划生成已停止。"),
+                           2500);
+        return;
+    }
+
     if (!m_session.messages.isEmpty() && m_session.messages.last().content.isEmpty()) {
         m_session.messages.last().content = text(QStringLiteral("(Stopped)"), QStringLiteral("（已停止）"));
         emit assistantMessageUpdated(m_session.messages.last().content);
     }
     setRetryAvailable(false);
     saveCurrentSession();
+    m_activeRequestKind = ActiveRequestKind::None;
     emit statusMessage(QStringLiteral("Generation stopped."),
                        QStringLiteral("已停止生成。"),
                        2500);
@@ -491,6 +564,11 @@ void ApplicationController::retryLastRequest()
 
 void ApplicationController::handleTextDelta(const QString &delta)
 {
+    if (m_activeRequestKind == ActiveRequestKind::AgentPlan) {
+        m_agentPlanResponseBuffer += delta;
+        return;
+    }
+
     m_currentAssistantContent += delta;
     if (!m_session.messages.isEmpty()) {
         m_session.messages.last().content = m_currentAssistantContent;
@@ -501,6 +579,39 @@ void ApplicationController::handleTextDelta(const QString &delta)
 
 void ApplicationController::handleRequestFinished()
 {
+    if (m_activeRequestKind == ActiveRequestKind::AgentPlan) {
+        setGenerating(false);
+        const AgentPlanParseResult parseResult = AgentPlanParser::parseJsonPlan(
+            m_agentPlanResponseBuffer,
+            defaultAgentToolCatalog());
+        m_agentPlanResponseBuffer.clear();
+        m_activeRequestKind = ActiveRequestKind::None;
+
+        if (!parseResult.ok) {
+            m_pendingAgentPlanContinuationDepth = 0;
+            AppLogger::warning(QStringLiteral("AgentPlan"),
+                               QStringLiteral("Agent plan parse failed. error=%1")
+                                   .arg(parseResult.error));
+            emit statusMessage(QStringLiteral("Agent plan parsing failed: %1").arg(parseResult.error),
+                               QStringLiteral("Agent 计划解析失败：%1").arg(parseResult.error),
+                               7000);
+            return;
+        }
+
+        AgentPlan plan = parseResult.plan;
+        plan.continuationDepth = m_pendingAgentPlanContinuationDepth;
+        m_pendingAgentPlanContinuationDepth = 0;
+
+        AppLogger::info(QStringLiteral("AgentPlan"),
+                        QStringLiteral("Agent plan parsed. steps=%1")
+                            .arg(plan.steps.size()));
+        emit statusMessage(QStringLiteral("Agent plan generated. Review before executing steps."),
+                           QStringLiteral("Agent 计划已生成。请先检查再执行步骤。"),
+                           4000);
+        emit agentPlanReady(plan);
+        return;
+    }
+
     setGenerating(false);
     setRetryAvailable(false);
     if (!m_session.messages.isEmpty() && m_session.messages.last().content.isEmpty()) {
@@ -509,10 +620,23 @@ void ApplicationController::handleRequestFinished()
     }
 
     saveCurrentSession();
+    m_activeRequestKind = ActiveRequestKind::None;
 }
 
 void ApplicationController::handleRequestFailed(const QString &message, RequestErrorCategory category)
 {
+    if (m_activeRequestKind == ActiveRequestKind::AgentPlan) {
+        setGenerating(false);
+        m_agentPlanResponseBuffer.clear();
+        m_pendingAgentPlanContinuationDepth = 0;
+        m_activeRequestKind = ActiveRequestKind::None;
+        setRetryAvailable(false);
+        emit statusMessage(QStringLiteral("Agent plan request failed: %1").arg(message),
+                           QStringLiteral("Agent 计划请求失败：%1").arg(message),
+                           7000);
+        return;
+    }
+
     setGenerating(false);
     const QString errorMessage = requestFailureMessage(category, message);
     const QString displayMessage = m_currentAssistantContent.isEmpty()
@@ -529,6 +653,7 @@ void ApplicationController::handleRequestFailed(const QString &message, RequestE
                        QStringLiteral("请求失败，可以重试上一条消息。"),
                        5000);
     saveCurrentSession();
+    m_activeRequestKind = ActiveRequestKind::None;
 }
 
 void ApplicationController::setGenerating(bool generating)

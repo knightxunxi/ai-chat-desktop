@@ -10,7 +10,7 @@ class QFormLayout;
 class QLabel;
 class QLineEdit;
 
-// 学习注释：应用设置窗口，负责编辑服务商、Base URL、模型、API Key、模型参数和界面语言。
+// 学习注释：应用设置窗口，负责编辑服务商、Base URL、模型、API Key、模型参数、Agent 工作目录和界面语言。
 // 使用模块：MainWindow 打开它，ApplicationController 保存它返回的 AppConfig。
 class SettingsDialog : public QDialog
 {
@@ -44,6 +44,7 @@ private:
     QLabel *m_apiKeyLabel = nullptr;        // 功能：API Key 标签；使用模块：applyTexts。
     QLabel *m_temperatureLabel = nullptr;   // 功能：temperature 标签；使用模块：可选模型参数。
     QLabel *m_maxTokensLabel = nullptr;     // 功能：max_tokens 标签；使用模块：可选模型参数。
+    QLabel *m_agentWorkspaceLabel = nullptr; // 功能：Agent 工作目录标签；使用模块：后续文件生成默认路径。
     QLabel *m_languageLabel = nullptr;      // 功能：语言标签；使用模块：applyTexts。
     QComboBox *m_providerCombo = nullptr;   // 功能：服务商选择；使用模块：预设填充配置。
     QLineEdit *m_customProviderEdit = nullptr; // 功能：自定义服务商名称；使用模块：选择 Custom 时启用。
@@ -52,6 +53,7 @@ private:
     QLineEdit *m_apiKeyEdit = nullptr;      // 功能：API Key 输入；使用模块：生成 AppConfig 后安全保存。
     QLineEdit *m_temperatureEdit = nullptr; // 功能：temperature 输入；使用模块：可选模型参数。
     QLineEdit *m_maxTokensEdit = nullptr;   // 功能：max_tokens 输入；使用模块：可选模型参数。
+    QLineEdit *m_agentWorkspaceEdit = nullptr; // 功能：Agent 工作目录输入；使用模块：生成 AppConfig。
     QComboBox *m_languageCombo = nullptr;   // 功能：语言选择；使用模块：界面语言切换。
     QDialogButtonBox *m_buttonBox = nullptr; // 功能：确认/取消按钮；使用模块：标准对话框操作。
 };
