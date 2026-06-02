@@ -36,6 +36,25 @@ AgentPlan makePlan()
     return plan;
 }
 
+AgentPlan makeContinuousPlan()
+{
+    AgentPlan plan;
+    plan.summary = QStringLiteral("Clean two text snippets.");
+
+    for (int index = 1; index <= 2; ++index) {
+        AgentPlanStep step;
+        step.id = QStringLiteral("step-%1").arg(index);
+        step.title = QStringLiteral("Clean text %1").arg(index);
+        step.toolId = QStringLiteral("text.cleanup");
+        step.reason = QStringLiteral("Remove repeated blank lines.");
+        step.risk = AgentToolRisk::Low;
+        step.parameters.insert(QStringLiteral("input"), QStringLiteral("A\n\n\nB"));
+        plan.steps.append(step);
+    }
+
+    return plan;
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -50,6 +69,8 @@ int main(int argc, char *argv[])
     auto *detailEdit = dialog.findChild<QPlainTextEdit *>(QStringLiteral("agentPlanStepDetailEdit"));
     auto *outputEdit = dialog.findChild<QPlainTextEdit *>(QStringLiteral("agentPlanOutputEdit"));
     auto *executeButton = dialog.findChild<QPushButton *>(QStringLiteral("executeAgentPlanStepButton"));
+    auto *runAllButton = dialog.findChild<QPushButton *>(QStringLiteral("runAgentPlanStepsButton"));
+    auto *stopButton = dialog.findChild<QPushButton *>(QStringLiteral("stopAgentPlanStepsButton"));
     auto *skipButton = dialog.findChild<QPushButton *>(QStringLiteral("skipAgentPlanStepButton"));
     auto *copyButton = dialog.findChild<QPushButton *>(QStringLiteral("copyAgentPlanOutputButton"));
     auto *insertButton = dialog.findChild<QPushButton *>(QStringLiteral("insertAgentPlanOutputButton"));
@@ -62,6 +83,8 @@ int main(int argc, char *argv[])
     assert(detailEdit != nullptr);
     assert(outputEdit != nullptr);
     assert(executeButton != nullptr);
+    assert(runAllButton != nullptr);
+    assert(stopButton != nullptr);
     assert(skipButton != nullptr);
     assert(copyButton != nullptr);
     assert(insertButton != nullptr);
@@ -71,6 +94,8 @@ int main(int argc, char *argv[])
     assert(stepList->count() == 2);
     assert(stepList->currentRow() == 0);
     assert(executeButton->isEnabled());
+    assert(runAllButton->isEnabled());
+    assert(!stopButton->isEnabled());
     assert(skipButton->isEnabled());
     assert(!copyButton->isEnabled());
     assert(!insertButton->isEnabled());
@@ -82,6 +107,7 @@ int main(int argc, char *argv[])
     assert(copyButton->isEnabled());
     assert(insertButton->isEnabled());
     assert(continueButton->isEnabled());
+    assert(!runAllButton->isEnabled());
 
     QString insertedOutput;
     QObject::connect(&dialog, &AgentPlanDialog::outputInsertionRequested, [&insertedOutput](const QString &output) {
@@ -100,6 +126,24 @@ int main(int argc, char *argv[])
     assert(continuationDepth == 1);
     assert(continuationGoal.contains(QStringLiteral("Format JSON")));
     assert(continuationGoal.contains(QStringLiteral("\"name\": \"test\"")));
+    assert(continuationGoal.contains(QStringLiteral("untrusted file data")));
+
+    AgentPlanDialog continuousDialog(makeContinuousPlan(), defaultAgentToolCatalog(), AppLanguage::Chinese);
+    auto *continuousRunAllButton = continuousDialog.findChild<QPushButton *>(QStringLiteral("runAgentPlanStepsButton"));
+    auto *continuousStopButton = continuousDialog.findChild<QPushButton *>(QStringLiteral("stopAgentPlanStepsButton"));
+    auto *continuousStepList = continuousDialog.findChild<QListWidget *>(QStringLiteral("agentPlanStepList"));
+    auto *continuousOutputEdit = continuousDialog.findChild<QPlainTextEdit *>(QStringLiteral("agentPlanOutputEdit"));
+    assert(continuousRunAllButton != nullptr);
+    assert(continuousStopButton != nullptr);
+    assert(continuousStepList != nullptr);
+    assert(continuousOutputEdit != nullptr);
+    assert(continuousRunAllButton->isEnabled());
+    assert(!continuousStopButton->isEnabled());
+    continuousRunAllButton->click();
+    assert(continuousStepList->item(0)->text().contains(QStringLiteral("completed")));
+    assert(continuousStepList->item(1)->text().contains(QStringLiteral("completed")));
+    assert(continuousOutputEdit->toPlainText() == QStringLiteral("A\n\nB"));
+    assert(!continuousRunAllButton->isEnabled());
 
     AgentPlanDialog secondDialog(makePlan(), defaultAgentToolCatalog(), AppLanguage::Chinese);
     auto *secondStepList = secondDialog.findChild<QListWidget *>(QStringLiteral("agentPlanStepList"));

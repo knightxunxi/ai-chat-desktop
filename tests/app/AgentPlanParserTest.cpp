@@ -75,6 +75,16 @@ int main()
     assert(result.ok);
     assert(result.plan.steps.first().risk == AgentToolRisk::Medium);
 
+    QJsonObject workspaceDeleteParameters;
+    workspaceDeleteParameters.insert(QStringLiteral("path"), QStringLiteral("old.txt"));
+    result = parse(planObject(QJsonArray{stepObject(
+        QStringLiteral("step-1"),
+        QStringLiteral("workspace.delete_file"),
+        QStringLiteral("low"),
+        workspaceDeleteParameters)}));
+    assert(result.ok);
+    assert(result.plan.steps.first().risk == AgentToolRisk::High);
+
     result = AgentPlanParser::parseJsonPlan(QStringLiteral("not-json"), defaultAgentToolCatalog());
     assert(!result.ok);
     assert(result.error.contains(QStringLiteral("parse error"), Qt::CaseInsensitive));

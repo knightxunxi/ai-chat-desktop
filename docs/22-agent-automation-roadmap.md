@@ -66,7 +66,7 @@ V7 不包含：
 - 工作目录策略测试通过。
 - 计划窗口能可靠停止或暂停。
 
-详细计划见 [V8 Agent 工作目录规划](26-v8-agent-workspace-roadmap.md)。V8 及后续版本的完整演进路线见 [V8+ Agent 详细开发路线](28-v8-plus-agent-development-roadmap.md)。
+详细计划见 [V8 Agent 工作目录规划](26-v8-agent-workspace-roadmap.md)。V8.1 第一版验收结果见 [V8.1 验收记录](29-v8-acceptance-notes.md)，V8.2/V8.3 第一版验收结果见 [V8.2/V8.3 验收记录](30-v8-2-v8-3-acceptance-notes.md)。V8 及后续版本的完整演进路线见 [V8+ Agent 详细开发路线](28-v8-plus-agent-development-roadmap.md)。
 
 ## 4. V9：受控命令执行
 

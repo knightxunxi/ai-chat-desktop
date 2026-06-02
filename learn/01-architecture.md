@@ -62,7 +62,10 @@ src/support     日志、日志读取等通用能力
 - `AgentPlan.h/.cpp`：Agent 结构化计划和步骤状态。
 - `AgentPlanParser.h/.cpp`：解析并校验 AI 返回的 JSON 计划。
 - `AgentPlanPromptBuilder.h/.cpp`：把用户目标和工具目录整理为计划生成提示词。
-- `AgentPlanExecutor.h/.cpp`：执行用户确认后的低风险文本工具步骤。
+- `AgentPlanExecutor.h/.cpp`：通过工具注册表执行用户确认后的工具步骤。
+- `AgentLoopController.h/.cpp`：Agentic Loop 运行层，按观察、动作、评估循环执行工具。
+- `AgentLoopActionParser.h/.cpp`：解析单轮 Agent action JSON，支持 `done=true` 终止信号。
+- `AgentLoopPromptBuilder.h/.cpp`：生成单轮 Agent action 规划提示词。
 
 控制层的作用是把多个模块串起来。例如发送消息时，它会：
 
@@ -113,13 +116,20 @@ src/support     日志、日志读取等通用能力
 - `JsonFormatTool.h` / `JsonCompactTool.h`：JSON 格式化和压缩。
 - `MarkdownCleanupTool.h` / `TextCleanupTool.h`：Markdown 和普通文本清理。
 - `FileInteractionService.h/.cpp`：受控文件交互服务，提供文本读取、目录列出、文本保存、路径打开前校验和日志路径摘要。
+- `WorkspacePolicy.h/.cpp`：Agent 工作目录策略，判断路径是否在工作目录内、是否属于受保护文件、是否允许自动操作。
+- `WorkspaceFileService.h/.cpp`：Agent 工作目录文件服务，支持工作目录内创建、读取、列目录、覆盖和移动删除普通文件。
 - `AgentToolCatalog.h/.cpp`：Agent 可见工具目录，定义工具 ID、风险等级、输入限制和敏感结果标记。
+- `AgentToolRegistry.h/.cpp`：工具注册表，统一工具描述、参数 schema、执行函数和 Function Calling 函数名。
 
 这一层不依赖主窗口，不直接访问剪贴板，也不直接发送消息。工具窗口只负责调用工具并展示结果。
 
 V6 文件工具的关键边界是：路径由用户通过选择框提供，工具输出只展示或插入聊天输入框，不自动发送给 AI，不执行脚本或系统命令。
 
 V7 Agent 的关键边界是：AI 只能生成计划和建议工具；本地解析器校验计划；用户确认后才执行低风险文本工具；文件工具仍需要走专用文件选择流程。
+
+V8.1 Agent 的关键边界是：AI 可以建议 `workspace.*` 文件工具，但本地执行器必须先经过 `WorkspacePolicy` 校验；所有自动文件操作只能发生在 Agent 工作目录内；受保护文件不能自动创建、覆盖或删除；读取到的文件内容会被标记为不可信数据。
+
+V8.2/V8.3 Agent 的关键边界是：连续执行由 `AgentLoopController` 统一管理，每轮只执行一个步骤，达到步数上限、失败、停止或重复动作时暂停；工具目录、参数 schema 和执行函数来自同一份 `AgentToolRegistry`，Function Calling schema 也从注册表生成。
 
 ### `src/support`
 
@@ -198,4 +208,5 @@ flowchart TD
 - 给会话搜索引入 SQLite FTS 全文索引。
 - 把角色模板导入导出作为独立服务模块。
 - 在 V6 文件工具基础上进入 V7 AI 任务拆解和受控工具建议。
-- 在 V8 之后再评估受控命令执行、操作记录和设备输入模拟。
+- 在 V8.3 工具注册表基础上进入 V9 受控命令执行。
+- 在 V10/V11 之后再评估操作记录和设备输入模拟。

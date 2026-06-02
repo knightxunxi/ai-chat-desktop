@@ -50,6 +50,12 @@ int main()
     decision = WorkspacePolicy::evaluateWorkspaceOperation(
         workspace,
         QStringLiteral("secrets/production.pem"),
+        WorkspaceOperation::Write);
+    assert(!decision.allowed);
+
+    decision = WorkspacePolicy::evaluateWorkspaceOperation(
+        workspace,
+        QStringLiteral("secrets/production.pem"),
         WorkspaceOperation::Overwrite);
     assert(!decision.allowed);
 

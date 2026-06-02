@@ -206,3 +206,111 @@ V3 修复过一个重要问题：点击会话导致列表顺序变乱。
 4. 调用 `QCoreApplication::quit()` 退出事件循环。
 
 这个问题体现了桌面应用常见的资源释放意识：窗口消失不等于进程已经退出，网络请求、事件循环、后台对象都可能导致进程仍然存在。
+
+## 12. Agent 工作目录文件流程
+
+V8.1 开始，Agent 可以在默认工作目录内执行受控文件操作。
+
+相关模块：
+
+- `AgentPlanPromptBuilder`
+- `AgentPlanParser`
+- `AgentToolCatalog`
+- `AgentPlanDialog`
+- `AgentPlanExecutor`
+- `WorkspacePolicy`
+- `WorkspaceFileService`
+
+流程如下：
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant C as ApplicationController
+    participant AI as AI Model
+    participant D as AgentPlanDialog
+    participant E as AgentPlanExecutor
+    participant P as WorkspacePolicy
+    participant F as WorkspaceFileService
+
+    U->>C: 输入目标并生成 Agent 计划
+    C->>AI: 发送工具目录和规划提示词
+    AI->>C: 返回 JSON 计划
+    C->>C: 解析并校验工具 ID 和风险等级
+    C->>D: 展示计划
+    U->>D: 执行单步或连续执行
+    D->>E: executeStep(step, workspace)
+    E->>P: 校验路径、操作类型和受保护文件
+    P->>E: 返回允许或拒绝
+    E->>F: 执行工作目录内文件操作
+    F->>D: 返回结果摘要或不可信文件内容
+```
+
+关键点：
+
+- AI 不能直接操作文件系统，只能返回结构化计划。
+- 工具 ID 必须存在于本地 `AgentToolCatalog`。
+- `workspace.write_text` 创建新文件，不覆盖已有文件。
+- `workspace.overwrite_text` 覆盖前生成 `.bak` 备份。
+- `workspace.delete_file` 把文件移动到 `.trash`，不是永久删除。
+- `workspace.read_text` 会把文件内容包裹为不可信数据。
+- 连续执行最多 5 步，任一步失败会暂停。
+
+这个流程体现了 Agent 开发中的核心原则：模型负责建议，本地代码负责权限、路径和实际执行。
+
+## 13. Agentic Loop 连续执行流程
+
+V8.2 开始，计划窗口的连续执行不再自己维护循环，而是交给 `AgentLoopController`。
+
+流程如下：
+
+```mermaid
+flowchart TD
+    Observe["Observe: 读取计划状态和上一步输出"] --> StopCheck["检查停止请求、步数上限、耗时上限"]
+    StopCheck --> Think["Think: 选择下一个可直接执行步骤"]
+    Think --> RepeatCheck["检查重复动作"]
+    RepeatCheck --> Act["Act: 通过 ToolRegistry 执行工具"]
+    Act --> Evaluate["Evaluate: 成功、失败、停止或继续"]
+    Evaluate --> Observe
+```
+
+关键点：
+
+- 每轮只执行一个工具步骤。
+- 连续执行默认最多 5 步。
+- 用户点击停止后，下一轮开始前会停止。
+- 工具失败后不继续执行。
+- 重复动作会被拦截。
+- 日志记录 Observe、Think、Act、Evaluate 的摘要。
+
+`AgentLoopPromptBuilder` 和 `AgentLoopActionParser` 预留给后续真实 AI 单步循环请求：模型每次只返回一个 action，或者返回 `done=true` 表示任务完成。
+
+## 14. 工具注册表和 Function Calling 兼容流程
+
+V8.3 开始，工具描述和执行函数统一放在 `AgentToolRegistry`。
+
+```mermaid
+flowchart TD
+    Registry["AgentToolRegistry"] --> Catalog["AgentToolCatalog"]
+    Registry --> Executor["AgentPlanExecutor"]
+    Registry --> FunctionSchema["Function Calling tools schema"]
+    Catalog --> Prompt["Plan / Loop Prompt"]
+    Executor --> Tool["本地工具执行"]
+```
+
+注册表中的每个工具包含：
+
+- 工具 ID。
+- 中英文描述。
+- 风险等级。
+- 参数 schema。
+- Function Calling 函数名。
+- 是否允许计划窗口直接执行。
+- 执行函数。
+
+这样做的好处：
+
+- Prompt 和执行器不会维护两份工具定义。
+- 新增工具时主要改注册表。
+- Function Calling schema 可以从同一份定义生成。
+- 不支持直接执行的文件选择工具不会进入 Function Calling schema。

@@ -514,7 +514,12 @@ void MainWindow::generateAgentPlan()
 
 void MainWindow::openAgentPlanDialog(const AgentPlan &plan)
 {
-    AgentPlanDialog dialog(plan, defaultAgentToolCatalog(), m_controller.config().language, this);
+    AgentPlanDialog dialog(
+        plan,
+        defaultAgentToolCatalog(),
+        m_controller.config().language,
+        this,
+        m_controller.config().agentWorkspaceDirectory);
     connect(&dialog, &AgentPlanDialog::outputInsertionRequested, this, &MainWindow::insertToolOutputIntoInput);
     connect(&dialog, &AgentPlanDialog::continuePlanningRequested, &m_controller, &ApplicationController::generateAgentPlan);
     dialog.exec();

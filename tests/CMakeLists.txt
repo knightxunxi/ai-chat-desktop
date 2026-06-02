@@ -1,3 +1,23 @@
+set(AGENT_TOOL_REGISTRY_SOURCES
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonCompactTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonFormatTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/LocalTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/MarkdownCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.h
+)
+
 add_executable(CoreModelSmokeTest
     core/ModelSmokeTest.cpp
 )
@@ -48,8 +68,7 @@ add_executable(AgentPlanParserTest
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlanParser.cpp
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlanParser.h
-    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
-    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${AGENT_TOOL_REGISTRY_SOURCES}
 )
 
 target_link_libraries(AgentPlanParserTest PRIVATE
@@ -71,6 +90,8 @@ add_executable(AgentPlanExecutorTest
     ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.h
     ${PROJECT_SOURCE_DIR}/src/tools/JsonCompactTool.h
     ${PROJECT_SOURCE_DIR}/src/tools/JsonFormatTool.h
     ${PROJECT_SOURCE_DIR}/src/tools/JsonTools.cpp
@@ -79,6 +100,10 @@ add_executable(AgentPlanExecutorTest
     ${PROJECT_SOURCE_DIR}/src/tools/TextCleanupTool.h
     ${PROJECT_SOURCE_DIR}/src/tools/TextTools.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.h
 )
 
 target_link_libraries(AgentPlanExecutorTest PRIVATE
@@ -95,8 +120,7 @@ add_executable(AgentPlanPromptBuilderTest
     app/AgentPlanPromptBuilderTest.cpp
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlanPromptBuilder.cpp
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlanPromptBuilder.h
-    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
-    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${AGENT_TOOL_REGISTRY_SOURCES}
 )
 
 target_link_libraries(AgentPlanPromptBuilderTest PRIVATE
@@ -108,6 +132,61 @@ target_include_directories(AgentPlanPromptBuilderTest PRIVATE
 )
 
 add_test(NAME AgentPlanPromptBuilderTest COMMAND AgentPlanPromptBuilderTest)
+
+add_executable(AgentLoopActionParserTest
+    app/AgentLoopActionParserTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopActionParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopActionParser.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
+    ${AGENT_TOOL_REGISTRY_SOURCES}
+)
+
+target_link_libraries(AgentLoopActionParserTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AgentLoopActionParserTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentLoopActionParserTest COMMAND AgentLoopActionParserTest)
+
+add_executable(AgentLoopPromptBuilderTest
+    app/AgentLoopPromptBuilderTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopPromptBuilder.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopPromptBuilder.h
+    ${AGENT_TOOL_REGISTRY_SOURCES}
+)
+
+target_link_libraries(AgentLoopPromptBuilderTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AgentLoopPromptBuilderTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentLoopPromptBuilderTest COMMAND AgentLoopPromptBuilderTest)
+
+add_executable(AgentLoopControllerTest
+    app/AgentLoopControllerTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopController.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopController.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
+    ${AGENT_TOOL_REGISTRY_SOURCES}
+)
+
+target_link_libraries(AgentLoopControllerTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AgentLoopControllerTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentLoopControllerTest COMMAND AgentLoopControllerTest)
 
 add_executable(StreamParserTest
     services/StreamParserTest.cpp
@@ -195,10 +274,29 @@ target_include_directories(FileInteractionServiceTest PRIVATE
 
 add_test(NAME FileInteractionServiceTest COMMAND FileInteractionServiceTest)
 
+add_executable(WorkspaceFileServiceTest
+    tools/WorkspaceFileServiceTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.h
+)
+
+target_link_libraries(WorkspaceFileServiceTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(WorkspaceFileServiceTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME WorkspaceFileServiceTest COMMAND WorkspaceFileServiceTest)
+
 add_executable(AgentToolCatalogTest
     tools/AgentToolCatalogTest.cpp
-    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
-    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${AGENT_TOOL_REGISTRY_SOURCES}
 )
 
 target_link_libraries(AgentToolCatalogTest PRIVATE
@@ -210,6 +308,21 @@ target_include_directories(AgentToolCatalogTest PRIVATE
 )
 
 add_test(NAME AgentToolCatalogTest COMMAND AgentToolCatalogTest)
+
+add_executable(AgentToolRegistryTest
+    tools/AgentToolRegistryTest.cpp
+    ${AGENT_TOOL_REGISTRY_SOURCES}
+)
+
+target_link_libraries(AgentToolRegistryTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(AgentToolRegistryTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME AgentToolRegistryTest COMMAND AgentToolRegistryTest)
 
 add_executable(WorkspacePolicyTest
     tools/WorkspacePolicyTest.cpp
@@ -408,6 +521,8 @@ add_test(NAME ToolsDialogSmokeTest COMMAND ToolsDialogSmokeTest)
 
 add_executable(AgentPlanDialogSmokeTest
     ui/AgentPlanDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopController.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopController.h
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.cpp
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlanExecutor.cpp
@@ -415,6 +530,8 @@ add_executable(AgentPlanDialogSmokeTest
     ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.h
     ${PROJECT_SOURCE_DIR}/src/tools/JsonCompactTool.h
     ${PROJECT_SOURCE_DIR}/src/tools/JsonFormatTool.h
     ${PROJECT_SOURCE_DIR}/src/tools/JsonTools.cpp
@@ -423,6 +540,10 @@ add_executable(AgentPlanDialogSmokeTest
     ${PROJECT_SOURCE_DIR}/src/tools/TextCleanupTool.h
     ${PROJECT_SOURCE_DIR}/src/tools/TextTools.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.h
     ${PROJECT_SOURCE_DIR}/src/ui/AgentPlanDialog.h
     ${PROJECT_SOURCE_DIR}/src/ui/AgentPlanDialog.cpp
 )

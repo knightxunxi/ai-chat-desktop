@@ -7,7 +7,7 @@
 int main()
 {
     const QVector<AgentToolDescriptor> catalog = defaultAgentToolCatalog();
-    assert(catalog.size() >= 8);
+    assert(catalog.size() >= 13);
 
     QSet<QString> ids;
     for (const AgentToolDescriptor &descriptor : catalog) {
@@ -19,7 +19,6 @@ int main()
         assert(!descriptor.inputPolicy.isEmpty());
         assert(descriptor.requiresUserConfirmation);
         assert(descriptor.enabledForAgent);
-        assert(descriptor.risk != AgentToolRisk::High);
     }
 
     const AgentToolDescriptor *jsonTool = findAgentToolDescriptor(catalog, QStringLiteral("json.format"));
@@ -32,6 +31,20 @@ int main()
     assert(fileTool != nullptr);
     assert(fileTool->risk == AgentToolRisk::Medium);
     assert(fileTool->resultMayContainSensitiveContent);
+
+    const AgentToolDescriptor *workspaceWriteTool = findAgentToolDescriptor(catalog, QStringLiteral("workspace.write_text"));
+    assert(workspaceWriteTool != nullptr);
+    assert(workspaceWriteTool->risk == AgentToolRisk::Medium);
+    assert(!workspaceWriteTool->resultMayContainSensitiveContent);
+
+    const AgentToolDescriptor *workspaceReadTool = findAgentToolDescriptor(catalog, QStringLiteral("workspace.read_text"));
+    assert(workspaceReadTool != nullptr);
+    assert(workspaceReadTool->risk == AgentToolRisk::Medium);
+    assert(workspaceReadTool->resultMayContainSensitiveContent);
+
+    const AgentToolDescriptor *workspaceDeleteTool = findAgentToolDescriptor(catalog, QStringLiteral("workspace.delete_file"));
+    assert(workspaceDeleteTool != nullptr);
+    assert(workspaceDeleteTool->risk == AgentToolRisk::High);
 
     assert(findAgentToolDescriptor(catalog, QStringLiteral("missing.tool")) == nullptr);
 

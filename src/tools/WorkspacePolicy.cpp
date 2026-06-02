@@ -75,7 +75,9 @@ bool isUnsafeWorkspaceRoot(const QString &workspaceDirectory)
 
 bool isDestructiveOperation(WorkspaceOperation operation)
 {
-    return operation == WorkspaceOperation::Overwrite || operation == WorkspaceOperation::Delete;
+    return operation == WorkspaceOperation::Write
+        || operation == WorkspaceOperation::Overwrite
+        || operation == WorkspaceOperation::Delete;
 }
 
 } // namespace
@@ -175,7 +177,7 @@ WorkspacePolicyDecision evaluateWorkspaceOperation(
     }
 
     if (isDestructiveOperation(operation) && isProtectedPath(decision.normalizedPath)) {
-        decision.reason = QStringLiteral("Protected files cannot be deleted or overwritten automatically.");
+        decision.reason = QStringLiteral("Protected files cannot be created, deleted, or overwritten automatically.");
         return decision;
     }
 

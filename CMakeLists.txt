@@ -22,6 +22,12 @@ qt_add_executable(AIChatDesktop
     src/main.cpp
     src/app/AgentPlan.h
     src/app/AgentPlan.cpp
+    src/app/AgentLoopActionParser.h
+    src/app/AgentLoopActionParser.cpp
+    src/app/AgentLoopController.h
+    src/app/AgentLoopController.cpp
+    src/app/AgentLoopPromptBuilder.h
+    src/app/AgentLoopPromptBuilder.cpp
     src/app/AgentPlanExecutor.h
     src/app/AgentPlanExecutor.cpp
     src/app/AgentPlanParser.h
@@ -53,6 +59,8 @@ qt_add_executable(AIChatDesktop
     src/support/LogFileReader.cpp
     src/tools/AgentToolCatalog.h
     src/tools/AgentToolCatalog.cpp
+    src/tools/AgentToolRegistry.h
+    src/tools/AgentToolRegistry.cpp
     src/tools/FileInteractionService.h
     src/tools/FileInteractionService.cpp
     src/tools/JsonCompactTool.h
@@ -63,6 +71,8 @@ qt_add_executable(AIChatDesktop
     src/tools/TextCleanupTool.h
     src/tools/TextTools.cpp
     src/tools/ToolResult.h
+    src/tools/WorkspaceFileService.h
+    src/tools/WorkspaceFileService.cpp
     src/tools/WorkspacePolicy.h
     src/tools/WorkspacePolicy.cpp
     src/storage/CredentialStorage.h

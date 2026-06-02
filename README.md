@@ -26,6 +26,11 @@
 - 错误分类提示和失败重试。
 - 基础日志记录、应用内日志查看和打开日志目录。
 - 受控文件工具：读取用户选择的文本文件、列出文件夹、保存工具输出、打开确认后的文件或文件夹。
+- Agent 结构化计划：AI 生成工具步骤，用户在计划窗口确认后执行。
+- Agent 工作目录文件工具：在默认工作目录内创建、读取、列目录、覆盖和移动删除普通文件。
+- Agent 连续执行 MVP：计划窗口可连续执行最多 5 个可直接执行步骤，并支持停止。
+- Agentic Loop 运行层：观察、执行、评估循环，支持步数上限、停止、失败暂停和重复动作检测。
+- 工具注册表和 Function Calling 兼容层：统一工具描述、参数 schema、执行入口和函数调用 schema。
 - Windows Release 打包说明。
 
 ## 技术栈
@@ -98,6 +103,8 @@ Platform: Windows
 - [V8 Agent 工作目录规划](docs/26-v8-agent-workspace-roadmap.md)
 - [下一版本开发计划](docs/27-next-version-development-plan.md)
 - [V8+ Agent 详细开发路线](docs/28-v8-plus-agent-development-roadmap.md)
+- [V8.1 验收记录](docs/29-v8-acceptance-notes.md)
+- [V8.2/V8.3 验收记录](docs/30-v8-2-v8-3-acceptance-notes.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -181,6 +188,8 @@ ctest --test-dir build-qt --output-on-failure
 - 会话收藏、归档和筛选。
 - Agent 工具目录、计划解析、计划 Prompt 生成、计划预览和低风险步骤执行。
 - Agent 默认工作目录配置和工作目录策略。
+- Agent 工作目录文件服务、`workspace.*` 工具执行、连续执行和提示词注入防护。
+- Agentic Loop 单步 action 解析、单步 prompt、循环控制器和工具注册表。
 - 应用启动/关闭 smoke test。
 
 ## Windows 打包
@@ -203,17 +212,17 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 
 ## 当前版本状态
 
-当前版本已完成 V6，覆盖本地工具系统、JSON/Markdown/文本处理工具、工具窗口、会话收藏、会话归档、会话筛选和受控文件交互工具。
-
-当前 V7 开发分支已启动受控 Agent 基础能力，已完成 Agent 安全设计、工具目录、计划模型、计划解析器、计划 Prompt 生成器、真实 AI 计划生成入口、计划预览窗口和低风险文本工具单步执行；文件工具步骤仍保留专用文件选择确认流程，不从计划参数直接执行。
+当前版本已完成 V8.3，覆盖本地工具系统、受控文件交互工具、Agent 结构化计划、计划预览、默认 Agent 工作目录、`workspace.*` 文件工具、Agentic Loop 运行层、工具注册表和 Function Calling 兼容层。
 
 已知限制：
 
 - 当前版本只面向 Windows，暂未规划 macOS/Linux 迁移。
 - Markdown 展示仍是基础版本，复杂代码高亮暂未支持；V5 新增的 Markdown 整理工具只做低风险空白清理。
 - 角色提示词模板仍是本地版本，暂未支持云同步。
-- 本地工具系统仅支持内置工具，暂不支持插件、脚本或 AI 自动调用工具。
-- 文件工具只支持用户主动选择路径后的低风险操作，不支持删除、移动、脚本执行或后台自动化。
+- 本地工具系统仅支持内置工具，暂不支持插件、脚本或任意命令执行。
+- Agent 只允许在配置的工作目录内自动操作普通文件，不支持工作目录外自动读写。
+- 连续执行是 MVP，同步步骤会在当前步骤完成后响应停止。
+- Function Calling schema 已生成，但网络请求体尚未切换到原生 tools 调用。
 
 ## 后续方向
 
@@ -225,9 +234,9 @@ V5 详细计划见 [V5 Roadmap](docs/16-v5-roadmap.md)，验收记录见 [V5 验
 
 V7 详细计划见 [V7 Roadmap](docs/19-v7-roadmap.md)，Agent 安全边界见 [V7 Agent 安全设计](docs/23-v7-agent-safety-design.md)，当前验收记录见 [V7 验收记录](docs/24-v7-acceptance-notes.md)，合并前手工检查见 [V7 手工验证脚本](docs/25-v7-manual-test-script.md)。V7 重点是 AI 生成结构化任务计划、工具建议、用户确认和单步受控执行。
 
-V8 详细计划见 [V8 Agent 工作目录规划](docs/26-v8-agent-workspace-roadmap.md)，重点是默认工作目录、自动文件生成、连续执行和文件内容提示词注入防护。
+V8 详细计划见 [V8 Agent 工作目录规划](docs/26-v8-agent-workspace-roadmap.md)，重点是默认工作目录、自动文件生成、连续执行和文件内容提示词注入防护。当前验收记录见 [V8.1 验收记录](docs/29-v8-acceptance-notes.md) 和 [V8.2/V8.3 验收记录](docs/30-v8-2-v8-3-acceptance-notes.md)。
 
-下一版本建议按 [下一版本开发计划](docs/27-next-version-development-plan.md) 推进，优先实现 V8.1 工作目录文件 Agent MVP；UI 优化暂不纳入该版本。
+下一阶段建议按 [V8+ Agent 详细开发路线](docs/28-v8-plus-agent-development-roadmap.md) 进入 V9 受控命令执行；UI 优化暂不纳入 Agent 主线。
 
 V8 及后续 Agent 演进见 [V8+ Agent 详细开发路线](docs/28-v8-plus-agent-development-roadmap.md)，该路线结合本地优化方向，按工作目录文件 Agent、Agentic Loop、工具注册表、受控命令执行、技能记忆和电脑感知逐步推进。
 

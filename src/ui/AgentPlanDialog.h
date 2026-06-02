@@ -24,7 +24,8 @@ public:
         const AgentPlan &plan,
         const QVector<AgentToolDescriptor> &toolCatalog,
         AppLanguage language,
-        QWidget *parent = nullptr);
+        QWidget *parent = nullptr,
+        const QString &workspaceDirectory = QString());
 
 signals:
     // 功能：请求把当前步骤输出插入聊天输入框；使用模块：MainWindow。
@@ -43,6 +44,10 @@ private:
     void updateSelectedStepDetails();
     // 功能：执行当前选中步骤；使用模块：执行按钮。
     void executeSelectedStep();
+    // 功能：连续执行可直接执行的待处理步骤；使用模块：V8 Agent 连续执行按钮。
+    void executeRemainingSteps();
+    // 功能：请求停止连续执行；使用模块：停止按钮。
+    void requestStopExecution();
     // 功能：跳过当前选中步骤；使用模块：跳过按钮。
     void skipSelectedStep();
     // 功能：复制当前输出；使用模块：复制按钮。
@@ -53,6 +58,10 @@ private:
     void continuePlanning();
     // 功能：刷新按钮状态；使用模块：步骤选择和输出变化后。
     void updateActionButtons();
+    // 功能：执行指定步骤并刷新 UI；使用模块：单步执行和连续执行。
+    bool executeStepAt(int index);
+    // 功能：查找下一个可直接执行的待处理步骤；使用模块：连续执行。
+    int nextExecutableStepIndex() const;
     // 功能：返回当前选中步骤索引；使用模块：执行/跳过/详情刷新。
     int selectedStepIndex() const;
     // 功能：生成步骤列表显示文本；使用模块：populateStepList。
@@ -67,15 +76,20 @@ private:
     AgentPlan m_plan;                              // 功能：当前计划和步骤状态；使用模块：列表与执行。
     QVector<AgentToolDescriptor> m_toolCatalog;    // 功能：工具目录；使用模块：显示工具名称和风险。
     AppLanguage m_language = AppLanguage::Chinese; // 功能：窗口语言；使用模块：文案选择。
+    QString m_workspaceDirectory;                  // 功能：Agent 工作目录；使用模块：workspace.* 步骤执行。
     QLabel *m_summaryLabel = nullptr;              // 功能：计划摘要；使用模块：顶部展示。
     QLabel *m_statusLabel = nullptr;               // 功能：执行状态提示；使用模块：执行/跳过。
     QListWidget *m_stepList = nullptr;             // 功能：计划步骤列表；使用模块：用户选择步骤。
     QPlainTextEdit *m_detailEdit = nullptr;        // 功能：步骤详情；使用模块：显示参数和风险。
     QPlainTextEdit *m_outputEdit = nullptr;        // 功能：步骤输出；使用模块：执行后展示。
     QPushButton *m_executeButton = nullptr;        // 功能：执行选中步骤；使用模块：用户确认。
+    QPushButton *m_runAllButton = nullptr;         // 功能：连续执行待处理步骤；使用模块：V8 连续执行 MVP。
+    QPushButton *m_stopButton = nullptr;           // 功能：请求停止连续执行；使用模块：V8 连续执行 MVP。
     QPushButton *m_skipButton = nullptr;           // 功能：跳过选中步骤；使用模块：用户跳过。
     QPushButton *m_copyButton = nullptr;           // 功能：复制输出；使用模块：输出处理。
     QPushButton *m_insertButton = nullptr;         // 功能：插入输出；使用模块：输出处理。
     QPushButton *m_continueButton = nullptr;       // 功能：基于输出继续规划；使用模块：用户确认回传输出。
     QPushButton *m_closeButton = nullptr;          // 功能：关闭窗口；使用模块：结束计划预览。
+    bool m_runningBatch = false;                   // 功能：是否正在连续执行；使用模块：按钮状态和停止逻辑。
+    bool m_stopRequested = false;                  // 功能：停止请求标记；使用模块：连续执行循环。
 };

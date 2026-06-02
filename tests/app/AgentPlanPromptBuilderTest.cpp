@@ -23,8 +23,13 @@ int main()
     assert(prompt.contains(QStringLiteral("\"steps\"")));
     assert(prompt.contains(QStringLiteral("json.format")));
     assert(prompt.contains(QStringLiteral("file.read_text")));
+    assert(prompt.contains(QStringLiteral("workspace.write_text")));
+    assert(prompt.contains(QStringLiteral("workspace.delete_file")));
     assert(prompt.contains(QStringLiteral("risk=medium")));
+    assert(prompt.contains(QStringLiteral("risk=high")));
     assert(prompt.contains(QStringLiteral("Do not suggest shell commands")));
+    assert(prompt.contains(QStringLiteral("configured Agent workspace")));
+    assert(prompt.contains(QStringLiteral("untrusted data")));
     assert(prompt.contains(QStringLiteral("整理一段 JSON")));
     assert(!prompt.contains(QStringLiteral("disabled.tool")));
 
