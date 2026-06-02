@@ -5,8 +5,10 @@
 #include "ui/LogViewerDialog.h"
 #include "ui/RolePromptDialog.h"
 #include "ui/SettingsDialog.h"
+#include "ui/ToolsDialog.h"
 
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileDialog>
@@ -27,6 +29,7 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QTextEdit>
+#include <QTextCursor>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -78,6 +81,12 @@ void MainWindow::setupUi()
     m_exportChatButton = new QPushButton(sidebar);
     m_exportChatButton->setObjectName(QStringLiteral("exportChatButton"));
 
+    m_favoriteChatButton = new QPushButton(sidebar);
+    m_favoriteChatButton->setObjectName(QStringLiteral("favoriteChatButton"));
+
+    m_archiveChatButton = new QPushButton(sidebar);
+    m_archiveChatButton->setObjectName(QStringLiteral("archiveChatButton"));
+
     m_deleteChatButton = new QPushButton(sidebar);
     m_deleteChatButton->setObjectName(QStringLiteral("deleteChatButton"));
 
@@ -85,14 +94,20 @@ void MainWindow::setupUi()
     m_sessionSearchEdit->setObjectName(QStringLiteral("sessionSearchEdit"));
     m_sessionSearchEdit->setClearButtonEnabled(true);
 
+    m_sessionFilterComboBox = new QComboBox(sidebar);
+    m_sessionFilterComboBox->setObjectName(QStringLiteral("sessionFilterComboBox"));
+
     m_sessionList = new QListWidget(sidebar);
     m_sessionList->setObjectName(QStringLiteral("sessionList"));
 
     sidebarLayout->addWidget(m_newChatButton);
     sidebarLayout->addWidget(m_renameChatButton);
     sidebarLayout->addWidget(m_exportChatButton);
+    sidebarLayout->addWidget(m_favoriteChatButton);
+    sidebarLayout->addWidget(m_archiveChatButton);
     sidebarLayout->addWidget(m_deleteChatButton);
     sidebarLayout->addWidget(m_sessionSearchEdit);
+    sidebarLayout->addWidget(m_sessionFilterComboBox);
     sidebarLayout->addWidget(m_sessionList, 1);
 
     auto *mainPanel = new QWidget(central);
@@ -124,6 +139,9 @@ void MainWindow::setupUi()
     m_systemPromptButton = new QPushButton(header);
     m_systemPromptButton->setObjectName(QStringLiteral("systemPromptButton"));
 
+    m_toolsButton = new QPushButton(header);
+    m_toolsButton->setObjectName(QStringLiteral("toolsButton"));
+
     m_logButton = new QPushButton(header);
     m_logButton->setObjectName(QStringLiteral("logButton"));
 
@@ -132,6 +150,7 @@ void MainWindow::setupUi()
 
     headerLayout->addWidget(titleGroup, 1);
     headerLayout->addWidget(m_systemPromptButton);
+    headerLayout->addWidget(m_toolsButton);
     headerLayout->addWidget(m_logButton);
     headerLayout->addWidget(m_settingsButton);
 
@@ -174,14 +193,18 @@ void MainWindow::setupUi()
     connect(m_retryButton, &QPushButton::clicked, &m_controller, &ApplicationController::retryLastRequest);
     connect(m_sendButton, &QPushButton::clicked, this, &MainWindow::sendCurrentMessage);
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
+    connect(m_toolsButton, &QPushButton::clicked, this, &MainWindow::openToolsDialog);
     connect(m_logButton, &QPushButton::clicked, this, &MainWindow::openLogViewerDialog);
     connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
     connect(m_newChatButton, &QPushButton::clicked, this, &MainWindow::startNewChat);
     connect(m_renameChatButton, &QPushButton::clicked, this, &MainWindow::renameCurrentChat);
     connect(m_exportChatButton, &QPushButton::clicked, this, &MainWindow::exportCurrentChat);
+    connect(m_favoriteChatButton, &QPushButton::clicked, this, &MainWindow::toggleCurrentChatFavorite);
+    connect(m_archiveChatButton, &QPushButton::clicked, this, &MainWindow::toggleCurrentChatArchived);
     connect(m_deleteChatButton, &QPushButton::clicked, this, &MainWindow::deleteCurrentChat);
     connect(m_sessionList, &QListWidget::itemClicked, this, &MainWindow::switchToSession);
     connect(m_sessionSearchEdit, &QLineEdit::textChanged, &m_controller, &ApplicationController::searchSessions);
+    connect(m_sessionFilterComboBox, &QComboBox::currentIndexChanged, this, &MainWindow::changeSessionFilter);
 
     auto *returnShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), m_messageInput);
     connect(returnShortcut, &QShortcut::activated, this, &MainWindow::sendCurrentMessage);
@@ -198,6 +221,10 @@ void MainWindow::connectController()
     });
     connect(&m_controller, &ApplicationController::promptTemplatesChanged, this, &MainWindow::applyLanguage);
     connect(&m_controller, &ApplicationController::sessionListChanged, this, &MainWindow::populateSessionList);
+    connect(&m_controller, &ApplicationController::sessionListFilterChanged, this, [this]() {
+        updateSessionFilterComboBox();
+        updateSessionOrganizationControls();
+    });
     connect(&m_controller, &ApplicationController::currentSessionChanged, this, [this]() {
         populateChatView();
         applyLanguage();
@@ -276,11 +303,12 @@ QListWidgetItem *MainWindow::findSessionItem(const QString &sessionId) const
 QString MainWindow::sessionListTitle(const ChatSession &session) const
 {
     const QString title = session.title.trimmed();
+    const QString prefix = session.isFavorite ? QStringLiteral("[*] ") : QString();
     if (title.isEmpty() || (title == QStringLiteral("New Chat") && session.messages.isEmpty())) {
-        return text(QStringLiteral("Getting Started"), QStringLiteral("开始使用"));
+        return prefix + text(QStringLiteral("Getting Started"), QStringLiteral("开始使用"));
     }
 
-    return title;
+    return prefix + title;
 }
 
 void MainWindow::populateChatView()
@@ -316,11 +344,14 @@ void MainWindow::applyLanguage()
     m_deleteChatButton->setText(text(QStringLiteral("Delete Chat"), QStringLiteral("删除会话")));
     m_sessionSearchEdit->setPlaceholderText(text(QStringLiteral("Search chats"), QStringLiteral("搜索会话")));
     m_systemPromptButton->setText(text(QStringLiteral("Role Prompt"), QStringLiteral("角色提示词")));
+    m_toolsButton->setText(text(QStringLiteral("Tools"), QStringLiteral("工具")));
     m_logButton->setText(text(QStringLiteral("Logs"), QStringLiteral("日志")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
     m_retryButton->setText(text(QStringLiteral("Retry"), QStringLiteral("重试")));
     m_personaLabel->setText(text(QStringLiteral("Role: %1"), QStringLiteral("角色：%1")).arg(currentRoleDisplayName()));
     m_messageInput->setPlaceholderText(text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
+    updateSessionFilterComboBox();
+    updateSessionOrganizationControls();
     updateSendButtonAppearance();
 
     if (m_chatView != nullptr && m_controller.currentSession().messages.isEmpty()) {
@@ -328,6 +359,38 @@ void MainWindow::applyLanguage()
     }
 
     updateCurrentSessionListItem();
+}
+
+void MainWindow::updateSessionFilterComboBox()
+{
+    const QSignalBlocker blocker(m_sessionFilterComboBox);
+    m_sessionFilterComboBox->clear();
+    m_sessionFilterComboBox->addItem(text(QStringLiteral("Active"), QStringLiteral("全部")),
+                                     static_cast<int>(SessionListFilter::Active));
+    m_sessionFilterComboBox->addItem(text(QStringLiteral("Favorites"), QStringLiteral("收藏")),
+                                     static_cast<int>(SessionListFilter::Favorite));
+    m_sessionFilterComboBox->addItem(text(QStringLiteral("Archived"), QStringLiteral("归档")),
+                                     static_cast<int>(SessionListFilter::Archived));
+
+    const int currentFilterValue = static_cast<int>(m_controller.sessionListFilter());
+    const int currentIndex = m_sessionFilterComboBox->findData(currentFilterValue);
+    if (currentIndex >= 0) {
+        m_sessionFilterComboBox->setCurrentIndex(currentIndex);
+    }
+}
+
+void MainWindow::updateSessionOrganizationControls()
+{
+    const ChatSession &session = m_controller.currentSession();
+    m_favoriteChatButton->setText(session.isFavorite
+                                      ? text(QStringLiteral("Unfavorite"), QStringLiteral("取消收藏"))
+                                      : text(QStringLiteral("Favorite"), QStringLiteral("收藏")));
+    m_archiveChatButton->setText(session.isArchived
+                                     ? text(QStringLiteral("Unarchive"), QStringLiteral("取消归档"))
+                                     : text(QStringLiteral("Archive"), QStringLiteral("归档")));
+    const bool enabled = !m_controller.isGenerating();
+    m_favoriteChatButton->setEnabled(enabled);
+    m_archiveChatButton->setEnabled(enabled);
 }
 
 QString MainWindow::text(const QString &english, const QString &chinese) const
@@ -389,6 +452,33 @@ void MainWindow::openLogViewerDialog()
 {
     LogViewerDialog dialog(AppLogger::logFilePath(), m_controller.config().language, this);
     dialog.exec();
+}
+
+void MainWindow::openToolsDialog()
+{
+    ToolsDialog dialog(m_controller.config().language, this);
+    connect(&dialog, &ToolsDialog::outputInsertionRequested, this, &MainWindow::insertToolOutputIntoInput);
+    dialog.exec();
+}
+
+void MainWindow::insertToolOutputIntoInput(const QString &output)
+{
+    if (output.isEmpty()) {
+        return;
+    }
+
+    if (m_controller.isGenerating()) {
+        showStatusMessage(QStringLiteral("Stop generation before inserting tool output."),
+                          QStringLiteral("请先停止生成，再插入工具输出。"),
+                          3000);
+        return;
+    }
+
+    QTextCursor cursor = m_messageInput->textCursor();
+    cursor.insertText(output);
+    m_messageInput->setTextCursor(cursor);
+    m_messageInput->setFocus();
+    updateSendButtonState();
 }
 
 void MainWindow::editSystemPrompt()
@@ -496,6 +586,16 @@ void MainWindow::exportCurrentChat()
                       4000);
 }
 
+void MainWindow::toggleCurrentChatFavorite()
+{
+    m_controller.toggleCurrentSessionFavorite();
+}
+
+void MainWindow::toggleCurrentChatArchived()
+{
+    m_controller.toggleCurrentSessionArchived();
+}
+
 void MainWindow::deleteCurrentChat()
 {
     if (m_controller.isGenerating()) {
@@ -516,6 +616,16 @@ void MainWindow::deleteCurrentChat()
 
     m_messageInput->clear();
     m_controller.deleteCurrentSession();
+}
+
+void MainWindow::changeSessionFilter(int index)
+{
+    if (index < 0) {
+        return;
+    }
+
+    const SessionListFilter filter = static_cast<SessionListFilter>(m_sessionFilterComboBox->itemData(index).toInt());
+    m_controller.setSessionListFilter(filter);
 }
 
 void MainWindow::switchToSession(QListWidgetItem *item)
@@ -560,8 +670,11 @@ void MainWindow::setGenerating(bool generating)
     m_newChatButton->setEnabled(!generating);
     m_renameChatButton->setEnabled(!generating);
     m_exportChatButton->setEnabled(!generating);
+    m_favoriteChatButton->setEnabled(!generating);
+    m_archiveChatButton->setEnabled(!generating);
     m_deleteChatButton->setEnabled(!generating);
     m_systemPromptButton->setEnabled(!generating);
+    m_toolsButton->setEnabled(true);
     m_settingsButton->setEnabled(!generating);
     m_logButton->setEnabled(true);
     m_retryButton->setEnabled(!generating && m_retryButton->isVisible());

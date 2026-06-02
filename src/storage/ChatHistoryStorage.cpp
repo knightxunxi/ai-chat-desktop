@@ -34,6 +34,20 @@ QString escapedLikePattern(QString value)
     return QStringLiteral("%") + value + QStringLiteral("%");
 }
 
+QString sessionFilterWhereClause(SessionListFilter filter)
+{
+    switch (filter) {
+    case SessionListFilter::Active:
+        return QStringLiteral("s.is_archived = 0");
+    case SessionListFilter::Favorite:
+        return QStringLiteral("s.is_favorite = 1 AND s.is_archived = 0");
+    case SessionListFilter::Archived:
+        return QStringLiteral("s.is_archived = 1");
+    }
+
+    return QStringLiteral("s.is_archived = 0");
+}
+
 } // namespace
 
 ChatHistoryStorage::ChatHistoryStorage(const QString &databasePath)
@@ -75,9 +89,23 @@ bool ChatHistoryStorage::initialize(QString *errorMessage)
             "title TEXT NOT NULL,"
             "system_prompt TEXT NOT NULL DEFAULT '',"
             "created_at TEXT NOT NULL,"
-            "updated_at TEXT NOT NULL"
+            "updated_at TEXT NOT NULL,"
+            "is_favorite INTEGER NOT NULL DEFAULT 0,"
+            "is_archived INTEGER NOT NULL DEFAULT 0"
             ")"))) {
         setError(errorMessage, query.lastError().text());
+        return false;
+    }
+
+    if (!ensureSessionColumn(QStringLiteral("is_favorite"),
+                             QStringLiteral("is_favorite INTEGER NOT NULL DEFAULT 0"),
+                             errorMessage)) {
+        return false;
+    }
+
+    if (!ensureSessionColumn(QStringLiteral("is_archived"),
+                             QStringLiteral("is_archived INTEGER NOT NULL DEFAULT 0"),
+                             errorMessage)) {
         return false;
     }
 
@@ -105,17 +133,21 @@ bool ChatHistoryStorage::saveSession(const ChatSession &session, QString *errorM
 
     QSqlQuery query(QSqlDatabase::database(m_connectionName));
     query.prepare(QStringLiteral(
-        "INSERT INTO sessions (id, title, system_prompt, created_at, updated_at) "
-        "VALUES (:id, :title, :system_prompt, :created_at, :updated_at) "
+        "INSERT INTO sessions (id, title, system_prompt, created_at, updated_at, is_favorite, is_archived) "
+        "VALUES (:id, :title, :system_prompt, :created_at, :updated_at, :is_favorite, :is_archived) "
         "ON CONFLICT(id) DO UPDATE SET "
         "title = excluded.title, "
         "system_prompt = excluded.system_prompt, "
-        "updated_at = excluded.updated_at"));
+        "updated_at = excluded.updated_at, "
+        "is_favorite = excluded.is_favorite, "
+        "is_archived = excluded.is_archived"));
     query.bindValue(QStringLiteral(":id"), session.id);
     query.bindValue(QStringLiteral(":title"), nonNullString(session.title));
     query.bindValue(QStringLiteral(":system_prompt"), nonNullString(session.systemPrompt));
     query.bindValue(QStringLiteral(":created_at"), toIsoUtc(session.createdAt));
     query.bindValue(QStringLiteral(":updated_at"), toIsoUtc(session.updatedAt));
+    query.bindValue(QStringLiteral(":is_favorite"), session.isFavorite ? 1 : 0);
+    query.bindValue(QStringLiteral(":is_archived"), session.isArchived ? 1 : 0);
 
     if (!query.exec()) {
         setError(errorMessage, query.lastError().text());
@@ -202,14 +234,21 @@ bool ChatHistoryStorage::replaceSessionMessages(const ChatSession &session, QStr
 
 QVector<ChatSession> ChatHistoryStorage::loadSessionSummaries(QString *errorMessage) const
 {
+    return loadSessionSummaries(SessionListFilter::Active, errorMessage);
+}
+
+QVector<ChatSession> ChatHistoryStorage::loadSessionSummaries(SessionListFilter filter, QString *errorMessage) const
+{
     if (!ensureOpen(errorMessage)) {
         return {};
     }
 
     QSqlQuery query(QSqlDatabase::database(m_connectionName));
-    if (!query.exec(QStringLiteral(
-            "SELECT id, title, system_prompt, created_at, updated_at "
-            "FROM sessions ORDER BY updated_at DESC"))) {
+    const QString sql = QStringLiteral(
+                            "SELECT s.id, s.title, s.system_prompt, s.created_at, s.updated_at, s.is_favorite, s.is_archived "
+                            "FROM sessions s WHERE %1 ORDER BY s.updated_at DESC")
+                            .arg(sessionFilterWhereClause(filter));
+    if (!query.exec(sql)) {
         setError(errorMessage, query.lastError().text());
         return {};
     }
@@ -219,9 +258,14 @@ QVector<ChatSession> ChatHistoryStorage::loadSessionSummaries(QString *errorMess
 
 QVector<ChatSession> ChatHistoryStorage::searchSessionSummaries(const QString &queryText, QString *errorMessage) const
 {
+    return searchSessionSummaries(queryText, SessionListFilter::Active, errorMessage);
+}
+
+QVector<ChatSession> ChatHistoryStorage::searchSessionSummaries(const QString &queryText, SessionListFilter filter, QString *errorMessage) const
+{
     const QString trimmedQuery = queryText.trimmed();
     if (trimmedQuery.isEmpty()) {
-        return loadSessionSummaries(errorMessage);
+        return loadSessionSummaries(filter, errorMessage);
     }
 
     if (!ensureOpen(errorMessage)) {
@@ -230,15 +274,17 @@ QVector<ChatSession> ChatHistoryStorage::searchSessionSummaries(const QString &q
 
     QSqlQuery query(QSqlDatabase::database(m_connectionName));
     query.prepare(QStringLiteral(
-        "SELECT s.id, s.title, s.system_prompt, s.created_at, s.updated_at "
-        "FROM sessions s "
-        "WHERE s.title LIKE :query ESCAPE '\\' "
-        "OR EXISTS ("
-        "    SELECT 1 FROM messages m "
-        "    WHERE m.session_id = s.id "
-        "    AND m.content LIKE :query ESCAPE '\\'"
-        ") "
-        "ORDER BY s.updated_at DESC"));
+                      "SELECT s.id, s.title, s.system_prompt, s.created_at, s.updated_at, s.is_favorite, s.is_archived "
+                      "FROM sessions s "
+                      "WHERE %1 "
+                      "AND (s.title LIKE :query ESCAPE '\\' "
+                      "OR EXISTS ("
+                      "    SELECT 1 FROM messages m "
+                      "    WHERE m.session_id = s.id "
+                      "    AND m.content LIKE :query ESCAPE '\\'"
+                      ")) "
+                      "ORDER BY s.updated_at DESC")
+                      .arg(sessionFilterWhereClause(filter)));
     query.bindValue(QStringLiteral(":query"), escapedLikePattern(trimmedQuery));
 
     if (!query.exec()) {
@@ -247,6 +293,44 @@ QVector<ChatSession> ChatHistoryStorage::searchSessionSummaries(const QString &q
     }
 
     return readSessionSummaries(&query, errorMessage);
+}
+
+bool ChatHistoryStorage::setSessionFavorite(const QString &sessionId, bool favorite, QString *errorMessage)
+{
+    if (!ensureOpen(errorMessage)) {
+        return false;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral("UPDATE sessions SET is_favorite = :is_favorite WHERE id = :id"));
+    query.bindValue(QStringLiteral(":is_favorite"), favorite ? 1 : 0);
+    query.bindValue(QStringLiteral(":id"), sessionId);
+
+    if (!query.exec()) {
+        setError(errorMessage, query.lastError().text());
+        return false;
+    }
+
+    return true;
+}
+
+bool ChatHistoryStorage::setSessionArchived(const QString &sessionId, bool archived, QString *errorMessage)
+{
+    if (!ensureOpen(errorMessage)) {
+        return false;
+    }
+
+    QSqlQuery query(QSqlDatabase::database(m_connectionName));
+    query.prepare(QStringLiteral("UPDATE sessions SET is_archived = :is_archived WHERE id = :id"));
+    query.bindValue(QStringLiteral(":is_archived"), archived ? 1 : 0);
+    query.bindValue(QStringLiteral(":id"), sessionId);
+
+    if (!query.exec()) {
+        setError(errorMessage, query.lastError().text());
+        return false;
+    }
+
+    return true;
 }
 
 QVector<ChatSession> ChatHistoryStorage::readSessionSummaries(QSqlQuery *query, QString *errorMessage) const
@@ -264,6 +348,8 @@ QVector<ChatSession> ChatHistoryStorage::readSessionSummaries(QSqlQuery *query, 
         session.systemPrompt = query->value(2).toString();
         session.createdAt = fromIsoUtc(query->value(3).toString());
         session.updatedAt = fromIsoUtc(query->value(4).toString());
+        session.isFavorite = query->value(5).toInt() != 0;
+        session.isArchived = query->value(6).toInt() != 0;
         sessions.append(session);
     }
 
@@ -278,7 +364,7 @@ std::optional<ChatSession> ChatHistoryStorage::loadSession(const QString &sessio
 
     QSqlQuery query(QSqlDatabase::database(m_connectionName));
     query.prepare(QStringLiteral(
-        "SELECT id, title, system_prompt, created_at, updated_at "
+        "SELECT id, title, system_prompt, created_at, updated_at, is_favorite, is_archived "
         "FROM sessions WHERE id = :id"));
     query.bindValue(QStringLiteral(":id"), sessionId);
 
@@ -297,6 +383,8 @@ std::optional<ChatSession> ChatHistoryStorage::loadSession(const QString &sessio
     session.systemPrompt = query.value(2).toString();
     session.createdAt = fromIsoUtc(query.value(3).toString());
     session.updatedAt = fromIsoUtc(query.value(4).toString());
+    session.isFavorite = query.value(5).toInt() != 0;
+    session.isArchived = query.value(6).toInt() != 0;
 
     if (!loadMessages(&session, errorMessage)) {
         return std::nullopt;
@@ -374,6 +462,34 @@ bool ChatHistoryStorage::ensureOpen(QString *errorMessage) const
 
     if (!database.isOpen() && !database.open()) {
         setError(errorMessage, database.lastError().text());
+        return false;
+    }
+
+    return true;
+}
+
+bool ChatHistoryStorage::ensureSessionColumn(const QString &columnName, const QString &definition, QString *errorMessage) const
+{
+    if (!ensureOpen(errorMessage)) {
+        return false;
+    }
+
+    QSqlDatabase database = QSqlDatabase::database(m_connectionName);
+    QSqlQuery tableInfo(database);
+    if (!tableInfo.exec(QStringLiteral("PRAGMA table_info(sessions)"))) {
+        setError(errorMessage, tableInfo.lastError().text());
+        return false;
+    }
+
+    while (tableInfo.next()) {
+        if (tableInfo.value(1).toString().compare(columnName, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+
+    QSqlQuery alterQuery(database);
+    if (!alterQuery.exec(QStringLiteral("ALTER TABLE sessions ADD COLUMN %1").arg(definition))) {
+        setError(errorMessage, alterQuery.lastError().text());
         return false;
     }
 

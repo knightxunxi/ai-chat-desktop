@@ -1,6 +1,9 @@
 #include "storage/ChatHistoryStorage.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QTextStream>
 
@@ -16,6 +19,49 @@ void assertStorageResult(bool result, const QString &error)
 
     QTextStream(stderr) << error << Qt::endl;
     assert(false);
+}
+
+void createLegacyDatabase(const QString &databasePath)
+{
+    const QString connectionName = QStringLiteral("legacy_chat_history_test");
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), connectionName);
+        database.setDatabaseName(databasePath);
+        assert(database.open());
+
+        QSqlQuery query(database);
+        assert(query.exec(QStringLiteral(
+            "CREATE TABLE sessions ("
+            "id TEXT PRIMARY KEY,"
+            "title TEXT NOT NULL,"
+            "system_prompt TEXT NOT NULL DEFAULT '',"
+            "created_at TEXT NOT NULL,"
+            "updated_at TEXT NOT NULL"
+            ")")));
+        assert(query.exec(QStringLiteral(
+            "CREATE TABLE messages ("
+            "id TEXT PRIMARY KEY,"
+            "session_id TEXT NOT NULL,"
+            "role TEXT NOT NULL,"
+            "content TEXT NOT NULL,"
+            "created_at TEXT NOT NULL"
+            ")")));
+
+        const QString timestamp = QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs);
+        query.prepare(QStringLiteral(
+            "INSERT INTO sessions (id, title, system_prompt, created_at, updated_at) "
+            "VALUES (:id, :title, :system_prompt, :created_at, :updated_at)"));
+        query.bindValue(QStringLiteral(":id"), QStringLiteral("legacy-session"));
+        query.bindValue(QStringLiteral(":title"), QStringLiteral("Legacy Session"));
+        query.bindValue(QStringLiteral(":system_prompt"), QStringLiteral(""));
+        query.bindValue(QStringLiteral(":created_at"), timestamp);
+        query.bindValue(QStringLiteral(":updated_at"), timestamp);
+        assert(query.exec());
+
+        database.close();
+    }
+
+    QSqlDatabase::removeDatabase(connectionName);
 }
 
 } // namespace
@@ -100,6 +146,54 @@ int main(int argc, char *argv[])
     assert(loaded->id == secondSession.id);
     assert(loaded->title == QStringLiteral("Second Session"));
     assert(loaded->messages.size() == 1);
+
+    assertStorageResult(storage.setSessionFavorite(session.id, true, &error), error);
+    assertStorageResult(storage.setSessionArchived(secondSession.id, true, &error), error);
+
+    loadedById = storage.loadSession(session.id, &error);
+    assert(loadedById.has_value());
+    assert(loadedById->isFavorite);
+    assert(!loadedById->isArchived);
+    assert(loadedById->updatedAt == session.updatedAt);
+
+    std::optional<ChatSession> archivedSession = storage.loadSession(secondSession.id, &error);
+    assert(archivedSession.has_value());
+    assert(archivedSession->isArchived);
+    assert(archivedSession->updatedAt == secondSession.updatedAt);
+
+    const QVector<ChatSession> activeSummaries = storage.loadSessionSummaries(SessionListFilter::Active, &error);
+    assert(activeSummaries.size() == 1);
+    assert(activeSummaries[0].id == session.id);
+    assert(activeSummaries[0].isFavorite);
+    assert(!activeSummaries[0].isArchived);
+
+    const QVector<ChatSession> favoriteSummaries = storage.loadSessionSummaries(SessionListFilter::Favorite, &error);
+    assert(favoriteSummaries.size() == 1);
+    assert(favoriteSummaries[0].id == session.id);
+
+    const QVector<ChatSession> archivedSummaries = storage.loadSessionSummaries(SessionListFilter::Archived, &error);
+    assert(archivedSummaries.size() == 1);
+    assert(archivedSummaries[0].id == secondSession.id);
+    assert(archivedSummaries[0].isArchived);
+
+    const QVector<ChatSession> activeSearchAfterArchive =
+        storage.searchSessionSummaries(QStringLiteral("Later"), SessionListFilter::Active, &error);
+    assert(activeSearchAfterArchive.isEmpty());
+
+    const QVector<ChatSession> archivedSearchResults =
+        storage.searchSessionSummaries(QStringLiteral("Later"), SessionListFilter::Archived, &error);
+    assert(archivedSearchResults.size() == 1);
+    assert(archivedSearchResults[0].id == secondSession.id);
+
+    const QString legacyDatabasePath = tempDir.filePath(QStringLiteral("legacy-history.db"));
+    createLegacyDatabase(legacyDatabasePath);
+    ChatHistoryStorage legacyStorage(legacyDatabasePath);
+    assertStorageResult(legacyStorage.initialize(&error), error);
+    const QVector<ChatSession> legacySummaries = legacyStorage.loadSessionSummaries(SessionListFilter::Active, &error);
+    assert(legacySummaries.size() == 1);
+    assert(legacySummaries[0].id == QStringLiteral("legacy-session"));
+    assert(!legacySummaries[0].isFavorite);
+    assert(!legacySummaries[0].isArchived);
 
     assert(storage.clearSession(session.id, &error));
     assert(storage.clearSession(secondSession.id, &error));

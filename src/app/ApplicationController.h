@@ -3,6 +3,7 @@
 #include "core/AppConfig.h"
 #include "core/ChatSession.h"
 #include "core/PromptTemplate.h"
+#include "core/SessionListFilter.h"
 #include "services/RequestErrorCategory.h"
 #include "services/OpenAICompatibleClient.h"
 #include "storage/ChatHistoryStorage.h"
@@ -30,6 +31,8 @@ public:
     const ChatSession &currentSession() const;
     // 功能：读取会话摘要列表；使用模块：MainWindow 侧边栏列表。
     const QVector<ChatSession> &sessionSummaries() const;
+    // 功能：读取当前会话列表筛选条件；使用模块：MainWindow 同步筛选控件。
+    SessionListFilter sessionListFilter() const;
     // 功能：读取提示词模板；使用模块：RolePromptDialog 打开时初始化模板列表。
     const QVector<PromptTemplate> &promptTemplates() const;
     // 功能：判断是否正在生成回复；使用模块：MainWindow 控制按钮启用状态。
@@ -48,6 +51,12 @@ public slots:
     void renameCurrentSession(const QString &title);
     // 功能：按关键字搜索会话；使用模块：MainWindow 会话搜索框。
     void searchSessions(const QString &query);
+    // 功能：切换会话列表筛选条件；使用模块：MainWindow 筛选控件。
+    void setSessionListFilter(SessionListFilter filter);
+    // 功能：切换当前会话收藏状态；使用模块：MainWindow 收藏按钮。
+    void toggleCurrentSessionFavorite();
+    // 功能：切换当前会话归档状态；使用模块：MainWindow 归档按钮。
+    void toggleCurrentSessionArchived();
     // 功能：创建新会话；使用模块：MainWindow 新建会话按钮。
     void startNewChat();
     // 功能：切换当前会话；使用模块：MainWindow 侧边栏点击会话。
@@ -65,6 +74,7 @@ signals:
     void configChanged();          // 功能：配置变化通知；使用模块：MainWindow 刷新模型和语言。
     void promptTemplatesChanged(); // 功能：模板变化通知；使用模块：MainWindow 刷新角色显示文案。
     void sessionListChanged();     // 功能：会话列表变化通知；使用模块：MainWindow 重新填充侧边栏。
+    void sessionListFilterChanged(); // 功能：会话筛选变化通知；使用模块：MainWindow 同步筛选控件。
     void currentSessionChanged();  // 功能：当前会话变化通知；使用模块：MainWindow 重新渲染聊天区。
     void currentChatCleared();     // 功能：清空起始提示；使用模块：用户发送首条消息时清空默认提示。
     void userMessageAdded(const QString &content);       // 功能：新增用户消息；使用模块：MainWindow 增量添加消息气泡。
@@ -97,6 +107,8 @@ private:
     bool reloadSessionSummaries(QString *error = nullptr);
     // 功能：把当前会话插入或更新到摘要列表；使用模块：保存会话后维护侧边栏顺序。
     void upsertCurrentSessionSummary(bool moveToTop);
+    // 功能：判断会话是否应出现在当前筛选中；使用模块：摘要列表刷新和组织状态切换。
+    bool sessionMatchesCurrentFilter(const ChatSession &session) const;
     // 功能：判断当前空会话是否需要保存；使用模块：新建/切换会话前避免保存无意义空白会话。
     bool hasPersistableCurrentSession() const;
     // 功能：根据当前语言选择文案；使用模块：状态消息和错误提示。
@@ -105,6 +117,7 @@ private:
     AppConfig m_config;                         // 功能：当前应用配置；使用模块：请求、语言和设置保存。
     ChatSession m_session;                      // 功能：当前会话完整数据；使用模块：聊天区展示和请求上下文。
     QVector<ChatSession> m_sessionSummaries;    // 功能：侧边栏会话摘要；使用模块：MainWindow::populateSessionList。
+    SessionListFilter m_sessionListFilter = SessionListFilter::Active; // 功能：会话列表筛选；使用模块：搜索、收藏、归档。
     QVector<PromptTemplate> m_promptTemplates;  // 功能：角色提示词模板缓存；使用模块：RolePromptDialog。
     ConfigStorage m_configStorage;              // 功能：配置读写；使用模块：initialize/saveConfig。
     ChatHistoryStorage m_chatHistoryStorage;    // 功能：聊天历史读写；使用模块：会话保存、搜索、切换、删除。

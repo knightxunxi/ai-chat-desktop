@@ -13,6 +13,7 @@ src/app         应用控制层
   ↓
 src/services    AI API 和流式响应服务
 src/storage     本地配置、凭据、聊天记录、模板存储
+src/tools       本地文本工具
 src/core        核心数据模型
 src/support     日志、日志读取等通用能力
 ```
@@ -29,6 +30,7 @@ src/support     日志、日志读取等通用能力
 - `MessageRole.h`：用户、AI、系统等消息角色。
 - `PromptTemplate.h`：角色提示词模板。
 - `ProviderPreset.h/.cpp`：DeepSeek、OpenAI、自定义服务商预设。
+- `SessionListFilter.h`：会话列表筛选类型，用于全部、收藏和归档列表。
 
 这一层的特点是稳定、轻量，适合作为自动化测试的基础。
 
@@ -44,6 +46,7 @@ src/support     日志、日志读取等通用能力
 - `MessageWidget.h/.cpp`：单条消息组件，支持复制和基础 Markdown 展示。
 - `ChatView.h/.cpp`：聊天消息滚动区域。
 - `LogViewerDialog.h/.cpp`：应用内日志查看窗口。
+- `ToolsDialog.h/.cpp`：本地工具窗口，支持运行工具、复制输出和插入聊天输入框。
 
 界面层不直接做网络请求或数据库细节，主要通过信号槽调用控制层。
 
@@ -53,7 +56,7 @@ src/support     日志、日志读取等通用能力
 
 代表文件：
 
-- `ApplicationController.h/.cpp`：处理初始化、发送消息、停止生成、重试、切换会话、保存配置等流程。
+- `ApplicationController.h/.cpp`：处理初始化、发送消息、停止生成、重试、切换会话、保存配置、收藏归档和筛选等流程。
 - `SessionSummaryList.h/.cpp`：维护会话列表排序规则。
 
 控制层的作用是把多个模块串起来。例如发送消息时，它会：
@@ -94,6 +97,19 @@ src/support     日志、日志读取等通用能力
 
 这里的关键设计是：API Key 不再写入普通配置，而是通过 Windows Credential Manager 保存。
 
+### `src/tools`
+
+本地工具层，负责不调用 AI 的文本处理能力。
+
+代表文件：
+
+- `LocalTool.h`：本地工具统一接口。
+- `ToolResult.h`：工具执行结果。
+- `JsonFormatTool.h` / `JsonCompactTool.h`：JSON 格式化和压缩。
+- `MarkdownCleanupTool.h` / `TextCleanupTool.h`：Markdown 和普通文本清理。
+
+这一层不依赖主窗口，不直接访问剪贴板，也不直接发送消息。工具窗口只负责调用工具并展示结果。
+
 ### `src/support`
 
 通用支持能力。
@@ -113,10 +129,11 @@ ui  → app → storage
 app → core
 services → core
 storage → core
+tools → core
 support 被多层调用
 ```
 
-这里的重点是：`ui` 不直接操作数据库和网络，`storage` 不依赖界面，`services` 不依赖界面。
+这里的重点是：`ui` 不直接操作数据库和网络，`storage` 不依赖界面，`services` 不依赖界面，`tools` 不依赖主窗口。
 
 这种结构带来的好处：
 
@@ -168,3 +185,4 @@ flowchart TD
 - 增加 UI 自动化测试。
 - 给会话搜索引入 SQLite FTS 全文索引。
 - 把角色模板导入导出作为独立服务模块。
+- 在 `LocalTool` 基础上继续扩展受控本地文件/系统交互工具。

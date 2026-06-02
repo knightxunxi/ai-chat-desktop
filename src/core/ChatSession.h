@@ -15,6 +15,8 @@ struct ChatSession {
     QString systemPrompt;               // 功能：角色提示词；使用模块：RolePromptDialog 编辑，请求体中作为 system 消息发送。
     QDateTime createdAt;                // 功能：会话创建时间 UTC；使用模块：数据库记录和导出。
     QDateTime updatedAt;                // 功能：最后更新时间 UTC；使用模块：会话列表按最近更新排序。
+    bool isFavorite = false;            // 功能：是否收藏；使用模块：会话列表筛选和收藏按钮。
+    bool isArchived = false;            // 功能：是否归档；使用模块：默认列表隐藏归档会话，归档筛选显示。
     QVector<ChatMessage> messages;      // 功能：当前会话消息集合；使用模块：ChatView 展示、AI 请求上下文、历史存储。
 
     // 功能：创建一个空白新会话；使用模块：应用首次启动、点击新建会话、删除后补空会话。
