@@ -4,7 +4,7 @@
 
 ## 1. 项目一句话
 
-AI Chat Desktop 是一个基于 C++17、Qt 6 和 CMake 开发的 Windows 桌面 AI 聊天应用，支持 OpenAI 兼容接口、多会话管理、流式回复、安全凭据存储、错误重试、日志查看和 Windows 发布打包。
+AI Chat Desktop 是一个基于 C++17、Qt 6 和 CMake 开发的 Windows 桌面 AI 聊天应用，支持 OpenAI 兼容接口、多会话管理、流式回复、安全凭据存储、错误重试、日志查看、受控本地工具和 Windows 发布打包。
 
 ## 2. 简历项目描述示例
 
@@ -17,6 +17,7 @@ AI Chat Desktop | C++17 / Qt 6 / CMake / SQLite / Windows Credential Manager
 - 设计分层架构，将界面层、控制层、服务层、存储层和核心模型拆分，使用 ApplicationController 统一管理聊天、会话、配置和网络请求流程。
 - 使用 SQLite 保存本地聊天历史，支持多会话新建、切换、重命名、搜索、删除和 Markdown 导出。
 - 接入 Windows Credential Manager 保存 API Key，并实现旧 QSettings API Key 迁移，降低敏感信息明文存储风险。
+- 设计受控本地工具能力，支持文本工具、用户选择文件读取、目录列出和输出保存；通过文件大小限制、覆盖确认、路径摘要日志降低误操作风险。
 - 使用 CMake/CTest 搭建构建和测试流程，覆盖 SSE 流解析、请求体构建、HTTP 错误分类、SQLite 存储、配置迁移、日志脱敏等核心逻辑。
 - 实践 Git/GitHub feature branch 与 Pull Request 流程，完成需求分析、技术设计、任务拆分、阶段验收、发布说明和 Windows 打包。
 ```
@@ -33,6 +34,7 @@ AI Chat Desktop | C++17 / Qt 6 / CMake / SQLite / Windows Credential Manager
 - Windows Credential Manager
 - OpenAI-compatible API
 - Server-Sent Events
+- 受控本地文件交互
 - Git / GitHub Pull Request
 
 工程关键词：
@@ -44,6 +46,7 @@ AI Chat Desktop | C++17 / Qt 6 / CMake / SQLite / Windows Credential Manager
 - 安全凭据存储
 - 自动化测试
 - 日志脱敏
+- 安全边界设计
 - 发布打包
 - 迭代开发
 
@@ -58,7 +61,7 @@ AI Chat Desktop | C++17 / Qt 6 / CMake / SQLite / Windows Credential Manager
 
 架构上我把项目分为 ui、app、services、storage、core 几层。UI 层只负责界面和用户交互，ApplicationController 负责业务流程，services 负责网络请求和流式解析，storage 负责 SQLite 聊天记录、QSettings 配置和 Windows Credential Manager 凭据保存。
 
-最后我用 CMake 和 CTest 做构建测试，使用 GitHub feature branch 和 Pull Request 合并流程，并完成 Windows Release 打包和 V3 验收文档。
+最后我用 CMake 和 CTest 做构建测试，使用 GitHub feature branch 和 Pull Request 合并流程，并完成 Windows Release 打包和阶段验收文档。
 ```
 
 ## 5. STAR 故事 1：API Key 安全存储
@@ -132,6 +135,7 @@ Result：用户可以更快定位配置或网络问题，并直接重试。
 - 不是只做 demo，而是按需求、设计、任务、实现、测试、验收、发布推进。
 - 有真实迭代过程，修过界面、存储、排序、关闭占用等 bug。
 - 有安全意识，API Key 不写普通配置，日志做脱敏。
+- 有权限边界意识，本地文件工具只处理用户选择路径，不做脚本执行或后台自动化。
 - 有测试意识，核心逻辑通过 CTest 覆盖。
 - 有发布意识，能生成 Windows Release 包。
 - 有协作意识，使用 GitHub branch 和 Pull Request 流程。

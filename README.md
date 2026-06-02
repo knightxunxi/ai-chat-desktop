@@ -25,6 +25,7 @@
 - 角色提示词模板和 JSON 导入导出。
 - 错误分类提示和失败重试。
 - 基础日志记录、应用内日志查看和打开日志目录。
+- 受控文件工具：读取用户选择的文本文件、列出文件夹、保存工具输出、打开确认后的文件或文件夹。
 - Windows Release 打包说明。
 
 ## 技术栈
@@ -60,6 +61,7 @@ Platform: Windows
 │  ├─ services/          AI API 客户端和流式解析
 │  ├─ support/           日志等通用支持模块
 │  ├─ storage/           配置和聊天记录存储
+│  ├─ tools/             本地工具和受控文件交互
 │  └─ ui/                Qt Widgets 界面
 ├─ tests/                自动化测试
 └─ CMakeLists.txt
@@ -85,6 +87,10 @@ Platform: Windows
 - [V5 Roadmap](docs/16-v5-roadmap.md)
 - [会话组织增强设计](docs/17-session-organization-design.md)
 - [V5 验收记录](docs/18-v5-acceptance-notes.md)
+- [V6 Roadmap](docs/19-v6-roadmap.md)
+- [V6 本地交互安全设计](docs/20-v6-local-interaction-security.md)
+- [V6 验收记录](docs/21-v6-acceptance-notes.md)
+- [Agent 与电脑交互后续规划](docs/22-agent-automation-roadmap.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -163,6 +169,9 @@ ctest --test-dir build-qt --output-on-failure
 - 基础日志写入和敏感字段脱敏。
 - 日志最近内容读取。
 - 角色提示词模板保存和选择。
+- 本地工具逻辑和工具窗口 smoke test。
+- 受控文件交互服务和文件工具窗口 smoke test。
+- 会话收藏、归档和筛选。
 - 应用启动/关闭 smoke test。
 
 ## Windows 打包
@@ -181,11 +190,11 @@ Copy-Item build-release-qt\AIChatDesktop.exe release\AIChatDesktop\
 windeployqt release\AIChatDesktop\AIChatDesktop.exe
 ```
 
-发布前请在 `release\AIChatDesktop\AIChatDesktop.exe` 中手工验证 API 请求、语言切换、聊天记录恢复、停止生成、消息复制、Markdown 展示、角色提示词模板、错误重试、应用内日志查看、本地工具窗口、收藏/归档和会话筛选。
+发布前请在 `release\AIChatDesktop\AIChatDesktop.exe` 中手工验证 API 请求、语言切换、聊天记录恢复、停止生成、消息复制、Markdown 展示、角色提示词模板、错误重试、应用内日志查看、本地工具窗口、文件工具窗口、收藏/归档和会话筛选。
 
 ## 当前版本状态
 
-当前 main 已完成 V4。当前 V5 开发分支已新增本地工具系统、JSON/Markdown/文本处理工具、工具窗口、会话收藏、会话归档和会话筛选。
+当前版本已完成 V6，覆盖本地工具系统、JSON/Markdown/文本处理工具、工具窗口、会话收藏、会话归档、会话筛选和受控文件交互工具。
 
 已知限制：
 
@@ -193,8 +202,13 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 - Markdown 展示仍是基础版本，复杂代码高亮暂未支持；V5 新增的 Markdown 整理工具只做低风险空白清理。
 - 角色提示词模板仍是本地版本，暂未支持云同步。
 - 本地工具系统仅支持内置工具，暂不支持插件、脚本或 AI 自动调用工具。
+- 文件工具只支持用户主动选择路径后的低风险操作，不支持删除、移动、脚本执行或后台自动化。
 
 ## 后续方向
+
+V7-V10 后续方向见 [Agent 与电脑交互后续规划](docs/22-agent-automation-roadmap.md)，推荐先做 AI 任务拆解，再进入受控命令执行、操作记录和设备输入模拟。
+
+V6 详细计划见 [V6 Roadmap](docs/19-v6-roadmap.md)，安全边界见 [V6 本地交互安全设计](docs/20-v6-local-interaction-security.md)，验收结果见 [V6 验收记录](docs/21-v6-acceptance-notes.md)。
 
 V5 详细计划见 [V5 Roadmap](docs/16-v5-roadmap.md)，验收记录见 [V5 验收记录](docs/18-v5-acceptance-notes.md)。
 
@@ -208,4 +222,5 @@ V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)，发布说明见 [V3 Rel
 
 - Markdown 代码高亮增强。
 - 会话标签和 SQLite FTS 全文搜索。
-- 受控本地文件/系统交互工具。
+- AI 任务拆解和受控工具调用。
+- 受控命令执行。

@@ -47,6 +47,7 @@ src/support     日志、日志读取等通用能力
 - `ChatView.h/.cpp`：聊天消息滚动区域。
 - `LogViewerDialog.h/.cpp`：应用内日志查看窗口。
 - `ToolsDialog.h/.cpp`：本地工具窗口，支持运行工具、复制输出和插入聊天输入框。
+- `FileToolsDialog.h/.cpp`：文件工具窗口，支持读取用户选择的文本文件、列出文件夹、保存输出和打开确认后的路径。
 
 界面层不直接做网络请求或数据库细节，主要通过信号槽调用控制层。
 
@@ -99,7 +100,7 @@ src/support     日志、日志读取等通用能力
 
 ### `src/tools`
 
-本地工具层，负责不调用 AI 的文本处理能力。
+本地工具层，负责不调用 AI 的文本处理能力，以及 V6 的受控本地文件交互能力。
 
 代表文件：
 
@@ -107,8 +108,11 @@ src/support     日志、日志读取等通用能力
 - `ToolResult.h`：工具执行结果。
 - `JsonFormatTool.h` / `JsonCompactTool.h`：JSON 格式化和压缩。
 - `MarkdownCleanupTool.h` / `TextCleanupTool.h`：Markdown 和普通文本清理。
+- `FileInteractionService.h/.cpp`：受控文件交互服务，提供文本读取、目录列出、文本保存、路径打开前校验和日志路径摘要。
 
 这一层不依赖主窗口，不直接访问剪贴板，也不直接发送消息。工具窗口只负责调用工具并展示结果。
+
+V6 文件工具的关键边界是：路径由用户通过选择框提供，工具输出只展示或插入聊天输入框，不自动发送给 AI，不执行脚本或系统命令。
 
 ### `src/support`
 
@@ -126,6 +130,7 @@ src/support     日志、日志读取等通用能力
 ```text
 ui  → app → services
 ui  → app → storage
+ui  → tools
 app → core
 services → core
 storage → core
@@ -185,4 +190,5 @@ flowchart TD
 - 增加 UI 自动化测试。
 - 给会话搜索引入 SQLite FTS 全文索引。
 - 把角色模板导入导出作为独立服务模块。
-- 在 `LocalTool` 基础上继续扩展受控本地文件/系统交互工具。
+- 在 V6 文件工具基础上进入 V7 AI 任务拆解和受控工具建议。
+- 在 V8 之后再评估受控命令执行、操作记录和设备输入模拟。

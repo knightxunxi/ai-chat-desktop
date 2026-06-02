@@ -8,7 +8,6 @@
 
 class ChatView;
 class QCloseEvent;
-class QComboBox;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
@@ -49,7 +48,7 @@ private:
     // 功能：刷新所有界面文案；使用模块：语言切换和模板变化。
     void applyLanguage();
     // 功能：同步会话筛选控件；使用模块：语言切换和筛选状态变化。
-    void updateSessionFilterComboBox();
+    void updateSessionFilterButtons();
     // 功能：刷新收藏/归档按钮文案和状态；使用模块：当前会话变化和语言切换。
     void updateSessionOrganizationControls();
     // 功能：根据当前语言选择中文或英文；使用模块：所有 UI 文案。
@@ -66,6 +65,8 @@ private:
     void openLogViewerDialog();
     // 功能：打开本地工具窗口；使用模块：工具按钮。
     void openToolsDialog();
+    // 功能：打开文件工具窗口；使用模块：文件工具按钮。
+    void openFileToolsDialog();
     // 功能：把工具输出插入聊天输入框；使用模块：ToolsDialog::outputInsertionRequested 信号。
     void insertToolOutputIntoInput(const QString &output);
     // 功能：打开角色提示词窗口；使用模块：角色提示词按钮。
@@ -82,8 +83,8 @@ private:
     void toggleCurrentChatArchived();
     // 功能：删除当前会话；使用模块：删除按钮。
     void deleteCurrentChat();
-    // 功能：切换会话列表筛选；使用模块：筛选下拉框。
-    void changeSessionFilter(int index);
+    // 功能：切换会话列表筛选；使用模块：筛选按钮。
+    void changeSessionFilter(SessionListFilter filter);
     // 功能：切换到点击的会话；使用模块：侧边栏 itemClicked 信号。
     void switchToSession(QListWidgetItem *item);
     // 功能：发送输入框内容或停止生成；使用模块：发送按钮和快捷键。
@@ -106,7 +107,9 @@ private:
     ApplicationController m_controller;      // 功能：主业务控制器；使用模块：主窗口所有用户操作。
     QListWidget *m_sessionList = nullptr;    // 功能：会话列表；使用模块：侧边栏会话展示和切换。
     QLineEdit *m_sessionSearchEdit = nullptr; // 功能：会话搜索输入；使用模块：搜索历史会话。
-    QComboBox *m_sessionFilterComboBox = nullptr; // 功能：会话筛选；使用模块：全部/收藏/归档列表切换。
+    QPushButton *m_activeFilterButton = nullptr; // 功能：显示未归档会话；使用模块：侧边栏筛选按钮组。
+    QPushButton *m_favoriteFilterButton = nullptr; // 功能：显示收藏会话；使用模块：侧边栏筛选按钮组。
+    QPushButton *m_archivedFilterButton = nullptr; // 功能：显示归档会话；使用模块：侧边栏筛选按钮组。
     QPushButton *m_newChatButton = nullptr;  // 功能：新建会话按钮；使用模块：侧边栏操作区。
     QPushButton *m_renameChatButton = nullptr; // 功能：重命名按钮；使用模块：侧边栏操作区。
     QPushButton *m_exportChatButton = nullptr; // 功能：导出按钮；使用模块：侧边栏操作区。
@@ -115,6 +118,7 @@ private:
     QPushButton *m_deleteChatButton = nullptr; // 功能：删除按钮；使用模块：侧边栏操作区。
     QPushButton *m_systemPromptButton = nullptr; // 功能：角色提示词入口；使用模块：顶部工具区。
     QPushButton *m_toolsButton = nullptr;     // 功能：本地工具入口；使用模块：顶部工具区。
+    QPushButton *m_fileToolsButton = nullptr; // 功能：文件工具入口；使用模块：顶部工具区。
     QPushButton *m_logButton = nullptr;      // 功能：日志窗口入口；使用模块：顶部工具区。
     ChatView *m_chatView = nullptr;          // 功能：聊天消息列表视图；使用模块：主内容区。
     QTextEdit *m_messageInput = nullptr;     // 功能：用户输入框；使用模块：底部输入区。

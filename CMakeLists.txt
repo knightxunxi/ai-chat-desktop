@@ -43,6 +43,8 @@ qt_add_executable(AIChatDesktop
     src/support/AppLogger.cpp
     src/support/LogFileReader.h
     src/support/LogFileReader.cpp
+    src/tools/FileInteractionService.h
+    src/tools/FileInteractionService.cpp
     src/tools/JsonCompactTool.h
     src/tools/JsonFormatTool.h
     src/tools/JsonTools.cpp
@@ -64,6 +66,8 @@ qt_add_executable(AIChatDesktop
     src/storage/PromptTemplateStorage.cpp
     src/ui/ChatView.h
     src/ui/ChatView.cpp
+    src/ui/FileToolsDialog.h
+    src/ui/FileToolsDialog.cpp
     src/ui/LogViewerDialog.h
     src/ui/LogViewerDialog.cpp
     src/ui/MainWindow.h

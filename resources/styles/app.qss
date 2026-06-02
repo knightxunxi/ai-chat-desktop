@@ -115,6 +115,42 @@ QLineEdit#sessionSearchEdit {
     padding: 5px 9px;
 }
 
+QFrame#sessionFilterBar {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+}
+
+QFrame#sessionFilterBar QPushButton {
+    min-height: 30px;
+    padding: 4px 6px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: #334155;
+    font-size: 13px;
+}
+
+QFrame#sessionFilterBar QPushButton:hover {
+    background: #f1f5f9;
+}
+
+QFrame#sessionFilterBar QPushButton:checked {
+    background: #111827;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+QPushButton#activeFilterButton {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+}
+
+QPushButton#archivedFilterButton {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+}
+
 QListWidget#sessionList::item {
     min-height: 36px;
     padding: 6px 10px;
