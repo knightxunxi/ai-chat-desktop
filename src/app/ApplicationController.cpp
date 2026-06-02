@@ -6,6 +6,24 @@
 
 #include <QDateTime>
 
+namespace {
+
+bool sessionMatchesFilter(const ChatSession &session, SessionListFilter filter)
+{
+    switch (filter) {
+    case SessionListFilter::Active:
+        return !session.isArchived;
+    case SessionListFilter::Favorite:
+        return session.isFavorite && !session.isArchived;
+    case SessionListFilter::Archived:
+        return session.isArchived;
+    }
+
+    return !session.isArchived;
+}
+
+} // namespace
+
 ApplicationController::ApplicationController(QObject *parent)
     : QObject(parent)
 {
@@ -77,6 +95,11 @@ const ChatSession &ApplicationController::currentSession() const
 const QVector<ChatSession> &ApplicationController::sessionSummaries() const
 {
     return m_sessionSummaries;
+}
+
+SessionListFilter ApplicationController::sessionListFilter() const
+{
+    return m_sessionListFilter;
 }
 
 const QVector<PromptTemplate> &ApplicationController::promptTemplates() const
@@ -189,6 +212,80 @@ void ApplicationController::searchSessions(const QString &query)
     emit sessionListChanged();
 }
 
+void ApplicationController::setSessionListFilter(SessionListFilter filter)
+{
+    if (m_sessionListFilter == filter) {
+        return;
+    }
+
+    m_sessionListFilter = filter;
+    QString error;
+    if (!reloadSessionSummaries(&error) && !error.isEmpty()) {
+        emit statusMessage(QStringLiteral("Failed to load chat sessions: %1").arg(error),
+                           QStringLiteral("加载会话列表失败：%1").arg(error),
+                           6000);
+    }
+
+    emit sessionListFilterChanged();
+    emit sessionListChanged();
+}
+
+void ApplicationController::toggleCurrentSessionFavorite()
+{
+    if (m_isGenerating) {
+        return;
+    }
+
+    const bool previousFavorite = m_session.isFavorite;
+    const SessionListFilter previousFilter = m_sessionListFilter;
+    m_session.isFavorite = !m_session.isFavorite;
+    if (!m_session.isFavorite && m_sessionListFilter == SessionListFilter::Favorite) {
+        m_sessionListFilter = SessionListFilter::Active;
+    }
+
+    if (!saveCurrentSession(false)) {
+        m_session.isFavorite = previousFavorite;
+        m_sessionListFilter = previousFilter;
+        emit sessionListFilterChanged();
+        emit currentSessionChanged();
+        return;
+    }
+
+    if (m_sessionListFilter != previousFilter) {
+        emit sessionListFilterChanged();
+    }
+    emit currentSessionChanged();
+}
+
+void ApplicationController::toggleCurrentSessionArchived()
+{
+    if (m_isGenerating) {
+        return;
+    }
+
+    const bool previousArchived = m_session.isArchived;
+    const SessionListFilter previousFilter = m_sessionListFilter;
+    m_session.isArchived = !m_session.isArchived;
+    if (m_session.isArchived) {
+        m_sessionListFilter = SessionListFilter::Archived;
+    } else if (m_sessionListFilter == SessionListFilter::Archived) {
+        m_sessionListFilter = SessionListFilter::Active;
+    }
+
+    if (!saveCurrentSession(false)) {
+        m_session.isArchived = previousArchived;
+        m_sessionListFilter = previousFilter;
+        emit sessionListFilterChanged();
+        emit currentSessionChanged();
+        return;
+    }
+
+    if (m_sessionListFilter != previousFilter) {
+        emit sessionListFilterChanged();
+    }
+    emit currentSessionChanged();
+}
+
 void ApplicationController::startNewChat()
 {
     if (m_isGenerating) {
@@ -196,6 +293,14 @@ void ApplicationController::startNewChat()
     }
 
     setRetryAvailable(false);
+    if (m_sessionListFilter != SessionListFilter::Active) {
+        m_sessionListFilter = SessionListFilter::Active;
+        QString error;
+        reloadSessionSummaries(&error);
+        emit sessionListFilterChanged();
+        emit sessionListChanged();
+    }
+
     if (!hasPersistableCurrentSession()) {
         emit currentSessionChanged();
         return;
@@ -272,6 +377,14 @@ void ApplicationController::deleteCurrentSession()
     QString error;
     if (!m_sessionSearchQuery.isEmpty()) {
         reloadSessionSummaries(&error);
+    }
+
+    if (m_sessionSummaries.isEmpty()) {
+        if (m_sessionListFilter != SessionListFilter::Active) {
+            m_sessionListFilter = SessionListFilter::Active;
+            emit sessionListFilterChanged();
+            reloadSessionSummaries(&error);
+        }
     }
 
     if (m_sessionSummaries.isEmpty()) {
@@ -520,14 +633,25 @@ bool ApplicationController::reloadSessionSummaries(QString *error)
     }
 
     m_sessionSummaries = m_sessionSearchQuery.isEmpty()
-                             ? m_chatHistoryStorage.loadSessionSummaries(error)
-                             : m_chatHistoryStorage.searchSessionSummaries(m_sessionSearchQuery, error);
+                             ? m_chatHistoryStorage.loadSessionSummaries(m_sessionListFilter, error)
+                             : m_chatHistoryStorage.searchSessionSummaries(m_sessionSearchQuery, m_sessionListFilter, error);
     return error == nullptr || error->isEmpty();
 }
 
 void ApplicationController::upsertCurrentSessionSummary(bool moveToTop)
 {
+    if (!sessionMatchesCurrentFilter(m_session)) {
+        QString error;
+        reloadSessionSummaries(&error);
+        return;
+    }
+
     SessionSummaryList::upsert(&m_sessionSummaries, m_session, moveToTop);
+}
+
+bool ApplicationController::sessionMatchesCurrentFilter(const ChatSession &session) const
+{
+    return sessionMatchesFilter(session, m_sessionListFilter);
 }
 
 bool ApplicationController::hasPersistableCurrentSession() const

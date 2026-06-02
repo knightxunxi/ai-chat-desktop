@@ -11,6 +11,7 @@
 - `std::optional`：表示可选模型参数，例如 temperature、max tokens。
 - RAII：Qt 对象父子关系、局部对象自动释放、文件对象自动关闭。
 - 强类型枚举：例如 `RequestErrorCategory`、`MessageRole`。
+- 接口抽象：例如 `LocalTool` 统一本地工具调用方式。
 
 学习重点：
 
@@ -116,6 +117,7 @@ AI 回复流式展示依赖 SSE：
 
 - AI 请求体和响应体。
 - 角色提示词模板本地保存。
+- V5 本地工具中的 JSON 格式化和压缩。
 
 Qt 相关类：
 
@@ -138,6 +140,9 @@ SQLite 用来保存聊天历史。
 - 保存消息。
 - 加载最近会话。
 - 会话搜索。
+- 会话收藏。
+- 会话归档。
+- 会话筛选。
 - 删除会话。
 - 替换会话消息，支持失败重试后清理旧失败回复。
 
@@ -152,8 +157,32 @@ Qt 相关类：
 - 单文件数据库，适合桌面应用。
 - 不需要单独安装数据库服务。
 - 支持结构化查询和后续扩展。
+- 后续增加收藏、归档这类结构化状态时，比纯 JSON 文件更容易迁移和查询。
 
-## 9. Windows Credential Manager
+## 9. 本地工具抽象
+
+V5 新增了本地工具系统。
+
+核心接口：
+
+- `ToolResult`：统一表示工具执行成功或失败。
+- `LocalTool`：统一本地工具 ID、显示名、说明和运行入口。
+
+当前工具：
+
+- JSON 格式化。
+- JSON 压缩。
+- Markdown 整理。
+- 普通文本清理。
+
+设计价值：
+
+- 工具逻辑不依赖 `MainWindow`。
+- 工具可以独立写单元测试。
+- 工具输出先给用户确认，不自动发送给 AI。
+- 后续如果做受控本地文件/系统交互，可以继续复用这层抽象。
+
+## 10. Windows Credential Manager
 
 API Key 属于敏感信息，不适合写入普通配置文件。
 
@@ -177,7 +206,7 @@ API Key 属于敏感信息，不适合写入普通配置文件。
 - 业务层不直接依赖 Win32 API。
 - 测试中可以用 fake credential storage。
 
-## 10. QSettings
+## 11. QSettings
 
 `QSettings` 用于保存普通配置。
 
@@ -195,7 +224,7 @@ API Key 属于敏感信息，不适合写入普通配置文件。
 
 这是一个重要边界：配置不等于凭据。普通配置可以读写方便，敏感凭据要进入系统级安全存储。
 
-## 11. CMake
+## 12. CMake
 
 CMake 是项目构建系统。
 
@@ -214,7 +243,7 @@ CMake 是项目构建系统。
 - Qt 项目需要 MOC、RCC 等自动生成步骤。
 - Windows Credential Manager 需要链接 `Advapi32`。
 
-## 12. CTest
+## 13. CTest
 
 CTest 是 CMake 配套的测试入口。
 
@@ -236,12 +265,17 @@ ctest --test-dir build-qt --output-on-failure
 - Markdown 导出。
 - 日志脱敏。
 - UI smoke test。
+- 本地工具逻辑。
+- 工具窗口 smoke test。
+- 会话收藏、归档和筛选。
 
 面试表达：
 
 > 本项目把可测试的逻辑尽量从 UI 中抽出来，例如 SSE 解析、请求体构建、存储、导出、日志读取等都可以通过 CTest 自动化验证。
 
-## 13. windeployqt
+当前 V5 测试数量为 20 个。
+
+## 14. windeployqt
 
 `windeployqt` 是 Qt 提供的 Windows 部署工具。
 
@@ -266,7 +300,7 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 - 如果缺少 SQLite 驱动，聊天记录可能无法打开。
 - HTTPS 需要 TLS 插件和系统证书支持。
 
-## 14. Git / GitHub 协作流程
+## 15. Git / GitHub 协作流程
 
 本项目按 feature branch 方式迭代：
 

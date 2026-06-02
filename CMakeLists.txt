@@ -32,6 +32,7 @@ qt_add_executable(AIChatDesktop
     src/core/PromptTemplate.h
     src/core/ProviderPreset.h
     src/core/ProviderPreset.cpp
+    src/core/SessionListFilter.h
     src/services/AIClient.h
     src/services/OpenAICompatibleClient.h
     src/services/OpenAICompatibleClient.cpp
@@ -42,6 +43,14 @@ qt_add_executable(AIChatDesktop
     src/support/AppLogger.cpp
     src/support/LogFileReader.h
     src/support/LogFileReader.cpp
+    src/tools/JsonCompactTool.h
+    src/tools/JsonFormatTool.h
+    src/tools/JsonTools.cpp
+    src/tools/LocalTool.h
+    src/tools/MarkdownCleanupTool.h
+    src/tools/TextCleanupTool.h
+    src/tools/TextTools.cpp
+    src/tools/ToolResult.h
     src/storage/CredentialStorage.h
     src/storage/WindowsCredentialStorage.h
     src/storage/WindowsCredentialStorage.cpp
@@ -65,6 +74,8 @@ qt_add_executable(AIChatDesktop
     src/ui/RolePromptDialog.cpp
     src/ui/SettingsDialog.h
     src/ui/SettingsDialog.cpp
+    src/ui/ToolsDialog.h
+    src/ui/ToolsDialog.cpp
 )
 
 qt_add_resources(AIChatDesktop "app_resources"

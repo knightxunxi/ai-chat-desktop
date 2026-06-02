@@ -2,11 +2,13 @@
 
 #include "app/ApplicationController.h"
 #include "core/ChatSession.h"
+#include "core/SessionListFilter.h"
 
 #include <QMainWindow>
 
 class ChatView;
 class QCloseEvent;
+class QComboBox;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
@@ -46,6 +48,10 @@ private:
     void applyConfig();
     // 功能：刷新所有界面文案；使用模块：语言切换和模板变化。
     void applyLanguage();
+    // 功能：同步会话筛选控件；使用模块：语言切换和筛选状态变化。
+    void updateSessionFilterComboBox();
+    // 功能：刷新收藏/归档按钮文案和状态；使用模块：当前会话变化和语言切换。
+    void updateSessionOrganizationControls();
     // 功能：根据当前语言选择中文或英文；使用模块：所有 UI 文案。
     QString text(const QString &english, const QString &chinese) const;
     // 功能：计算顶部角色显示名；使用模块：applyLanguage。
@@ -58,6 +64,10 @@ private:
     void openSettingsDialog();
     // 功能：打开日志窗口；使用模块：日志按钮。
     void openLogViewerDialog();
+    // 功能：打开本地工具窗口；使用模块：工具按钮。
+    void openToolsDialog();
+    // 功能：把工具输出插入聊天输入框；使用模块：ToolsDialog::outputInsertionRequested 信号。
+    void insertToolOutputIntoInput(const QString &output);
     // 功能：打开角色提示词窗口；使用模块：角色提示词按钮。
     void editSystemPrompt();
     // 功能：开始新会话；使用模块：新建会话按钮。
@@ -66,8 +76,14 @@ private:
     void renameCurrentChat();
     // 功能：导出当前会话；使用模块：导出按钮。
     void exportCurrentChat();
+    // 功能：收藏或取消收藏当前会话；使用模块：收藏按钮。
+    void toggleCurrentChatFavorite();
+    // 功能：归档或取消归档当前会话；使用模块：归档按钮。
+    void toggleCurrentChatArchived();
     // 功能：删除当前会话；使用模块：删除按钮。
     void deleteCurrentChat();
+    // 功能：切换会话列表筛选；使用模块：筛选下拉框。
+    void changeSessionFilter(int index);
     // 功能：切换到点击的会话；使用模块：侧边栏 itemClicked 信号。
     void switchToSession(QListWidgetItem *item);
     // 功能：发送输入框内容或停止生成；使用模块：发送按钮和快捷键。
@@ -90,11 +106,15 @@ private:
     ApplicationController m_controller;      // 功能：主业务控制器；使用模块：主窗口所有用户操作。
     QListWidget *m_sessionList = nullptr;    // 功能：会话列表；使用模块：侧边栏会话展示和切换。
     QLineEdit *m_sessionSearchEdit = nullptr; // 功能：会话搜索输入；使用模块：搜索历史会话。
+    QComboBox *m_sessionFilterComboBox = nullptr; // 功能：会话筛选；使用模块：全部/收藏/归档列表切换。
     QPushButton *m_newChatButton = nullptr;  // 功能：新建会话按钮；使用模块：侧边栏操作区。
     QPushButton *m_renameChatButton = nullptr; // 功能：重命名按钮；使用模块：侧边栏操作区。
     QPushButton *m_exportChatButton = nullptr; // 功能：导出按钮；使用模块：侧边栏操作区。
+    QPushButton *m_favoriteChatButton = nullptr; // 功能：收藏/取消收藏当前会话；使用模块：侧边栏操作区。
+    QPushButton *m_archiveChatButton = nullptr; // 功能：归档/取消归档当前会话；使用模块：侧边栏操作区。
     QPushButton *m_deleteChatButton = nullptr; // 功能：删除按钮；使用模块：侧边栏操作区。
     QPushButton *m_systemPromptButton = nullptr; // 功能：角色提示词入口；使用模块：顶部工具区。
+    QPushButton *m_toolsButton = nullptr;     // 功能：本地工具入口；使用模块：顶部工具区。
     QPushButton *m_logButton = nullptr;      // 功能：日志窗口入口；使用模块：顶部工具区。
     ChatView *m_chatView = nullptr;          // 功能：聊天消息列表视图；使用模块：主内容区。
     QTextEdit *m_messageInput = nullptr;     // 功能：用户输入框；使用模块：底部输入区。

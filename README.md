@@ -82,6 +82,9 @@ Platform: Windows
 - [V4 Roadmap](docs/13-v4-roadmap.md)
 - [代码格式规范](docs/14-code-style.md)
 - [小工具集成方案](docs/15-tool-integration-design.md)
+- [V5 Roadmap](docs/16-v5-roadmap.md)
+- [会话组织增强设计](docs/17-session-organization-design.md)
+- [V5 验收记录](docs/18-v5-acceptance-notes.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -178,19 +181,22 @@ Copy-Item build-release-qt\AIChatDesktop.exe release\AIChatDesktop\
 windeployqt release\AIChatDesktop\AIChatDesktop.exe
 ```
 
-发布前请在 `release\AIChatDesktop\AIChatDesktop.exe` 中手工验证 API 请求、语言切换、聊天记录恢复、停止生成、消息复制、Markdown 展示、角色提示词模板、错误重试和应用内日志查看。
+发布前请在 `release\AIChatDesktop\AIChatDesktop.exe` 中手工验证 API 请求、语言切换、聊天记录恢复、停止生成、消息复制、Markdown 展示、角色提示词模板、错误重试、应用内日志查看、本地工具窗口、收藏/归档和会话筛选。
 
 ## 当前版本状态
 
-当前 main 已完成 V4，覆盖安全存储、会话管理增强、服务商预设、模型参数、错误重试、应用内日志查看、GitHub Actions CI、基础代码规范、UI smoke test、代码块复制、角色提示词模板导入导出和小工具集成方案。
+当前 main 已完成 V4。当前 V5 开发分支已新增本地工具系统、JSON/Markdown/文本处理工具、工具窗口、会话收藏、会话归档和会话筛选。
 
 已知限制：
 
 - 当前版本只面向 Windows，暂未规划 macOS/Linux 迁移。
-- Markdown 展示仍是基础版本，复杂代码高亮暂未支持。
+- Markdown 展示仍是基础版本，复杂代码高亮暂未支持；V5 新增的 Markdown 整理工具只做低风险空白清理。
 - 角色提示词模板仍是本地版本，暂未支持云同步。
+- 本地工具系统仅支持内置工具，暂不支持插件、脚本或 AI 自动调用工具。
 
 ## 后续方向
+
+V5 详细计划见 [V5 Roadmap](docs/16-v5-roadmap.md)，验收记录见 [V5 验收记录](docs/18-v5-acceptance-notes.md)。
 
 V4 详细计划见 [V4 Roadmap](docs/13-v4-roadmap.md)，小工具扩展方案见 [小工具集成方案](docs/15-tool-integration-design.md)。
 
@@ -201,5 +207,5 @@ V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)，发布说明见 [V3 Rel
 候选方向：
 
 - Markdown 代码高亮增强。
-- 小工具入口和首批本地工具。
-- 会话标签、收藏、归档。
+- 会话标签和 SQLite FTS 全文搜索。
+- 受控本地文件/系统交互工具。

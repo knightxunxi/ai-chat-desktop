@@ -110,6 +110,58 @@ target_include_directories(LogFileReaderTest PRIVATE
 
 add_test(NAME LogFileReaderTest COMMAND LogFileReaderTest)
 
+add_executable(LocalToolContractTest
+    tools/LocalToolContractTest.cpp
+)
+
+target_link_libraries(LocalToolContractTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(LocalToolContractTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME LocalToolContractTest COMMAND LocalToolContractTest)
+
+add_executable(JsonToolsTest
+    tools/JsonToolsTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonCompactTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonFormatTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/LocalTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+)
+
+target_link_libraries(JsonToolsTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(JsonToolsTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME JsonToolsTest COMMAND JsonToolsTest)
+
+add_executable(MarkdownTextToolsTest
+    tools/MarkdownTextToolsTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/LocalTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/MarkdownCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+)
+
+target_link_libraries(MarkdownTextToolsTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(MarkdownTextToolsTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME MarkdownTextToolsTest COMMAND MarkdownTextToolsTest)
+
 add_executable(ChatHistoryStorageTest
     storage/ChatHistoryStorageTest.cpp
     ${PROJECT_SOURCE_DIR}/src/storage/ChatHistoryStorage.cpp
@@ -211,6 +263,31 @@ target_include_directories(RolePromptDialogSmokeTest PRIVATE
 )
 
 add_test(NAME RolePromptDialogSmokeTest COMMAND RolePromptDialogSmokeTest)
+
+add_executable(ToolsDialogSmokeTest
+    ui/ToolsDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonCompactTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonFormatTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/LocalTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/MarkdownCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+    ${PROJECT_SOURCE_DIR}/src/ui/ToolsDialog.h
+    ${PROJECT_SOURCE_DIR}/src/ui/ToolsDialog.cpp
+)
+
+target_link_libraries(ToolsDialogSmokeTest PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+)
+
+target_include_directories(ToolsDialogSmokeTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME ToolsDialogSmokeTest COMMAND ToolsDialogSmokeTest)
 
 add_executable(MessageWidgetTest
     ui/MessageWidgetTest.cpp
