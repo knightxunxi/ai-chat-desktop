@@ -66,7 +66,7 @@ V7 不包含：
 - 工作目录策略测试通过。
 - 计划窗口能可靠停止或暂停。
 
-详细计划见 [V8 Agent 工作目录规划](26-v8-agent-workspace-roadmap.md)。
+详细计划见 [V8 Agent 工作目录规划](26-v8-agent-workspace-roadmap.md)。V8 及后续版本的完整演进路线见 [V8+ Agent 详细开发路线](28-v8-plus-agent-development-roadmap.md)。
 
 ## 4. V9：受控命令执行
 
@@ -144,7 +144,7 @@ V7 不包含：
 - 不跨应用记录敏感输入。
 - 不把屏幕内容或输入内容写入日志。
 
-## 6. 推荐阶段关系
+## 7. 推荐阶段关系
 
 ```text
 V6：受控文件/目录工具

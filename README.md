@@ -96,6 +96,8 @@ Platform: Windows
 - [V7 验收记录](docs/24-v7-acceptance-notes.md)
 - [V7 手工验证脚本](docs/25-v7-manual-test-script.md)
 - [V8 Agent 工作目录规划](docs/26-v8-agent-workspace-roadmap.md)
+- [下一版本开发计划](docs/27-next-version-development-plan.md)
+- [V8+ Agent 详细开发路线](docs/28-v8-plus-agent-development-roadmap.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -224,6 +226,10 @@ V5 详细计划见 [V5 Roadmap](docs/16-v5-roadmap.md)，验收记录见 [V5 验
 V7 详细计划见 [V7 Roadmap](docs/19-v7-roadmap.md)，Agent 安全边界见 [V7 Agent 安全设计](docs/23-v7-agent-safety-design.md)，当前验收记录见 [V7 验收记录](docs/24-v7-acceptance-notes.md)，合并前手工检查见 [V7 手工验证脚本](docs/25-v7-manual-test-script.md)。V7 重点是 AI 生成结构化任务计划、工具建议、用户确认和单步受控执行。
 
 V8 详细计划见 [V8 Agent 工作目录规划](docs/26-v8-agent-workspace-roadmap.md)，重点是默认工作目录、自动文件生成、连续执行和文件内容提示词注入防护。
+
+下一版本建议按 [下一版本开发计划](docs/27-next-version-development-plan.md) 推进，优先实现 V8.1 工作目录文件 Agent MVP；UI 优化暂不纳入该版本。
+
+V8 及后续 Agent 演进见 [V8+ Agent 详细开发路线](docs/28-v8-plus-agent-development-roadmap.md)，该路线结合本地优化方向，按工作目录文件 Agent、Agentic Loop、工具注册表、受控命令执行、技能记忆和电脑感知逐步推进。
 
 V4 详细计划见 [V4 Roadmap](docs/13-v4-roadmap.md)，小工具扩展方案见 [小工具集成方案](docs/15-tool-integration-design.md)。
 
