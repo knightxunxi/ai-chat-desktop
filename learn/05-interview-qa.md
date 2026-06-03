@@ -114,7 +114,7 @@
 
 参考回答：
 
-> 项目使用 CTest 统一运行测试。测试覆盖核心模型、服务商预设、会话列表排序、SSE 解析、请求体构建、HTTP 错误分类、配置和凭据迁移、SQLite 存储、Markdown 导出、日志脱敏、日志读取、本地工具逻辑、文件交互服务、Agent 工具目录、计划解析、计划 Prompt、低风险步骤执行、工作目录策略、工作目录文件服务、Agentic Loop、工具注册表、Function Calling schema，以及多个 UI smoke test。当前是 33 个测试全部通过。
+> 项目使用 CTest 统一运行测试。测试覆盖核心模型、服务商预设、会话列表排序、SSE 解析、请求体构建、HTTP 错误分类、配置和凭据迁移、SQLite 存储、Markdown 导出、日志脱敏、日志读取、本地工具逻辑、文件交互服务、Agent 工具目录、计划解析、计划 Prompt、低风险步骤执行、工作目录策略、工作目录文件服务、Agentic Loop、工具注册表、Function Calling schema、tool_calls 流式解析、受控命令执行策略、命令运行器、开发者命令技能目录、外部技能文件、工具调用计划转换、项目级指令读取和受控工作记忆，以及多个 UI smoke test。当前是 40 个测试全部通过。
 
 ## 20. UI 部分怎么测试？
 
@@ -222,4 +222,40 @@
 
 参考回答：
 
-> 当前已经能从 `AgentToolRegistry` 生成 OpenAI-compatible `tools` schema，并把 `workspace.write_text` 这类工具 ID 转成 `workspace_write_text` 这样的函数名。第一版还没有把网络请求切换到原生 tools 调用，仍保留 JSON plan fallback。这样可以兼容 DeepSeek 或其他接口在 Function Calling 支持不稳定时继续工作。
+> 当前已经能从 `AgentToolRegistry` 生成 OpenAI-compatible `tools` schema，并把 `workspace.write_text` 这类工具 ID 转成 `workspace_write_text` 这样的函数名。V9.2 第一版已经把 Agent 计划请求切换为可携带原生 tools：服务层会解析流式 `tool_calls`，控制层再把函数名映射回本地工具 ID，生成计划预览。旧 JSON plan fallback 仍保留，如果模型不返回 tool calls 或服务商不兼容 tools 字段，仍能退回原流程。
+
+## 38. V9 命令执行为什么不直接开放 PowerShell？
+
+参考回答：
+
+> 因为任意 PowerShell/CMD 字符串风险太高，模型可能拼出删除文件、修改系统配置或泄露敏感信息的命令。V9 只开放白名单模板，比如 `git status --short --branch`、`git diff --check`、`cmake --build build-qt` 和 `ctest --test-dir build-qt --output-on-failure`。本地 `CommandPolicy` 负责把工具 ID 映射成固定程序和参数数组，并校验工作目录；`CommandRunner` 用 `QProcess` 执行，不通过 shell 拼接，同时处理超时、输出截断和敏感字段脱敏。
+
+## 39. 命令执行怎么降低误操作风险？
+
+参考回答：
+
+> 第一，命令必须来自本地工具注册表，AI 不能自定义程序和参数。第二，命令工作目录必须是安全项目目录，不能是磁盘根目录、系统目录或用户主目录根部。第三，命令有超时，非零退出码或超时都会让工具失败并暂停连续执行。第四，日志只记录模板 ID、退出码、输出长度和超时状态，不记录完整 stdout/stderr。第五，`git add`、`git commit`、`git push` 这类会改变远程或版本库状态的命令暂不开放。
+
+## 40. V9.1 的开发者命令技能是什么？
+
+参考回答：
+
+> V9.1 把常见开发流程整理成静态技能目录，例如“检查当前改动”“提交前检查”“构建并测试”“定位测试失败”。技能本身不直接执行命令，而是展开为一组 `command.*` 工具步骤，比如提交前检查会展开为 `git diff --check`、`cmake --build build-qt` 和 `ctest --test-dir build-qt --output-on-failure`。真正执行时仍然经过工具注册表、命令策略、用户确认和命令运行器，所以技能不会绕过安全边界。
+
+## 41. V10.1 的项目级指令怎么做？
+
+参考回答：
+
+> V10.1 支持读取 Agent 项目目录下的 `AGENT.md`。它可以记录项目技术栈、构建测试命令、Git 约定和当前阶段路线。读取后不会直接当成系统指令，而是由 `ProjectInstructionService` 包装成“不可覆盖安全规则的不可信项目上下文”，再交给 `AgentPlanPromptBuilder` 注入计划 Prompt。缺少文件时静默跳过，文件过大时只读取前 16 KB。这样能让 Agent 更理解项目约定，同时不扩大工具权限。
+
+## 42. V10.2 的外部技能文件怎么做？
+
+参考回答：
+
+> V10.2 支持读取 Agent 项目目录下的 `skills/*.skill.md`。技能文件用 JSON 描述技能 ID、中英文名称、描述和步骤列表。读取后会先校验工具 ID 是否存在于 `AgentToolRegistry`，并且必须允许计划窗口直接执行；风险等级也会按本地工具目录提升。外部技能只会追加到内置技能后面，重复 ID 不会覆盖内置技能。它只是让模型更容易生成常见流程的计划，不会绕过计划预览、用户确认、命令白名单或本地安全策略。
+
+## 43. V10.3 的工作记忆怎么控制风险？
+
+参考回答：
+
+> V10.3 的记忆是项目级受控记忆，不是自动长期记忆。应用会读取项目目录下的 `AGENT_MEMORY.md` 作为受限上下文；追加记忆必须通过 `memory.append_project_note` 工具，并经过计划窗口和用户确认。服务层会拒绝明显包含 API Key、password、token、Bearer、secret 等敏感字段的内容，也限制单条记忆长度。记忆只帮助 Agent 理解用户明确要求保存的偏好或项目决策，不能扩大工具权限、绕过确认或覆盖本地安全策略。

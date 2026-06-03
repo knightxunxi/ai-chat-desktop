@@ -1,0 +1,67 @@
+classDiagram
+    class LoopTerminationPolicy {
+        +int maxSteps = 10
+        +qint64 maxRuntimeMs = 60000
+        +qint64 maxStepMs = 30000
+        +function~bool()~ shouldStop
+        +TerminationReason check(int completed, qint64 elapsed, qint64 stepMs) const
+        +QString reasonLabel(TerminationReason) const
+    }
+
+    class TerminationReason {
+        <<enum>>
+        None
+        StepLimit
+        RuntimeLimit
+        StepTimeout
+        Stopped
+        AIDone
+        AIError
+        ParseError
+    }
+
+    class AiLoopResponse {
+        +bool ok
+        +QString fullText
+        +QString errorMessage
+        +RequestErrorCategory errorCategory
+        +static AiLoopResponse success(QString text)
+        +static AiLoopResponse failure(QString msg, RequestErrorCategory cat)
+    }
+
+    class AgentLoopOptions {
+        +int maxSteps = 10
+        +qint64 maxRuntimeMs = 60000
+        +qint64 maxStepMs = 30000
+        +function~bool()~ shouldStop
+    }
+
+    class AgentLoopRunResult {
+        +AgentLoopRunStatus status
+        +int executedStepCount
+        +QString error
+        +QString lastToolId
+        +QString lastOutput
+        +QStringList auditTrail
+    }
+
+    class AgentLoopCallbacks {
+        +function~void(int)~ stepStarted
+        +function~void(int, ToolResult)~ stepFinished
+    }
+
+    LoopTerminationPolicy --> TerminationReason : uses
+    AgentLoopOptions --> LoopTerminationPolicy : can construct from
+
+    namespace AgentLoopController {
+        AgentLoopRunResult executeLoop(
+            AIClient* aiClient,
+            const AppConfig& config,
+            const QString& userGoal,
+            const AgentToolRegistry& registry,
+            const AgentToolExecutionContext& context,
+            const AgentLoopOptions& options,
+            const AgentLoopCallbacks& callbacks,
+            AppLanguage language
+        )
+    }

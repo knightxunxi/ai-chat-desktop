@@ -33,5 +33,16 @@ int main()
     assert(result.textDeltas.size() == 1);
     assert(result.textDeltas[0] == QStringLiteral("tail"));
 
+    parser.reset();
+    result = parser.consume(
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"json_format\",\"arguments\":\"{\\\"input\\\":\"}}]}}]}\n"
+        "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"hello\\\"}\"}}]}}]}\n"
+        "data: [DONE]\n");
+    assert(result.done);
+    assert(result.toolCalls.size() == 1);
+    assert(result.toolCalls.first().id == QStringLiteral("call-1"));
+    assert(result.toolCalls.first().functionName == QStringLiteral("json_format"));
+    assert(result.toolCalls.first().arguments == QStringLiteral("{\"input\":\"hello\"}"));
+
     return 0;
 }

@@ -7,7 +7,7 @@
 int main()
 {
     const QVector<AgentToolDescriptor> catalog = defaultAgentToolCatalog();
-    assert(catalog.size() >= 13);
+    assert(catalog.size() >= 19);
 
     QSet<QString> ids;
     for (const AgentToolDescriptor &descriptor : catalog) {
@@ -45,6 +45,20 @@ int main()
     const AgentToolDescriptor *workspaceDeleteTool = findAgentToolDescriptor(catalog, QStringLiteral("workspace.delete_file"));
     assert(workspaceDeleteTool != nullptr);
     assert(workspaceDeleteTool->risk == AgentToolRisk::High);
+
+    const AgentToolDescriptor *gitStatusTool = findAgentToolDescriptor(catalog, QStringLiteral("command.git_status"));
+    assert(gitStatusTool != nullptr);
+    assert(gitStatusTool->risk == AgentToolRisk::Low);
+    assert(gitStatusTool->resultMayContainSensitiveContent);
+
+    const AgentToolDescriptor *cmakeBuildTool = findAgentToolDescriptor(catalog, QStringLiteral("command.cmake_build"));
+    assert(cmakeBuildTool != nullptr);
+    assert(cmakeBuildTool->risk == AgentToolRisk::Medium);
+
+    const AgentToolDescriptor *memoryTool = findAgentToolDescriptor(catalog, QStringLiteral("memory.append_project_note"));
+    assert(memoryTool != nullptr);
+    assert(memoryTool->risk == AgentToolRisk::Medium);
+    assert(!memoryTool->resultMayContainSensitiveContent);
 
     assert(findAgentToolDescriptor(catalog, QStringLiteral("missing.tool")) == nullptr);
 

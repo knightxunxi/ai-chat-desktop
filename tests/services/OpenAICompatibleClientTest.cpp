@@ -43,6 +43,21 @@ int main()
     assert(parameterBody.value(QStringLiteral("temperature")).toDouble() < 0.71);
     assert(parameterBody.value(QStringLiteral("max_tokens")).toInt() == 2048);
 
+    QJsonObject function;
+    function.insert(QStringLiteral("name"), QStringLiteral("json_format"));
+    function.insert(QStringLiteral("description"), QStringLiteral("Format JSON text."));
+    function.insert(QStringLiteral("parameters"), QJsonObject{{QStringLiteral("type"), QStringLiteral("object")}});
+    QJsonObject tool;
+    tool.insert(QStringLiteral("type"), QStringLiteral("function"));
+    tool.insert(QStringLiteral("function"), function);
+    const QJsonObject toolBody = QJsonDocument::fromJson(
+        OpenAICompatibleClient::buildRequestBody(config, session, QJsonArray{tool})).object();
+    assert(toolBody.value(QStringLiteral("tools")).toArray().size() == 1);
+    assert(toolBody.value(QStringLiteral("tool_choice")).toString() == QStringLiteral("auto"));
+    assert(toolBody.value(QStringLiteral("tools")).toArray().first().toObject()
+               .value(QStringLiteral("function")).toObject()
+               .value(QStringLiteral("name")).toString() == QStringLiteral("json_format"));
+
     assert(OpenAICompatibleClient::classifyHttpStatus(401) == RequestErrorCategory::Authentication);
     assert(OpenAICompatibleClient::classifyHttpStatus(403) == RequestErrorCategory::Authentication);
     assert(OpenAICompatibleClient::classifyHttpStatus(402) == RequestErrorCategory::Quota);

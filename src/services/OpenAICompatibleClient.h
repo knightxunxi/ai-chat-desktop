@@ -19,14 +19,20 @@ public:
     explicit OpenAICompatibleClient(QObject *parent = nullptr);
 
     // 功能：生成 chat/completions 请求 JSON；使用模块：sendChat 和 OpenAICompatibleClientTest。
-    static QByteArray buildRequestBody(const AppConfig &config, const ChatSession &session);
+    static QByteArray buildRequestBody(const AppConfig &config, const ChatSession &session, const QJsonArray &tools = QJsonArray());
     // 功能：把 HTTP 状态码归类为认证、额度、模型、服务端等错误；使用模块：handleFinished 和单元测试。
     static RequestErrorCategory classifyHttpStatus(int statusCode);
 
     // 功能：发起一次聊天请求；使用模块：ApplicationController::startAssistantRequest。
     void sendChat(const AppConfig &config, const ChatSession &session) override;
+    // 功能：发起带 Function Calling tools 声明的聊天请求；使用模块：V9.2 Agent 计划生成。
+    void sendChatWithTools(const AppConfig &config, const ChatSession &session, const QJsonArray &tools) override;
     // 功能：取消当前网络请求；使用模块：停止生成和关闭窗口时调用。
     void cancel() override;
+
+signals:
+    // V12.3: 工具调用参数完整时的即时通知；使用模块：ApplicationController 流式执行工具。
+    void toolUseBlockComplete(const QString &toolName, const QJsonObject &arguments);
 
 private:
     // 功能：把 baseUrl 转换成 /chat/completions 地址；使用模块：sendChat。

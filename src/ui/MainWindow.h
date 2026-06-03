@@ -7,6 +7,7 @@
 #include <QMainWindow>
 
 class ChatView;
+class QCheckBox;
 class QCloseEvent;
 class QLabel;
 class QListWidget;
@@ -55,7 +56,7 @@ private:
     QString text(const QString &english, const QString &chinese) const;
     // 功能：计算顶部角色显示名；使用模块：applyLanguage。
     QString currentRoleDisplayName() const;
-    // 功能：根据生成状态切换发送/停止按钮样式；使用模块：setGenerating。
+    // 功能：根据生成状态切换发送/停止按钮样式，Agent 模式下切换按钮高亮；使用模块：setGenerating。
     void updateSendButtonAppearance();
     // 功能：根据输入内容和生成状态控制发送按钮启用；使用模块：输入框 textChanged。
     void updateSendButtonState();
@@ -67,12 +68,9 @@ private:
     void openToolsDialog();
     // 功能：打开文件工具窗口；使用模块：文件工具按钮。
     void openFileToolsDialog();
-    // 功能：根据当前输入生成 Agent 计划；使用模块：Agent 计划按钮。
+    // 功能：根据当前输入生成 Agent 计划；使用模块：已隐藏的 Agent 计划按钮（内部 API 保留）。
     void generateAgentPlan();
-    // 功能：打开 Agent 计划预览窗口；使用模块：ApplicationController::agentPlanReady 信号。
-    void openAgentPlanDialog(const AgentPlan &plan);
-    // 功能：把工具输出插入聊天输入框；使用模块：ToolsDialog::outputInsertionRequested 信号。
-    void insertToolOutputIntoInput(const QString &output);
+    // V12.5: openAgentPlanDialog 和 insertToolOutputIntoInput 已移除，计划改为自动执行。
     // 功能：打开角色提示词窗口；使用模块：角色提示词按钮。
     void editSystemPrompt();
     // 功能：开始新会话；使用模块：新建会话按钮。
@@ -93,6 +91,14 @@ private:
     void switchToSession(QListWidgetItem *item);
     // 功能：发送输入框内容或停止生成；使用模块：发送按钮和快捷键。
     void sendCurrentMessage();
+    // 功能：切换聊天模式 / Agent 统一模式；使用模块：模式切换按钮。
+    void toggleAgentMode();
+    // V12.4: 切换 Chat 模式自动执行工具开关；使用模块：自动执行按钮。
+    void toggleChatAutoExecute();
+    // V12.4: 切换高权限模式开关；使用模块：高权限复选框。
+    void toggleHighPermission();
+    // V12.4: 更新自动执行按钮外观；使用模块：toggleChatAutoExecute。
+    void updateChatAutoExecuteAppearance();
     // 功能：把用户消息增量加入聊天区；使用模块：userMessageAdded 信号。
     void addUserMessage(const QString &content);
     // 功能：添加助手回复占位；使用模块：assistantMessageStarted 信号。
@@ -129,6 +135,13 @@ private:
     QTextEdit *m_messageInput = nullptr;     // 功能：用户输入框；使用模块：底部输入区。
     QPushButton *m_retryButton = nullptr;    // 功能：失败重试按钮；使用模块：底部输入区。
     QPushButton *m_sendButton = nullptr;     // 功能：发送/停止按钮；使用模块：底部输入区。
+    QPushButton *m_modeToggleButton = nullptr; // 功能：Chat/Agent 模式切换按钮；使用模块：底部输入区。
+    bool m_isAgentMode = false;              // 功能：当前是否处于 Agent 统一模式；使用模块：sendCurrentMessage 路由。
+    // V12.4: Chat 模式自动执行工具 UI 控件
+    QPushButton *m_chatAutoExecuteButton = nullptr; // 功能：Chat 模式自动执行工具开关按钮；使用模块：底部输入区。
+    QCheckBox *m_highPermissionCheckbox = nullptr;  // 功能：高权限模式复选框；使用模块：底部输入区。
+    bool m_chatAutoExecute = false;   // 功能：Chat 模式自动执行工具状态；使用模块：sendCurrentMessage 路由。
+    bool m_highPermissionMode = false; // 功能：高权限模式状态；使用模块：toggleHighPermission。
     QPushButton *m_settingsButton = nullptr; // 功能：设置入口；使用模块：顶部工具区。
     QLabel *m_modelLabel = nullptr;          // 功能：当前模型展示；使用模块：顶部标题区。
     QLabel *m_personaLabel = nullptr;        // 功能：当前角色展示；使用模块：顶部标题区。

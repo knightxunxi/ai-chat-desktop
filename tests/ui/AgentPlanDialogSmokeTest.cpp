@@ -107,7 +107,7 @@ int main(int argc, char *argv[])
     assert(copyButton->isEnabled());
     assert(insertButton->isEnabled());
     assert(continueButton->isEnabled());
-    assert(!runAllButton->isEnabled());
+    assert(runAllButton->isEnabled());
 
     QString insertedOutput;
     QObject::connect(&dialog, &AgentPlanDialog::outputInsertionRequested, [&insertedOutput](const QString &output) {
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     auto *secondOutputEdit = secondDialog.findChild<QPlainTextEdit *>(QStringLiteral("agentPlanOutputEdit"));
     secondStepList->setCurrentRow(1);
     assert(secondOutputEdit->toPlainText().isEmpty());
-    assert(!secondExecuteButton->isEnabled());
+    assert(secondExecuteButton->isEnabled());
     assert(secondSkipButton->isEnabled());
     secondSkipButton->click();
     assert(secondStepList->item(1)->text().contains(QStringLiteral("skipped")));

@@ -59,6 +59,10 @@ src/support     日志、日志读取等通用能力
 
 - `ApplicationController.h/.cpp`：处理初始化、发送消息、停止生成、重试、切换会话、保存配置、收藏归档、筛选和 Agent 计划生成等流程。
 - `SessionSummaryList.h/.cpp`：维护会话列表排序规则。
+- `AgentCommandSkillCatalog.h/.cpp`：V9.1 开发者命令技能目录，把常见开发流程展开为 `command.*` 步骤模板。
+- `AgentCommandSkillFileService.h/.cpp`：V10.2 外部技能文件读取服务，从项目目录读取 `skills/*.skill.md` 并校验工具 ID。
+- `AgentToolCallPlanBuilder.h/.cpp`：V9.2 原生 Function Calling 转换器，把模型返回的 `tool_calls` 映射为本地 Agent 计划。
+- `ProjectInstructionService.h/.cpp`：V10.1 项目级指令读取服务，从项目目录读取 `AGENT.md` 并生成安全包装后的 Prompt 片段。
 - `AgentPlan.h/.cpp`：Agent 结构化计划和步骤状态。
 - `AgentPlanParser.h/.cpp`：解析并校验 AI 返回的 JSON 计划。
 - `AgentPlanPromptBuilder.h/.cpp`：把用户目标和工具目录整理为计划生成提示词。
@@ -86,9 +90,10 @@ src/support     日志、日志读取等通用能力
 - `AIClient.h`：AI 客户端接口。
 - `OpenAICompatibleClient.h/.cpp`：OpenAI 兼容接口实现。
 - `StreamParser.h/.cpp`：解析 Server-Sent Events 流式响应。
+- `ToolCall.h`：原生 Function Calling 工具调用数据结构。
 - `RequestErrorCategory.h`：请求错误分类。
 
-这一层屏蔽了 HTTP 请求、流式解析和错误分类细节，控制层只关心“收到增量文本、请求完成、请求失败”这些事件。
+这一层屏蔽了 HTTP 请求、流式解析和错误分类细节，控制层只关心“收到增量文本、收到工具调用、请求完成、请求失败”这些事件。
 
 ### `src/storage`
 
@@ -118,8 +123,16 @@ src/support     日志、日志读取等通用能力
 - `FileInteractionService.h/.cpp`：受控文件交互服务，提供文本读取、目录列出、文本保存、路径打开前校验和日志路径摘要。
 - `WorkspacePolicy.h/.cpp`：Agent 工作目录策略，判断路径是否在工作目录内、是否属于受保护文件、是否允许自动操作。
 - `WorkspaceFileService.h/.cpp`：Agent 工作目录文件服务，支持工作目录内创建、读取、列目录、覆盖和移动删除普通文件。
+- `CommandPolicy.h/.cpp`：V9 命令策略，定义白名单命令模板、工作目录安全判断和风险等级。
+- `CommandRunner.h/.cpp`：V9 命令运行器，使用 `QProcess` 执行程序和参数数组，并处理超时、输出截断和脱敏。
+- `ProjectMemoryService.h/.cpp`：V10.3 受控工作记忆服务，读取 `AGENT_MEMORY.md` 并在用户确认后追加记忆。
 - `AgentToolCatalog.h/.cpp`：Agent 可见工具目录，定义工具 ID、风险等级、输入限制和敏感结果标记。
 - `AgentToolRegistry.h/.cpp`：工具注册表，统一工具描述、参数 schema、执行函数和 Function Calling 函数名。
+- `GitReviewService.h/.cpp`：V11 Git 审查工具，提供 `git diff` 摘要和 `git log` 提交记录（只读）。
+- `LogSummaryService.h/.cpp`：V11 日志摘要工具，按关键词/级别搜索应用日志并脱敏。
+- `CsvDataService.h/.cpp`：V11 CSV 读写工具，轻量逗号/引号解析，限定工作目录。
+- `ProjectFindService.h/.cpp`：V11 项目文件搜索工具，glob 模式匹配，排除构建产物和 VCS 目录。
+- `AssistantService.h/.cpp`：V14 个人管家工具，工作日报、项目检查和文件整理（MVP）。
 
 这一层不依赖主窗口，不直接访问剪贴板，也不直接发送消息。工具窗口只负责调用工具并展示结果。
 
@@ -130,6 +143,20 @@ V7 Agent 的关键边界是：AI 只能生成计划和建议工具；本地解�
 V8.1 Agent 的关键边界是：AI 可以建议 `workspace.*` 文件工具，但本地执行器必须先经过 `WorkspacePolicy` 校验；所有自动文件操作只能发生在 Agent 工作目录内；受保护文件不能自动创建、覆盖或删除；读取到的文件内容会被标记为不可信数据。
 
 V8.2/V8.3 Agent 的关键边界是：连续执行由 `AgentLoopController` 统一管理，每轮只执行一个步骤，达到步数上限、失败、停止或重复动作时暂停；工具目录、参数 schema 和执行函数来自同一份 `AgentToolRegistry`，Function Calling schema 也从注册表生成。
+
+V9 命令执行的关键边界是：AI 只能建议 `command.*` 白名单工具，不能拼接任意 PowerShell/CMD；`CommandPolicy` 负责把工具 ID 映射到固定程序和参数数组，`CommandRunner` 使用 `QProcess` 执行并设置超时，命令输出会截断和脱敏。当前开放的是 Git 状态、diff 检查、构建、测试和项目文件列表这类开发者命令。V9.1 进一步加入项目目录配置和开发者命令技能目录，例如提交前检查会展开为 diff check、build、ctest 三步。
+
+V9.2 Function Calling 的关键边界是：请求体可以声明 `tools`，模型可以返回原生 `tool_calls`，但工具调用仍必须映射回 `AgentToolRegistry` 中已注册的函数名，参数必须解析为 JSON object，最终仍进入计划预览和用户确认流程。不支持 tools 或没有返回 tool_calls 时，旧 JSON plan fallback 继续可用。
+
+V10.1 项目级指令的关键边界是：应用会读取 Agent 项目目录根部的 `AGENT.md`，但这份文件只作为项目上下文，不是系统指令。Prompt 中会明确说明它不能覆盖工具权限、安全规则、工作目录限制或用户确认要求。文件读取有 16 KB 默认上限，缺失时不影响 Agent 请求。
+
+V10.2 外部技能的关键边界是：应用会读取 Agent 项目目录下的 `skills/*.skill.md`，但技能文件只描述推荐步骤，不会直接执行工具。每个步骤的工具 ID 必须存在于 `AgentToolRegistry` 且允许计划窗口直接执行；重复技能 ID 不覆盖内置技能；最终执行仍要经过计划预览、用户确认和本地工具策略。
+
+V10.3 工作记忆的关键边界是：应用会读取 Agent 项目目录下的 `AGENT_MEMORY.md`，并允许通过 `memory.append_project_note` 追加用户确认后的记忆。它不会自动保存聊天全文，也不会保存模型输出；明显包含 API Key、password、token、Bearer、secret 等敏感字段的内容会被拒绝。记忆只作为受限项目上下文，不能扩大工具权限。
+
+V11 统一模式的关键边界是：用户可通过统一入口发送消息，AI 自行判断返回聊天回复或任务计划。Native Function Calling 优先，失败后降级为 JSON Plan，再失败则当作普通聊天展示。取消生成会正确清理状态并显示"已停止"。
+
+V11 工具生态的关键边界是：Git 工具只执行只读命令（diff/log/status），禁止 add/commit/push。日志工具脱敏 API Key/Token。CSV 工具限定工作目录内，行数上限。文件搜索工具排除 `.git`/`build-*` 等目录。所有新工具均在 `AgentToolRegistry` 中注册并经过计划窗口用户确认。
 
 ### `src/support`
 
@@ -208,5 +235,5 @@ flowchart TD
 - 给会话搜索引入 SQLite FTS 全文索引。
 - 把角色模板导入导出作为独立服务模块。
 - 在 V6 文件工具基础上进入 V7 AI 任务拆解和受控工具建议。
-- 在 V8.3 工具注册表基础上进入 V9 受控命令执行。
-- 在 V10/V11 之后再评估操作记录和设备输入模拟。
+- 在 V9 命令执行基础上进入开发者技能、项目级指令和工作记忆。
+- 在 V12/V13 之后再评估操作记录和设备输入模拟。

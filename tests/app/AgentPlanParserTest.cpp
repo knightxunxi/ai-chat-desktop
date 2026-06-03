@@ -71,7 +71,13 @@ int main()
     assert(result.ok);
     assert(result.plan.steps.first().toolId == QStringLiteral("text.cleanup"));
 
-    result = parse(planObject(QJsonArray{stepObject(QStringLiteral("step-1"), QStringLiteral("file.read_text"), QStringLiteral("low"))}));
+    const QString workspaceReadParams = QStringLiteral(R"({"path":"readme.txt"})");
+    const QJsonDocument workspaceReadParamsDoc = QJsonDocument::fromJson(workspaceReadParams.toUtf8());
+    result = parse(planObject(QJsonArray{stepObject(
+        QStringLiteral("step-1"),
+        QStringLiteral("workspace.read_text"),
+        QStringLiteral("low"),
+        workspaceReadParamsDoc.object())}));
     assert(result.ok);
     assert(result.plan.steps.first().risk == AgentToolRisk::Medium);
 
@@ -84,6 +90,14 @@ int main()
         workspaceDeleteParameters)}));
     assert(result.ok);
     assert(result.plan.steps.first().risk == AgentToolRisk::High);
+
+    result = parse(planObject(QJsonArray{stepObject(
+        QStringLiteral("step-1"),
+        QStringLiteral("command.cmake_build"),
+        QStringLiteral("low"),
+        QJsonObject())}));
+    assert(result.ok);
+    assert(result.plan.steps.first().risk == AgentToolRisk::Medium);
 
     result = AgentPlanParser::parseJsonPlan(QStringLiteral("not-json"), defaultAgentToolCatalog());
     assert(!result.ok);

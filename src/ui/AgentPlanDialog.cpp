@@ -20,6 +20,11 @@ namespace {
 constexpr int MaxContinuousExecutionSteps = 5;
 constexpr qint64 MaxContinuousExecutionMs = 60000;
 
+// V12.2: 无限循环默认参数
+constexpr int InfiniteLoopMaxSteps = 10;
+constexpr qint64 InfiniteLoopMaxRuntimeMs = 120000;
+constexpr qint64 InfiniteLoopMaxStepMs = 30000;
+
 } // namespace
 
 AgentPlanDialog::AgentPlanDialog(
@@ -27,12 +32,18 @@ AgentPlanDialog::AgentPlanDialog(
     const QVector<AgentToolDescriptor> &toolCatalog,
     AppLanguage language,
     QWidget *parent,
-    const QString &workspaceDirectory)
+    const QString &workspaceDirectory,
+    const QString &projectDirectory,
+    AIClient *aiClient,
+    const AppConfig &appConfig)
     : QDialog(parent)
     , m_plan(plan)
     , m_toolCatalog(toolCatalog)
     , m_language(language)
     , m_workspaceDirectory(workspaceDirectory)
+    , m_projectDirectory(projectDirectory)
+    , m_aiClient(aiClient)
+    , m_appConfig(appConfig)
 {
     setupUi();
     applyLanguage();
@@ -96,6 +107,9 @@ void AgentPlanDialog::setupUi()
     m_stopButton = new QPushButton(this);
     m_stopButton->setObjectName(QStringLiteral("stopAgentPlanStepsButton"));
 
+    m_loopButton = new QPushButton(this);
+    m_loopButton->setObjectName(QStringLiteral("agentLoopButton"));
+
     m_skipButton = new QPushButton(this);
     m_skipButton->setObjectName(QStringLiteral("skipAgentPlanStepButton"));
 
@@ -114,6 +128,7 @@ void AgentPlanDialog::setupUi()
     footerLayout->addWidget(m_executeButton);
     footerLayout->addWidget(m_runAllButton);
     footerLayout->addWidget(m_stopButton);
+    footerLayout->addWidget(m_loopButton);
     footerLayout->addWidget(m_skipButton);
     footerLayout->addWidget(m_copyButton);
     footerLayout->addWidget(m_insertButton);
@@ -130,6 +145,7 @@ void AgentPlanDialog::setupUi()
     connect(m_executeButton, &QPushButton::clicked, this, &AgentPlanDialog::executeSelectedStep);
     connect(m_runAllButton, &QPushButton::clicked, this, &AgentPlanDialog::executeRemainingSteps);
     connect(m_stopButton, &QPushButton::clicked, this, &AgentPlanDialog::requestStopExecution);
+    connect(m_loopButton, &QPushButton::clicked, this, &AgentPlanDialog::executeInfiniteLoop);
     connect(m_skipButton, &QPushButton::clicked, this, &AgentPlanDialog::skipSelectedStep);
     connect(m_copyButton, &QPushButton::clicked, this, &AgentPlanDialog::copyOutput);
     connect(m_insertButton, &QPushButton::clicked, this, &AgentPlanDialog::insertOutput);
@@ -148,6 +164,7 @@ void AgentPlanDialog::applyLanguage()
     m_executeButton->setText(text(QStringLiteral("Execute Step"), QStringLiteral("执行步骤")));
     m_runAllButton->setText(text(QStringLiteral("Run Pending"), QStringLiteral("连续执行")));
     m_stopButton->setText(text(QStringLiteral("Stop"), QStringLiteral("停止")));
+    m_loopButton->setText(text(QStringLiteral("Agentic Loop"), QStringLiteral("无限循环")));
     m_skipButton->setText(text(QStringLiteral("Skip Step"), QStringLiteral("跳过步骤")));
     m_copyButton->setText(text(QStringLiteral("Copy Output"), QStringLiteral("复制输出")));
     m_insertButton->setText(text(QStringLiteral("Insert Output"), QStringLiteral("插入输出")));
@@ -155,6 +172,10 @@ void AgentPlanDialog::applyLanguage()
     m_closeButton->setText(text(QStringLiteral("Close"), QStringLiteral("关闭")));
     m_statusLabel->setText(text(QStringLiteral("Review each step before executing it."),
                                 QStringLiteral("执行前请逐步检查计划。")));
+
+    if (m_aiClient == nullptr) {
+        m_loopButton->setVisible(false);
+    }
 }
 
 void AgentPlanDialog::populateStepList()
@@ -207,6 +228,7 @@ void AgentPlanDialog::executeRemainingSteps()
 
     AgentToolExecutionContext context;
     context.workspaceDirectory = m_workspaceDirectory;
+    context.projectDirectory = m_projectDirectory;
 
     AgentLoopOptions options;
     options.maxSteps = MaxContinuousExecutionSteps;
@@ -270,6 +292,104 @@ void AgentPlanDialog::executeRemainingSteps()
         break;
     case AgentLoopRunStatus::Failed:
         m_statusLabel->setText(loopResult.error);
+        break;
+    }
+
+    m_stopRequested = false;
+    updateActionButtons();
+}
+
+void AgentPlanDialog::executeInfiniteLoop()
+{
+    if (m_runningBatch) {
+        return;
+    }
+
+    m_runningBatch = true;
+    m_stopRequested = false;
+    m_statusLabel->setText(text(
+        QStringLiteral("Starting infinite agentic loop..."),
+        QStringLiteral("启动无限 Agentic 循环...")));
+    updateActionButtons();
+
+    // 构建上下文
+    AgentToolExecutionContext context;
+    context.workspaceDirectory = m_workspaceDirectory;
+    context.projectDirectory = m_projectDirectory;
+
+    // 设置选项
+    AgentLoopOptions options;
+    options.maxSteps = InfiniteLoopMaxSteps;
+    options.maxRuntimeMs = InfiniteLoopMaxRuntimeMs;
+    options.maxStepMs = InfiniteLoopMaxStepMs;
+    options.shouldStop = [this]() { return m_stopRequested; };
+
+    // 设置回调
+    AgentLoopCallbacks callbacks;
+    callbacks.stepStarted = [this](int index) {
+        m_statusLabel->setText(text(
+            QStringLiteral("Agentic loop step %1...").arg(index + 1),
+            QStringLiteral("Agentic 循环第 %1 步...").arg(index + 1)));
+        QApplication::processEvents();
+    };
+    callbacks.stepFinished = [this](int index, const ToolResult &result) {
+        // 在输出区追加每步结果
+        QString line = text(
+            QStringLiteral("--- Step %1 output ---\n%2\n").arg(index + 1).arg(result.output),
+            QStringLiteral("--- 第 %1 步输出 ---\n%2\n").arg(index + 1).arg(result.output));
+        m_outputEdit->appendPlainText(line);
+        QApplication::processEvents();
+    };
+
+    // 核心调用
+    const AgentLoopRunResult result = AgentLoopController::executeLoop(
+        m_aiClient,
+        m_appConfig,
+        m_plan.summary,
+        AgentToolRegistryFactory::defaultRegistry(),
+        context,
+        options,
+        callbacks,
+        m_language);
+
+    m_runningBatch = false;
+
+    // 显示结果
+    switch (result.status) {
+    case AgentLoopRunStatus::Completed:
+        m_statusLabel->setText(text(
+            QStringLiteral("Agentic loop completed %1 steps.").arg(result.executedStepCount),
+            QStringLiteral("Agentic 循环完成 %1 步。").arg(result.executedStepCount)));
+        break;
+    case AgentLoopRunStatus::Stopped:
+        m_statusLabel->setText(text(
+            QStringLiteral("Agentic loop stopped."),
+            QStringLiteral("Agentic 循环已停止。")));
+        break;
+    case AgentLoopRunStatus::StepLimitReached:
+        m_statusLabel->setText(text(
+            QStringLiteral("Agentic loop paused at step limit (%1 steps).").arg(result.executedStepCount),
+            QStringLiteral("Agentic 循环达到步数上限，共 %1 步。").arg(result.executedStepCount)));
+        break;
+    case AgentLoopRunStatus::RuntimeLimitReached:
+        m_statusLabel->setText(text(
+            QStringLiteral("Agentic loop timed out after %1 steps.").arg(result.executedStepCount),
+            QStringLiteral("Agentic 循环超时，共执行 %1 步。").arg(result.executedStepCount)));
+        break;
+    case AgentLoopRunStatus::StepTimeout:
+        m_statusLabel->setText(text(
+            QStringLiteral("Agentic loop stopped: single step timed out."),
+            QStringLiteral("Agentic 循环停止：单步超时。")));
+        break;
+    case AgentLoopRunStatus::Failed:
+        m_statusLabel->setText(result.error);
+        break;
+    case AgentLoopRunStatus::RepeatedAction:
+        m_statusLabel->setText(text(
+            QStringLiteral("Agentic loop stopped: repeated action detected."),
+            QStringLiteral("Agentic 循环停止：检测到重复操作。")));
+        break;
+    default:
         break;
     }
 
@@ -361,6 +481,7 @@ void AgentPlanDialog::updateActionButtons()
     m_executeButton->setEnabled(canExecute);
     m_runAllButton->setEnabled(!m_runningBatch && nextExecutableStepIndex() >= 0);
     m_stopButton->setEnabled(m_runningBatch);
+    m_loopButton->setEnabled(!m_runningBatch && m_aiClient != nullptr);
     m_skipButton->setEnabled(!m_runningBatch && hasStep && m_plan.steps[index].status == AgentPlanStepStatus::Pending);
     const bool hasCurrentStepOutput = hasStep && !m_plan.steps[index].output.isEmpty();
     m_copyButton->setEnabled(!m_runningBatch && hasCurrentStepOutput);
@@ -385,7 +506,7 @@ bool AgentPlanDialog::executeStepAt(int index)
     step.status = AgentPlanStepStatus::Running;
     populateStepList();
 
-    const ToolResult result = AgentPlanExecutor::executeStep(step, m_workspaceDirectory);
+    const ToolResult result = AgentPlanExecutor::executeStep(step, m_workspaceDirectory, m_projectDirectory);
     if (!result.ok) {
         step.status = AgentPlanStepStatus::Failed;
         step.output = text(QStringLiteral("Tool failed: %1"), QStringLiteral("工具失败：%1")).arg(result.error);
@@ -436,10 +557,13 @@ QString AgentPlanDialog::stepDetailsText(const AgentPlanStep &step) const
     const QString workspaceLine = step.toolId.startsWith(QStringLiteral("workspace."))
                                       ? text(QStringLiteral("\nWorkspace: %1"), QStringLiteral("\n工作目录：%1")).arg(m_workspaceDirectory)
                                       : QString();
+    const QString projectLine = step.toolId.startsWith(QStringLiteral("command."))
+                                    ? text(QStringLiteral("\nProject directory: %1"), QStringLiteral("\n项目目录：%1")).arg(m_projectDirectory)
+                                    : QString();
 
     return text(
-               QStringLiteral("Title: %1\nTool: %2 (%3)\nRisk: %4\nReason: %5\nStatus: %6%7\n\nParameters:\n%8"),
-               QStringLiteral("标题：%1\n工具：%2（%3）\n风险：%4\n原因：%5\n状态：%6%7\n\n参数：\n%8"))
+               QStringLiteral("Title: %1\nTool: %2 (%3)\nRisk: %4\nReason: %5\nStatus: %6%7%8\n\nParameters:\n%9"),
+               QStringLiteral("标题：%1\n工具：%2（%3）\n风险：%4\n原因：%5\n状态：%6%7%8\n\n参数：\n%9"))
         .arg(step.title,
              toolName,
              step.toolId,
@@ -447,6 +571,7 @@ QString AgentPlanDialog::stepDetailsText(const AgentPlanStep &step) const
              step.reason,
              agentPlanStepStatusToString(step.status),
              workspaceLine,
+             projectLine,
              parameterJson.isEmpty() ? QStringLiteral("{}") : parameterJson);
 }
 

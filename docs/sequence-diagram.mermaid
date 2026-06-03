@@ -1,0 +1,61 @@
+sequenceDiagram
+    participant UI as AgentPlanDialog
+    participant Ctrl as AgentLoopController::executeLoop()
+    participant Runner as AiLoopRunner (匿名空间)
+    participant AIClient as AIClient (async)
+    participant Loop as QEventLoop
+    participant Builder as AgentLoopPromptBuilder
+    participant Parser as AgentLoopActionParser
+    participant Registry as AgentToolRegistry
+
+    UI->>Ctrl: executeLoop(aiClient, config, goal, registry, context, options, callbacks, language)
+    
+    Note over Ctrl: 初始化 QElapsedTimer, audit trail, observations=[]
+
+    loop while true
+        Ctrl->>Ctrl: 检查 shouldStop / maxSteps / maxRuntime
+        alt 终止条件触发
+            Ctrl-->>UI: AgentLoopRunResult(StepLimitReached/Stopped/...)
+        end
+
+        Ctrl->>Builder: buildNextActionPrompt(goal, observations, catalog, lang, completed, max)
+        Builder-->>Ctrl: prompt string
+
+        Ctrl->>Runner: call(aiClient, config, prompt, maxStepMs)
+        Runner->>AIClient: sendChat(config, session)
+        Runner->>Loop: exec()
+        Note over Loop: 阻塞等待...
+        AIClient-->>Runner: textDeltaReceived(delta) × N
+        AIClient-->>Runner: requestFinished()
+        Loop-->>Runner: quit()
+        Runner-->>Ctrl: AiLoopResponse{ok=true, fullText="..."}
+
+        alt AI 调用失败
+            Ctrl-->>UI: AgentLoopRunResult(Failed, error)
+        end
+
+        Ctrl->>Parser: parseJsonAction(fullText, catalog)
+        Parser-->>Ctrl: AgentLoopActionParseResult
+
+        alt 解析失败
+            Ctrl->>Ctrl: observations << "[parse error]"
+            Ctrl->>Ctrl: 继续下一轮
+        end
+
+        alt action.done == true
+            Ctrl-->>UI: AgentLoopRunResult(Completed)
+        end
+
+        Ctrl->>Ctrl: callbacks.stepStarted(index)
+        Ctrl->>Registry: execute(toolId, parameters, context)
+        Registry-->>Ctrl: ToolResult
+        Ctrl->>Ctrl: callbacks.stepFinished(index, toolResult)
+
+        alt ToolResult 失败
+            Ctrl-->>UI: AgentLoopRunResult(Failed, error)
+        end
+
+        Ctrl->>Ctrl: observations << toolResult.output
+        Ctrl->>Ctrl: executedStepCount++
+        Ctrl->>Ctrl: 检查 maxStepMs 超时
+    end

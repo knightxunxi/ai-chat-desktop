@@ -12,6 +12,7 @@
 
 struct AgentToolExecutionContext {
     QString workspaceDirectory; // 功能：Agent 工作目录；使用模块：workspace.* 工具执行。
+    QString projectDirectory;   // 功能：项目命令工作目录；使用模块：command.* 工具执行。
 };
 
 struct AgentToolDefinition {

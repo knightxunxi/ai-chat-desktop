@@ -1,7 +1,6 @@
 #include "ui/MainWindow.h"
 
 #include "support/AppLogger.h"
-#include "ui/AgentPlanDialog.h"
 #include "ui/ChatView.h"
 #include "ui/FileToolsDialog.h"
 #include "ui/LogViewerDialog.h"
@@ -10,6 +9,7 @@
 #include "ui/ToolsDialog.h"
 
 #include <QCloseEvent>
+#include <QCheckBox>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileDialog>
@@ -30,7 +30,6 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QTextEdit>
-#include <QTextCursor>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -167,6 +166,7 @@ void MainWindow::setupUi()
 
     m_agentPlanButton = new QPushButton(header);
     m_agentPlanButton->setObjectName(QStringLiteral("agentPlanButton"));
+    m_agentPlanButton->setVisible(false);  // 已由统一模式替代，保留接口供内部使用
 
     m_logButton = new QPushButton(header);
     m_logButton->setObjectName(QStringLiteral("logButton"));
@@ -204,7 +204,41 @@ void MainWindow::setupUi()
     m_sendButton->setObjectName(QStringLiteral("sendButton"));
     m_sendButton->setFixedSize(96, 44);
 
+    m_modeToggleButton = new QPushButton(composer);
+    m_modeToggleButton->setObjectName(QStringLiteral("modeToggleButton"));
+    m_modeToggleButton->setFixedSize(64, 44);
+    m_modeToggleButton->setCursor(Qt::PointingHandCursor);
+    m_modeToggleButton->setCheckable(true);
+    m_modeToggleButton->setChecked(false);
+
+    // V12.4: Chat 模式自动执行工具按钮（始终隐藏 — 已集成到 Agent 模式）
+    m_chatAutoExecuteButton = new QPushButton(composer);
+    m_chatAutoExecuteButton->setObjectName(QStringLiteral("chatAutoExecuteButton"));
+    m_chatAutoExecuteButton->setFixedSize(88, 44);
+    m_chatAutoExecuteButton->setCursor(Qt::PointingHandCursor);
+    m_chatAutoExecuteButton->setCheckable(true);
+    m_chatAutoExecuteButton->setChecked(false);
+    m_chatAutoExecuteButton->setToolTip(text(
+        QStringLiteral("When enabled, AI can auto-execute tools in Chat mode"),
+        QStringLiteral("开启后 Chat 模式下 AI 可自动执行工具")));
+    m_chatAutoExecuteButton->setVisible(false);  // 始终隐藏
+
+    // V12.4: 高权限模式复选框（始终隐藏 — Agent 模式默认高权限）
+    m_highPermissionCheckbox = new QCheckBox(composer);
+    m_highPermissionCheckbox->setObjectName(QStringLiteral("highPermissionCheckbox"));
+    m_highPermissionCheckbox->setText(text(
+        QStringLiteral("High Perm"),
+        QStringLiteral("高权限")));
+    m_highPermissionCheckbox->setToolTip(text(
+        QStringLiteral("Allow executing tools that require user confirmation (e.g., file operations)"),
+        QStringLiteral("允许执行需要确认的工具（如文件操作）")));
+    m_highPermissionCheckbox->setChecked(false);
+    m_highPermissionCheckbox->setVisible(false);  // 始终隐藏
+
     composerLayout->addWidget(m_messageInput, 1);
+    composerLayout->addWidget(m_chatAutoExecuteButton, 0, Qt::AlignBottom);
+    composerLayout->addWidget(m_highPermissionCheckbox, 0, Qt::AlignBottom);
+    composerLayout->addWidget(m_modeToggleButton, 0, Qt::AlignBottom);
     composerLayout->addWidget(m_retryButton, 0, Qt::AlignBottom);
     composerLayout->addWidget(m_sendButton, 0, Qt::AlignBottom);
 
@@ -220,6 +254,9 @@ void MainWindow::setupUi()
     connect(m_messageInput, &QTextEdit::textChanged, this, &MainWindow::updateSendButtonState);
     connect(m_retryButton, &QPushButton::clicked, &m_controller, &ApplicationController::retryLastRequest);
     connect(m_sendButton, &QPushButton::clicked, this, &MainWindow::sendCurrentMessage);
+    connect(m_modeToggleButton, &QPushButton::clicked, this, &MainWindow::toggleAgentMode);
+    connect(m_chatAutoExecuteButton, &QPushButton::clicked, this, &MainWindow::toggleChatAutoExecute); // V12.4
+    connect(m_highPermissionCheckbox, &QCheckBox::toggled, this, &MainWindow::toggleHighPermission);  // V12.4
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
     connect(m_toolsButton, &QPushButton::clicked, this, &MainWindow::openToolsDialog);
     connect(m_fileToolsButton, &QPushButton::clicked, this, &MainWindow::openFileToolsDialog);
@@ -278,7 +315,15 @@ void MainWindow::connectController()
     connect(&m_controller, &ApplicationController::configurationMissing, this, &MainWindow::showConfigurationMissingWarning);
     connect(&m_controller, &ApplicationController::statusMessage, this, &MainWindow::showStatusMessage);
     connect(&m_controller, &ApplicationController::startupWarning, this, &MainWindow::showStartupWarning);
-    connect(&m_controller, &ApplicationController::agentPlanReady, this, &MainWindow::openAgentPlanDialog);
+    // V12.5: agentPlanReady 信号已移除，计划自动执行不再通过弹窗
+    // V12.6: Agent 循环迭代状态更新
+    connect(&m_controller, &ApplicationController::agentLoopIterationUpdated,
+        this, [this](int iteration, int maxIterations) {
+            showStatusMessage(
+                QString("Agent loop %1/%2").arg(iteration).arg(maxIterations),
+                QString("Agent 循环 %1/%2").arg(iteration).arg(maxIterations),
+                3000);
+        });
 }
 
 void MainWindow::populateSessionList()
@@ -393,7 +438,9 @@ void MainWindow::applyLanguage()
     m_messageInput->setPlaceholderText(text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
     updateSessionFilterButtons();
     updateSessionOrganizationControls();
+    updateSendButtonAppearance();  // 也会更新模式切换按钮文案
     updateSendButtonAppearance();
+    updateChatAutoExecuteAppearance();  // V12.4: 刷新自动执行按钮文案
 
     if (m_chatView != nullptr && m_controller.currentSession().messages.isEmpty()) {
         populateChatView();
@@ -464,6 +511,32 @@ void MainWindow::updateSendButtonAppearance()
                                     : QString());
     m_sendButton->style()->unpolish(m_sendButton);
     m_sendButton->style()->polish(m_sendButton);
+
+    // 模式切换按钮样式：Agent 模式高亮
+    m_modeToggleButton->setText(m_isAgentMode
+        ? text(QStringLiteral("Agent"), QStringLiteral("Agent"))
+        : text(QStringLiteral("Chat"), QStringLiteral("Chat")));
+    if (m_isAgentMode) {
+        m_modeToggleButton->setStyleSheet(QStringLiteral(
+            "QPushButton#modeToggleButton {"
+            "  background: #4f46e5; border: 1px solid #4338ca; color: #ffffff;"
+            "  font-weight: 600; font-size: 12px; border-radius: 6px;"
+            "}"
+            "QPushButton#modeToggleButton:hover {"
+            "  background: #4338ca; border-color: #3730a3;"
+            "}"));
+    } else {
+        m_modeToggleButton->setStyleSheet(QStringLiteral(
+            "QPushButton#modeToggleButton {"
+            "  background: transparent; border: 1px solid #d1d5db; color: #6b7280;"
+            "  font-weight: 500; font-size: 12px; border-radius: 6px;"
+            "}"
+            "QPushButton#modeToggleButton:hover {"
+            "  background: #f3f4f6; border-color: #9ca3af; color: #374151;"
+            "}"));
+    }
+    m_modeToggleButton->style()->unpolish(m_modeToggleButton);
+    m_modeToggleButton->style()->polish(m_modeToggleButton);
 }
 
 void MainWindow::updateSendButtonState()
@@ -496,14 +569,14 @@ void MainWindow::openLogViewerDialog()
 void MainWindow::openToolsDialog()
 {
     ToolsDialog dialog(m_controller.config().language, this);
-    connect(&dialog, &ToolsDialog::outputInsertionRequested, this, &MainWindow::insertToolOutputIntoInput);
+    // V12.5: insertToolOutputIntoInput 已移除，工具输出不再插入聊天输入框
     dialog.exec();
 }
 
 void MainWindow::openFileToolsDialog()
 {
     FileToolsDialog dialog(m_controller.config().language, this);
-    connect(&dialog, &FileToolsDialog::outputInsertionRequested, this, &MainWindow::insertToolOutputIntoInput);
+    // V12.5: insertToolOutputIntoInput 已移除，工具输出不再插入聊天输入框
     dialog.exec();
 }
 
@@ -512,38 +585,8 @@ void MainWindow::generateAgentPlan()
     m_controller.generateAgentPlan(m_messageInput->toPlainText());
 }
 
-void MainWindow::openAgentPlanDialog(const AgentPlan &plan)
-{
-    AgentPlanDialog dialog(
-        plan,
-        defaultAgentToolCatalog(),
-        m_controller.config().language,
-        this,
-        m_controller.config().agentWorkspaceDirectory);
-    connect(&dialog, &AgentPlanDialog::outputInsertionRequested, this, &MainWindow::insertToolOutputIntoInput);
-    connect(&dialog, &AgentPlanDialog::continuePlanningRequested, &m_controller, &ApplicationController::generateAgentPlan);
-    dialog.exec();
-}
-
-void MainWindow::insertToolOutputIntoInput(const QString &output)
-{
-    if (output.isEmpty()) {
-        return;
-    }
-
-    if (m_controller.isGenerating()) {
-        showStatusMessage(QStringLiteral("Stop generation before inserting tool output."),
-                          QStringLiteral("请先停止生成，再插入工具输出。"),
-                          3000);
-        return;
-    }
-
-    QTextCursor cursor = m_messageInput->textCursor();
-    cursor.insertText(output);
-    m_messageInput->setTextCursor(cursor);
-    m_messageInput->setFocus();
-    updateSendButtonState();
-}
+// V12.5: openAgentPlanDialog 和 insertToolOutputIntoInput 已移除。
+// 计划不再弹出窗口，改为自动执行；工具输出插入功能已淘汰。
 
 void MainWindow::editSystemPrompt()
 {
@@ -709,7 +752,79 @@ void MainWindow::sendCurrentMessage()
         return;
     }
 
-    m_controller.sendMessage(content);
+    if (m_isAgentMode) {
+        m_controller.sendAgentLoopMessage(content);  // V12.6: 循环执行
+    } else if (m_chatAutoExecute) {
+        m_controller.sendMessageWithTools(content);  // V12.4: Chat + tools
+    } else {
+        m_controller.sendMessage(content);            // 原有：纯 Chat
+    }
+}
+
+void MainWindow::toggleAgentMode()
+{
+    m_isAgentMode = !m_isAgentMode;
+    updateSendButtonAppearance();
+
+    // V12.6: Agent 模式默认开启高权限 + 自动执行
+    if (m_isAgentMode) {
+        m_controller.setChatAutoExecute(true);
+        m_controller.setHighPermissionMode(true);
+        m_chatAutoExecute = true;
+        m_highPermissionMode = true;
+    }
+
+    // Agent 模式下输入框 placeholder 提示可执行循环任务
+    m_messageInput->setPlaceholderText(
+        m_isAgentMode
+            ? text(QStringLiteral("Type a task — AI will loop and auto-execute..."),
+                   QStringLiteral("...AI 自动判断并循环执行..."))
+            : text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
+}
+
+// V12.4: 切换 Chat 模式自动执行工具开关
+void MainWindow::toggleChatAutoExecute()
+{
+    m_chatAutoExecute = !m_chatAutoExecute;
+    m_controller.setChatAutoExecute(m_chatAutoExecute);
+    updateChatAutoExecuteAppearance();
+}
+
+// V12.4: 切换高权限模式开关
+void MainWindow::toggleHighPermission()
+{
+    m_highPermissionMode = m_highPermissionCheckbox->isChecked();
+    m_controller.setHighPermissionMode(m_highPermissionMode);
+}
+
+// V12.4: 更新自动执行按钮外观
+void MainWindow::updateChatAutoExecuteAppearance()
+{
+    if (m_chatAutoExecute) {
+        m_chatAutoExecuteButton->setText(QStringLiteral("⚡ ")
+            + text(QStringLiteral("Auto"), QStringLiteral("自动执行")));
+        m_chatAutoExecuteButton->setStyleSheet(QStringLiteral(
+            "QPushButton#chatAutoExecuteButton {"
+            "  background: #16a34a; border: 1px solid #15803d; color: #ffffff;"
+            "  font-weight: 600; font-size: 12px; border-radius: 6px;"
+            "}"
+            "QPushButton#chatAutoExecuteButton:hover {"
+            "  background: #15803d; border-color: #166534;"
+            "}"));
+    } else {
+        m_chatAutoExecuteButton->setText(QStringLiteral("⚡ ")
+            + text(QStringLiteral("Auto"), QStringLiteral("自动执行")));
+        m_chatAutoExecuteButton->setStyleSheet(QStringLiteral(
+            "QPushButton#chatAutoExecuteButton {"
+            "  background: transparent; border: 1px solid #6b7280; color: #6b7280;"
+            "  font-weight: 500; font-size: 12px; border-radius: 6px;"
+            "}"
+            "QPushButton#chatAutoExecuteButton:hover {"
+            "  background: #f3f4f6; border-color: #9ca3af; color: #374151;"
+            "}"));
+    }
+    m_chatAutoExecuteButton->style()->unpolish(m_chatAutoExecuteButton);
+    m_chatAutoExecuteButton->style()->polish(m_chatAutoExecuteButton);
 }
 
 void MainWindow::addUserMessage(const QString &content)
@@ -726,6 +841,9 @@ void MainWindow::addAssistantPlaceholder()
 void MainWindow::setGenerating(bool generating)
 {
     m_messageInput->setEnabled(!generating);
+    m_modeToggleButton->setEnabled(!generating);
+    m_chatAutoExecuteButton->setEnabled(!generating);   // V12.4
+    m_highPermissionCheckbox->setEnabled(!generating);   // V12.4
     m_newChatButton->setEnabled(!generating);
     m_renameChatButton->setEnabled(!generating);
     m_exportChatButton->setEnabled(!generating);

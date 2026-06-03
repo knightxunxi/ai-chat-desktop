@@ -18,6 +18,10 @@ QString languageName(AppLanguage language)
 
 namespace AgentLoopPromptBuilder {
 
+// V13.1: 此函数生成的提示词不直接包含记忆内容。三层记忆（L1/L2/L3）通过
+// ApplicationController::continueAgentLoop() 中注入到 loopSession.systemPrompt，
+// 与本 prompt 拼接后一起发送给 AI 模型。
+
 QString buildNextActionPrompt(
     const QString &userGoal,
     const QStringList &observations,

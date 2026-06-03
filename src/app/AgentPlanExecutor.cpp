@@ -18,8 +18,14 @@ ToolResult executeStep(const AgentPlanStep &step)
 
 ToolResult executeStep(const AgentPlanStep &step, const QString &workspaceDirectory)
 {
+    return executeStep(step, workspaceDirectory, QString());
+}
+
+ToolResult executeStep(const AgentPlanStep &step, const QString &workspaceDirectory, const QString &projectDirectory)
+{
     AgentToolExecutionContext context;
     context.workspaceDirectory = workspaceDirectory;
+    context.projectDirectory = projectDirectory;
 
     const ToolResult result = AgentToolRegistryFactory::defaultRegistry().execute(step.toolId, step.parameters, context);
     AppLogger::info(QStringLiteral("AgentPlan"),

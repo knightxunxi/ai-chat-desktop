@@ -31,6 +31,14 @@
 - Agent 连续执行 MVP：计划窗口可连续执行最多 5 个可直接执行步骤，并支持停止。
 - Agentic Loop 运行层：观察、执行、评估循环，支持步数上限、停止、失败暂停和重复动作检测。
 - 工具注册表和 Function Calling 兼容层：统一工具描述、参数 schema、执行入口和函数调用 schema。
+- 原生 Function Calling 第一版：Agent 请求可声明 tools，并将模型返回的 tool_calls 转换为计划预览。
+- 受控命令执行 MVP：通过白名单模板执行 Git 状态检查、diff 检查、构建、测试和项目文件列表。
+- 开发者命令技能：内置检查改动、提交前检查、构建并测试和定位测试失败等命令流程。
+- 项目级指令文件：Agent 请求会读取项目目录下的 `AGENT.md` 作为受限项目上下文。
+- 外部技能文件：Agent 请求会读取项目目录下的 `skills/*.skill.md` 并注入推荐技能流程。
+- 受控工作记忆：Agent 可读取 `AGENT_MEMORY.md`，并可在用户确认后追加项目记忆。
+- Chat/Agent 统一模式切换：AI 自动判断聊天还是任务执行，计划窗口自动弹出。
+- 6 个开发者工具生态：Git 变更审查、Git 提交记录、日志摘要、CSV 读写和项目文件搜索。
 - Windows Release 打包说明。
 
 ## 技术栈
@@ -105,6 +113,21 @@ Platform: Windows
 - [V8+ Agent 详细开发路线](docs/28-v8-plus-agent-development-roadmap.md)
 - [V8.1 验收记录](docs/29-v8-acceptance-notes.md)
 - [V8.2/V8.3 验收记录](docs/30-v8-2-v8-3-acceptance-notes.md)
+- [V9+ 后续开发规划](docs/31-v9-plus-development-roadmap.md)
+- [V9 命令执行安全设计](docs/32-v9-command-execution-security.md)
+- [V9 验收记录](docs/33-v9-command-execution-acceptance-notes.md)
+- [V9.1 验收记录](docs/34-v9-1-command-skills-acceptance-notes.md)
+- [V9.2 验收记录](docs/35-v9-2-function-calling-acceptance-notes.md)
+- [V10.1 验收记录](docs/36-v10-project-instructions-acceptance-notes.md)
+- [V10.2 验收记录](docs/37-v10-2-external-skills-acceptance-notes.md)
+- [V10.3 验收记录](docs/38-v10-3-project-memory-acceptance-notes.md)
+- [V11+ 后续开发规划](docs/39-v11-plus-development-roadmap.md)
+- [V11 工具生态设计](docs/40-v11-tool-ecosystem-design.md)
+- [V12 电脑感知设计](docs/41-v12-computer-awareness-design.md)
+- [V14 个人管家整合设计](docs/42-v14-assistant-integration-design.md)
+- [V11 验收记录](docs/43-v11-acceptance-notes.md)
+- [V12-V15 重新规划（对标分析后）](docs/44-v12-v15-roadmap.md)
+- [优化方向（含主流 Agent 对标）](docs/优化方向.md)
 - [学习资料入口](learn/README.md)
 
 ## 构建方式
@@ -190,7 +213,11 @@ ctest --test-dir build-qt --output-on-failure
 - Agent 默认工作目录配置和工作目录策略。
 - Agent 工作目录文件服务、`workspace.*` 工具执行、连续执行和提示词注入防护。
 - Agentic Loop 单步 action 解析、单步 prompt、循环控制器和工具注册表。
+- 受控命令执行策略、命令运行器、命令工具注册和命令执行边界。
+- 开发者命令技能目录和项目目录配置化。
 - 应用启动/关闭 smoke test。
+- V11 工具测试：Git 审查、日志摘要、CSV 读写、项目文件搜索。测试总数：46 个（100% 通过）。
+- V12 工具测试：窗口枚举、屏幕截图。
 
 ## Windows 打包
 
@@ -212,7 +239,7 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 
 ## 当前版本状态
 
-当前版本已完成 V8.3，覆盖本地工具系统、受控文件交互工具、Agent 结构化计划、计划预览、默认 Agent 工作目录、`workspace.*` 文件工具、Agentic Loop 运行层、工具注册表和 Function Calling 兼容层。
+当前版本已完成 V11 第一版，覆盖本地工具系统、受控文件交互工具、Agent 结构化计划、计划预览、默认 Agent 工作目录、`workspace.*` 文件工具、Agentic Loop 运行层、工具注册表、Function Calling schema、原生 tool_calls 计划转换、白名单命令执行、项目目录配置化、开发者命令技能目录、`AGENT.md` 项目级指令、外部技能文件、受控工作记忆、Chat/Agent 统一模式切换和 6 个开发者工具生态扩展（Git 审查、日志摘要、CSV 读写、项目文件搜索）。
 
 已知限制：
 
@@ -222,34 +249,15 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 - 本地工具系统仅支持内置工具，暂不支持插件、脚本或任意命令执行。
 - Agent 只允许在配置的工作目录内自动操作普通文件，不支持工作目录外自动读写。
 - 连续执行是 MVP，同步步骤会在当前步骤完成后响应停止。
-- Function Calling schema 已生成，但网络请求体尚未切换到原生 tools 调用。
+- 原生 Function Calling 已完成第一版，但真实接口稳定性和 tool result 回传重规划仍需后续验证。
+- 命令执行只支持固定白名单模板，不支持任意 PowerShell/CMD，也不支持 `git add`、`git commit`、`git push`。
+- 开发者命令技能已支持外部技能文件，但暂未支持 UI 一键触发或热重载提示。
+- 项目级指令只读取项目目录根部的 `AGENT.md`，暂不支持子目录指令或 UI 展示。
+- 工作记忆暂不支持 UI 管理、结构化检索、编辑或删除。
+- V11 统一模式暂不支持多轮对话上下文（独立会话发送）。
+- `UnifiedResponseParser` 缺独立单元测试；统一模式全链路无自动化测试。
+- OCR 工具（`system.ocr_text`）为占位实现，完整 OCR 需后续集成 Windows OCR API。
 
 ## 后续方向
 
-V7-V10 后续方向见 [Agent 与电脑交互后续规划](docs/22-agent-automation-roadmap.md)，推荐先做 AI 任务拆解，再进入受控命令执行、操作记录和设备输入模拟。
-
-V6 详细计划见 [V6 Roadmap](docs/19-v6-roadmap.md)，安全边界见 [V6 本地交互安全设计](docs/20-v6-local-interaction-security.md)，验收结果见 [V6 验收记录](docs/21-v6-acceptance-notes.md)。
-
-V5 详细计划见 [V5 Roadmap](docs/16-v5-roadmap.md)，验收记录见 [V5 验收记录](docs/18-v5-acceptance-notes.md)。
-
-V7 详细计划见 [V7 Roadmap](docs/19-v7-roadmap.md)，Agent 安全边界见 [V7 Agent 安全设计](docs/23-v7-agent-safety-design.md)，当前验收记录见 [V7 验收记录](docs/24-v7-acceptance-notes.md)，合并前手工检查见 [V7 手工验证脚本](docs/25-v7-manual-test-script.md)。V7 重点是 AI 生成结构化任务计划、工具建议、用户确认和单步受控执行。
-
-V8 详细计划见 [V8 Agent 工作目录规划](docs/26-v8-agent-workspace-roadmap.md)，重点是默认工作目录、自动文件生成、连续执行和文件内容提示词注入防护。当前验收记录见 [V8.1 验收记录](docs/29-v8-acceptance-notes.md) 和 [V8.2/V8.3 验收记录](docs/30-v8-2-v8-3-acceptance-notes.md)。
-
-下一阶段建议按 [V8+ Agent 详细开发路线](docs/28-v8-plus-agent-development-roadmap.md) 进入 V9 受控命令执行；UI 优化暂不纳入 Agent 主线。
-
-V8 及后续 Agent 演进见 [V8+ Agent 详细开发路线](docs/28-v8-plus-agent-development-roadmap.md)，该路线结合本地优化方向，按工作目录文件 Agent、Agentic Loop、工具注册表、受控命令执行、技能记忆和电脑感知逐步推进。
-
-V4 详细计划见 [V4 Roadmap](docs/13-v4-roadmap.md)，小工具扩展方案见 [小工具集成方案](docs/15-tool-integration-design.md)。
-
-V3 验收和复盘见 [V3 验收与复盘](docs/11-v3-acceptance-notes.md)。
-
-V3 详细计划见 [V3 Roadmap](docs/09-v3-roadmap.md)，发布说明见 [V3 Release Notes](docs/12-v3-release-notes.md)。
-
-候选方向：
-
-- Markdown 代码高亮增强。
-- 会话标签和 SQLite FTS 全文搜索。
-- AI 任务拆解和受控工具调用。
-- 受控命令执行。
-- 受控本地文件/系统交互工具。
+V11 已完成后，下一步建议进入 V12 电脑感知（窗口枚举、截图、OCR），详见 [V12 电脑感知设计](docs/41-v12-computer-awareness-design.md)。中长期方向见 [V11+ 后续开发规划](docs/39-v11-plus-development-roadmap.md)。

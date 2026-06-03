@@ -115,7 +115,7 @@ ctest --test-dir build-qt --output-on-failure
 
 - `AgentLoopController` 第一版仍是同步执行，长时间工具只能在步骤结束后检测超时。
 - 真实 AI 单步循环请求尚未替代现有计划生成入口。
-- Function Calling schema 已生成，但网络请求体尚未切换到原生 tools 调用。
+- Function Calling schema 已生成；原生 tools 请求和 tool_calls 计划转换已在 V9.2 第一版接入。
 - 命令执行仍未开放，需等 V9 白名单命令策略。
 
 ## 8. 后续建议

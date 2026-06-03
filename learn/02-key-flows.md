@@ -314,3 +314,210 @@ flowchart TD
 - 新增工具时主要改注册表。
 - Function Calling schema 可以从同一份定义生成。
 - 不支持直接执行的文件选择工具不会进入 Function Calling schema。
+
+## 15. 受控命令执行流程
+
+V9 开始，Agent 可以建议少量白名单命令工具。
+
+相关模块：
+
+- `AgentToolRegistry`
+- `AgentPlanExecutor`
+- `CommandPolicy`
+- `CommandRunner`
+- `AgentPlanDialog`
+
+流程如下：
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant D as AgentPlanDialog
+    participant E as AgentPlanExecutor
+    participant R as AgentToolRegistry
+    participant P as CommandPolicy
+    participant Q as CommandRunner
+
+    U->>D: 确认执行 command.* 步骤
+    D->>E: executeStep(step, workspace, project)
+    E->>R: execute(toolId, parameters, context)
+    R->>P: evaluateCommand(toolId, projectDirectory)
+    P->>R: 返回固定程序、参数和超时
+    R->>Q: run(command)
+    Q->>Q: QProcess 执行并等待
+    Q->>Q: 截断和脱敏 stdout/stderr
+    Q->>D: 返回成功摘要或失败摘要
+```
+
+关键点：
+
+- `command.*` 第一版不接受模型提供的任意参数。
+- `CommandPolicy` 只允许固定模板，例如 `git status --short --branch`。
+- 命令使用程序和参数数组执行，不通过 shell 字符串。
+- 工作目录必须是安全目录，不能是磁盘根目录、系统目录或用户主目录根部。
+- 命令输出可能包含不可信数据，日志只记录长度、退出码和超时状态。
+
+## 16. 开发者命令技能流程
+
+V9.1 开始，常见开发者命令组合被整理为技能目录。
+
+相关模块：
+
+- `AgentCommandSkillCatalog`
+- `AgentPlanPromptBuilder`
+- `AgentPlanParser`
+- `AgentToolRegistry`
+
+流程如下：
+
+```mermaid
+flowchart TD
+    SkillCatalog["AgentCommandSkillCatalog"] --> Prompt["AgentPlanPromptBuilder"]
+    Prompt --> Model["AI 模型"]
+    Model --> Plan["JSON 计划"]
+    Plan --> Parser["AgentPlanParser"]
+    Parser --> Dialog["AgentPlanDialog"]
+    Dialog --> Registry["AgentToolRegistry"]
+    Registry --> CommandPolicy["CommandPolicy"]
+```
+
+关键点：
+
+- 技能只是推荐流程，不直接绕过确认。
+- 技能会展开为普通 `command.*` 工具步骤。
+- 执行时仍经过工具注册表、命令策略和命令运行器。
+- 项目目录来自设置中的 Agent 项目目录，不再依赖应用启动目录。
+
+## 17. 原生 Function Calling 计划流程
+
+V9.2 开始，Agent 计划请求会优先携带 `AgentToolRegistry` 生成的 `tools` schema。
+
+相关模块：
+
+- `OpenAICompatibleClient`
+- `StreamParser`
+- `ToolCall`
+- `AgentToolCallPlanBuilder`
+- `ApplicationController`
+
+流程如下：
+
+```mermaid
+sequenceDiagram
+    participant C as ApplicationController
+    participant R as AgentToolRegistry
+    participant A as OpenAICompatibleClient
+    participant S as StreamParser
+    participant B as AgentToolCallPlanBuilder
+    participant D as AgentPlanDialog
+
+    C->>R: functionToolSchemas(language)
+    C->>A: sendChatWithTools(config, session, tools)
+    A->>S: consume(SSE data)
+    S->>A: text deltas / tool_calls
+    A->>C: toolCallsReceived(toolCalls)
+    C->>B: buildPlanFromToolCalls(toolCalls, registry)
+    B->>R: findByFunctionName(name)
+    B->>C: AgentPlan
+    C->>D: agentPlanReady(plan)
+```
+
+关键点：
+
+- `tools` 来自本地工具注册表，不由模型自由声明。
+- 函数名必须能映射回已注册工具 ID。
+- `arguments` 必须是 JSON object。
+- 没有返回 tool calls 时，仍走旧 JSON plan fallback。
+- 如果服务商不兼容 tools 字段，控制层会退回不带 tools 的 JSON plan 请求一次。
+
+## 18. 项目级指令流程
+
+V10.1 开始，Agent 计划请求会读取项目目录根部的 `AGENT.md`。
+
+相关模块：
+
+- `ProjectInstructionService`
+- `AgentPlanPromptBuilder`
+- `ApplicationController`
+
+流程如下：
+
+```mermaid
+flowchart TD
+    Config["AppConfig.agentProjectDirectory"] --> Loader["ProjectInstructionService"]
+    Loader --> AgentFile["AGENT.md"]
+    Loader --> Section["安全包装后的项目指令片段"]
+    Section --> Prompt["AgentPlanPromptBuilder"]
+    Prompt --> Model["AI 模型"]
+```
+
+关键点：
+
+- 缺少 `AGENT.md` 时静默跳过。
+- 文件内容最大读取 16 KB。
+- `AGENT.md` 是项目上下文，不是系统指令。
+- 文件不能扩大工具权限、绕过确认或覆盖本地安全策略。
+
+## 19. 外部技能文件流程
+
+V10.2 开始，Agent 计划请求会读取项目目录下的 `skills/*.skill.md`。
+
+相关模块：
+
+- `AgentCommandSkillFileService`
+- `AgentCommandSkillCatalog`
+- `AgentPlanPromptBuilder`
+- `ApplicationController`
+
+流程如下：
+
+```mermaid
+flowchart TD
+    Project["Agent 项目目录"] --> SkillsDir["skills/*.skill.md"]
+    SkillsDir --> Loader["AgentCommandSkillFileService"]
+    Loader --> Registry["AgentToolRegistry 校验工具 ID"]
+    Registry --> Skills["外部技能列表"]
+    BuiltIn["内置技能"] --> Merge["合并技能"]
+    Skills --> Merge
+    Merge --> Prompt["AgentPlanPromptBuilder"]
+```
+
+关键点：
+
+- 技能文件只描述步骤模板，不直接执行。
+- 外部技能重复 ID 不覆盖内置技能。
+- 工具 ID 必须存在于工具注册表，并允许计划窗口直接执行。
+- 命令工具仍受白名单策略限制。
+- 当前读取项目目录根部 `skills` 文件夹，不递归读取子目录。
+
+## 20. 受控工作记忆流程
+
+V10.3 开始，Agent 可以读取项目记忆，并在用户确认后追加记忆。
+
+相关模块：
+
+- `ProjectMemoryService`
+- `AgentToolRegistry`
+- `AgentPlanPromptBuilder`
+- `ApplicationController`
+
+流程如下：
+
+```mermaid
+flowchart TD
+    Project["Agent 项目目录"] --> MemoryFile["AGENT_MEMORY.md"]
+    MemoryFile --> Loader["ProjectMemoryService::loadFromProjectDirectory"]
+    Loader --> Section["受限记忆 Prompt 片段"]
+    Section --> Prompt["AgentPlanPromptBuilder"]
+    Tool["memory.append_project_note"] --> Confirm["计划窗口用户确认"]
+    Confirm --> Append["ProjectMemoryService::appendProjectNote"]
+    Append --> MemoryFile
+```
+
+关键点：
+
+- 不自动保存聊天全文。
+- 不自动保存模型输出。
+- 追加记忆必须走计划预览和用户确认。
+- 明显包含凭据或密钥的内容会被拒绝。
+- 记忆文件只作为项目上下文，不能覆盖安全规则。

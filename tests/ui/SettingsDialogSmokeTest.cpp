@@ -14,6 +14,7 @@ int main(int argc, char *argv[])
     config.apiKey = QStringLiteral("test-key");
     config.language = AppLanguage::Chinese;
     config.agentWorkspaceDirectory = QStringLiteral("D:/agent-workspace");
+    config.agentProjectDirectory = QStringLiteral("D:/agent-project");
 
     SettingsDialog dialog(config);
     const AppConfig readBack = dialog.config();
@@ -24,6 +25,7 @@ int main(int argc, char *argv[])
     assert(readBack.apiKey == config.apiKey);
     assert(readBack.language == AppLanguage::Chinese);
     assert(readBack.agentWorkspaceDirectory == config.agentWorkspaceDirectory);
+    assert(readBack.agentProjectDirectory == config.agentProjectDirectory);
 
     QComboBox *providerCombo = dialog.findChild<QComboBox *>(QStringLiteral("providerCombo"));
     assert(providerCombo != nullptr);
@@ -51,10 +53,12 @@ int main(int argc, char *argv[])
     QLineEdit *temperatureEdit = dialog.findChild<QLineEdit *>(QStringLiteral("temperatureEdit"));
     QLineEdit *maxTokensEdit = dialog.findChild<QLineEdit *>(QStringLiteral("maxTokensEdit"));
     QLineEdit *agentWorkspaceEdit = dialog.findChild<QLineEdit *>(QStringLiteral("agentWorkspaceEdit"));
+    QLineEdit *agentProjectEdit = dialog.findChild<QLineEdit *>(QStringLiteral("agentProjectEdit"));
 
     assert(temperatureEdit != nullptr);
     assert(maxTokensEdit != nullptr);
     assert(agentWorkspaceEdit != nullptr);
+    assert(agentProjectEdit != nullptr);
     assert(!dialog.config().temperature.has_value());
     assert(!dialog.config().maxTokens.has_value());
 
@@ -68,6 +72,7 @@ int main(int argc, char *argv[])
     assert(parameterConfig.maxTokens.has_value());
     assert(parameterConfig.maxTokens.value() == 2048);
     assert(parameterConfig.agentWorkspaceDirectory == config.agentWorkspaceDirectory);
+    assert(parameterConfig.agentProjectDirectory == config.agentProjectDirectory);
 
     return 0;
 }

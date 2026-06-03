@@ -31,7 +31,7 @@ int main()
     assert(AppLogger::initialize(&loggerError));
 
     const AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
-    assert(registry.definitions().size() >= 13);
+    assert(registry.definitions().size() >= 19);
     assert(registry.descriptors().size() == registry.definitions().size());
 
     QSet<QString> ids;
@@ -53,12 +53,17 @@ int main()
     assert(registry.findByFunctionName(QStringLiteral("json_format"))->descriptor.id == QStringLiteral("json.format"));
     assert(registry.canExecuteDirectly(QStringLiteral("json.format")));
     assert(registry.canExecuteDirectly(QStringLiteral("workspace.write_text")));
-    assert(!registry.canExecuteDirectly(QStringLiteral("file.read_text")));
+    assert(registry.canExecuteDirectly(QStringLiteral("file.read_text")));
+    assert(registry.canExecuteDirectly(QStringLiteral("command.git_status")));
+    assert(registry.canExecuteDirectly(QStringLiteral("command.list_project_files")));
+    assert(registry.canExecuteDirectly(QStringLiteral("memory.append_project_note")));
 
     const QJsonArray schemas = registry.functionToolSchemas(AppLanguage::English);
     assert(!schemas.isEmpty());
     bool foundWorkspaceWrite = false;
     bool foundFilePickerTool = false;
+    bool foundCommandTool = false;
+    bool foundMemoryTool = false;
     for (const QJsonValue &schemaValue : schemas) {
         assert(schemaValue.isObject());
         const QJsonObject schema = schemaValue.toObject();
@@ -77,12 +82,31 @@ int main()
         if (functionName == QStringLiteral("file_read_text")) {
             foundFilePickerTool = true;
         }
+        if (functionName == QStringLiteral("command_git_status")) {
+            foundCommandTool = true;
+            const QJsonObject parameters = function.value(QStringLiteral("parameters")).toObject();
+            assert(parameters.value(QStringLiteral("type")).toString() == QStringLiteral("object"));
+            assert(parameters.value(QStringLiteral("required")).toArray().isEmpty());
+        }
+        if (functionName == QStringLiteral("memory_append_project_note")) {
+            foundMemoryTool = true;
+            const QJsonObject parameters = function.value(QStringLiteral("parameters")).toObject();
+            assert(parameters.value(QStringLiteral("required")).toArray().contains(QStringLiteral("content")));
+        }
     }
     assert(foundWorkspaceWrite);
-    assert(!foundFilePickerTool);
+    assert(foundFilePickerTool);
+    assert(foundCommandTool);
+    assert(foundMemoryTool);
 
     AgentToolExecutionContext context;
     context.workspaceDirectory = temporaryDirectory.filePath(QStringLiteral("workspace"));
+    context.projectDirectory = temporaryDirectory.filePath(QStringLiteral("project"));
+    assert(QDir().mkpath(context.projectDirectory));
+    QFile projectFile(QDir(context.projectDirectory).filePath(QStringLiteral("README.md")));
+    assert(projectFile.open(QFile::WriteOnly | QFile::Text));
+    assert(projectFile.write("hello") == 5);
+    projectFile.close();
 
     QJsonObject textParameters;
     textParameters.insert(QStringLiteral("input"), QStringLiteral(" A \n\n\n B "));
@@ -97,9 +121,27 @@ int main()
     assert(result.ok);
     assert(readFile(QDir(context.workspaceDirectory).filePath(QStringLiteral("notes/hello.txt"))) == QStringLiteral("hello"));
 
+    result = registry.execute(QStringLiteral("command.list_project_files"), QJsonObject(), context);
+    assert(result.ok);
+    assert(result.output.contains(QStringLiteral("command.list_project_files")));
+    assert(result.output.contains(QStringLiteral("[FILE] README.md")));
+
+    QJsonObject memoryParameters;
+    memoryParameters.insert(QStringLiteral("content"), QStringLiteral("Prefer ctest before commit."));
+    result = registry.execute(QStringLiteral("memory.append_project_note"), memoryParameters, context);
+    assert(result.ok);
+    assert(result.output.contains(QStringLiteral("AGENT_MEMORY.md")));
+    assert(readFile(QDir(context.projectDirectory).filePath(QStringLiteral("AGENT_MEMORY.md"))).contains(QStringLiteral("Prefer ctest before commit.")));
+
+    QJsonObject unexpectedCommandParameters;
+    unexpectedCommandParameters.insert(QStringLiteral("args"), QStringLiteral("status"));
+    result = registry.execute(QStringLiteral("command.git_status"), unexpectedCommandParameters, context);
+    assert(!result.ok);
+    assert(result.error.contains(QStringLiteral("parameters"), Qt::CaseInsensitive));
+
     result = registry.execute(QStringLiteral("file.read_text"), QJsonObject(), context);
     assert(!result.ok);
-    assert(result.error.contains(QStringLiteral("file picker"), Qt::CaseInsensitive));
+    assert(result.error.contains(QStringLiteral("path"), Qt::CaseInsensitive));
 
     result = registry.execute(QStringLiteral("missing.tool"), QJsonObject(), context);
     assert(!result.ok);

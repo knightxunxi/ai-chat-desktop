@@ -39,6 +39,17 @@ AgentPlanStep makeWorkspaceStep(const QString &toolId, const QString &path, cons
     return step;
 }
 
+AgentPlanStep makeCommandStep(const QString &toolId)
+{
+    AgentPlanStep step;
+    step.id = QStringLiteral("command-step");
+    step.title = QStringLiteral("Run command");
+    step.toolId = toolId;
+    step.reason = QStringLiteral("Test command execution.");
+    step.risk = AgentToolRisk::Low;
+    return step;
+}
+
 QString readFile(const QString &path)
 {
     QFile file(path);
@@ -75,10 +86,10 @@ int main()
     assert(result.error.contains(QStringLiteral("input")));
 
     step = makeStep(QStringLiteral("file.read_text"), QStringLiteral("ignored"));
-    assert(!AgentPlanExecutor::canExecuteDirectly(step));
+    assert(AgentPlanExecutor::canExecuteDirectly(step));
     result = AgentPlanExecutor::executeStep(step);
     assert(!result.ok);
-    assert(result.error.contains(QStringLiteral("file picker"), Qt::CaseInsensitive));
+    assert(result.error.contains(QStringLiteral("path"), Qt::CaseInsensitive));
 
     const QString workspace = temporaryDirectory.filePath(QStringLiteral("workspace"));
     step = makeWorkspaceStep(QStringLiteral("workspace.write_text"), QStringLiteral("notes/hello.txt"), QStringLiteral("hello"));
@@ -121,6 +132,23 @@ int main()
     result = AgentPlanExecutor::executeStep(step, workspace);
     assert(!result.ok);
     assert(result.error.contains(QStringLiteral("path")));
+
+    const QString projectDirectory = temporaryDirectory.filePath(QStringLiteral("project"));
+    assert(QDir().mkpath(projectDirectory));
+    QFile readme(QDir(projectDirectory).filePath(QStringLiteral("README.md")));
+    assert(readme.open(QFile::WriteOnly | QFile::Text));
+    assert(readme.write("project") == 7);
+    readme.close();
+
+    step = makeCommandStep(QStringLiteral("command.list_project_files"));
+    assert(AgentPlanExecutor::canExecuteDirectly(step));
+    result = AgentPlanExecutor::executeStep(step, workspace, projectDirectory);
+    assert(result.ok);
+    assert(result.output.contains(QStringLiteral("[FILE] README.md")));
+
+    result = AgentPlanExecutor::executeStep(step, workspace);
+    assert(!result.ok);
+    assert(result.error.contains(QStringLiteral("working directory"), Qt::CaseInsensitive));
 
     return 0;
 }

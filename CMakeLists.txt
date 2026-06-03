@@ -22,6 +22,12 @@ qt_add_executable(AIChatDesktop
     src/main.cpp
     src/app/AgentPlan.h
     src/app/AgentPlan.cpp
+    src/app/AgentCommandSkillCatalog.h
+    src/app/AgentCommandSkillCatalog.cpp
+    src/app/AgentCommandSkillFileService.h
+    src/app/AgentCommandSkillFileService.cpp
+    src/app/AgentToolCallPlanBuilder.h
+    src/app/AgentToolCallPlanBuilder.cpp
     src/app/AgentLoopActionParser.h
     src/app/AgentLoopActionParser.cpp
     src/app/AgentLoopController.h
@@ -34,8 +40,16 @@ qt_add_executable(AIChatDesktop
     src/app/AgentPlanParser.cpp
     src/app/AgentPlanPromptBuilder.h
     src/app/AgentPlanPromptBuilder.cpp
+    src/app/TokenEstimator.h
+    src/app/TokenEstimator.cpp
+    src/app/SummaryAPIClient.h
+    src/app/SummaryAPIClient.cpp
+    src/app/ContextWindowManager.h
+    src/app/ContextWindowManager.cpp
     src/app/ApplicationController.h
     src/app/ApplicationController.cpp
+    src/app/ProjectInstructionService.h
+    src/app/ProjectInstructionService.cpp
     src/app/SessionSummaryList.h
     src/app/SessionSummaryList.cpp
     src/core/AppConfig.h
@@ -53,6 +67,7 @@ qt_add_executable(AIChatDesktop
     src/services/RequestErrorCategory.h
     src/services/StreamParser.h
     src/services/StreamParser.cpp
+    src/services/ToolCall.h
     src/support/AppLogger.h
     src/support/AppLogger.cpp
     src/support/LogFileReader.h
@@ -61,6 +76,10 @@ qt_add_executable(AIChatDesktop
     src/tools/AgentToolCatalog.cpp
     src/tools/AgentToolRegistry.h
     src/tools/AgentToolRegistry.cpp
+    src/tools/CommandPolicy.h
+    src/tools/CommandPolicy.cpp
+    src/tools/CommandRunner.h
+    src/tools/CommandRunner.cpp
     src/tools/FileInteractionService.h
     src/tools/FileInteractionService.cpp
     src/tools/JsonCompactTool.h
@@ -68,11 +87,42 @@ qt_add_executable(AIChatDesktop
     src/tools/JsonTools.cpp
     src/tools/LocalTool.h
     src/tools/MarkdownCleanupTool.h
+    src/tools/ProjectMemoryService.h
+    src/tools/ProjectMemoryService.cpp
+    src/memory/MemoryEntry.h
+    src/memory/DailyMemoryWriter.h
+    src/memory/DailyMemoryWriter.cpp
+    src/memory/ProjectMemoryManager.h
+    src/memory/ProjectMemoryManager.cpp
     src/tools/TextCleanupTool.h
     src/tools/TextTools.cpp
     src/tools/ToolResult.h
     src/tools/WorkspaceFileService.h
     src/tools/WorkspaceFileService.cpp
+    src/tools/GitReviewService.h
+    src/tools/GitReviewService.cpp
+    src/tools/LogSummaryService.h
+    src/tools/LogSummaryService.cpp
+    src/tools/CsvDataService.h
+    src/tools/CsvDataService.cpp
+    src/tools/ProjectFindService.h
+    src/tools/ProjectFindService.cpp
+    src/tools/WindowDetector.h
+    src/tools/WindowDetector.cpp
+    src/tools/ScreenCaptureService.h
+    src/tools/ScreenCaptureService.cpp
+    src/tools/SystemInfoService.h
+    src/tools/SystemInfoService.cpp
+    src/tools/OcrService.h
+    src/tools/OcrService.cpp
+    src/tools/UiAutomationService.h
+    src/tools/UiAutomationService.cpp
+    src/tools/InputSimulator.h
+    src/tools/InputSimulator.cpp
+    src/tools/ForegroundValidator.h
+    src/tools/ForegroundValidator.cpp
+    src/tools/AssistantService.h
+    src/tools/AssistantService.cpp
     src/tools/WorkspacePolicy.h
     src/tools/WorkspacePolicy.cpp
     src/storage/CredentialStorage.h
@@ -88,8 +138,6 @@ qt_add_executable(AIChatDesktop
     src/storage/PromptTemplateStorage.cpp
     src/ui/ChatView.h
     src/ui/ChatView.cpp
-    src/ui/AgentPlanDialog.h
-    src/ui/AgentPlanDialog.cpp
     src/ui/FileToolsDialog.h
     src/ui/FileToolsDialog.cpp
     src/ui/LogViewerDialog.h
@@ -124,12 +172,17 @@ if(WIN32)
     target_link_libraries(AIChatDesktop PRIVATE Advapi32)
 endif()
 
+if(MINGW)
+    # MinGW + Qt6 EntryPoint: WIN32_EXECUTABLE 会导致 __imp___argc 链接错误
+    # 使用 -mwindows 手动抑制控制台窗口
+    target_link_options(AIChatDesktop PRIVATE -mwindows)
+    set_target_properties(AIChatDesktop PROPERTIES WIN32_EXECUTABLE FALSE)
+else()
+    set_target_properties(AIChatDesktop PROPERTIES WIN32_EXECUTABLE TRUE)
+endif()
+
 target_include_directories(AIChatDesktop PRIVATE
     src
-)
-
-set_target_properties(AIChatDesktop PROPERTIES
-    WIN32_EXECUTABLE TRUE
 )
 
 include(CTest)

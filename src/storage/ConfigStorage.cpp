@@ -16,6 +16,7 @@ constexpr auto TemperatureKey = "api/temperature";
 constexpr auto MaxTokensKey = "api/maxTokens";
 constexpr auto LanguageKey = "ui/language";
 constexpr auto AgentWorkspaceDirectoryKey = "agent/workspaceDirectory";
+constexpr auto AgentProjectDirectoryKey = "agent/projectDirectory";
 constexpr auto DefaultOrganizationName = "AIChatDesktop";
 constexpr auto DefaultApplicationName = "AIChatDesktop";
 
@@ -68,6 +69,10 @@ AppConfig ConfigStorage::load() const
     if (config.agentWorkspaceDirectory.trimmed().isEmpty()) {
         config.agentWorkspaceDirectory = defaults.agentWorkspaceDirectory;
     }
+    config.agentProjectDirectory = settings.value(AgentProjectDirectoryKey, defaults.agentProjectDirectory).toString();
+    if (config.agentProjectDirectory.trimmed().isEmpty()) {
+        config.agentProjectDirectory = defaults.agentProjectDirectory;
+    }
 
     const QString legacyApiKey = settings.value(ApiKeyKey).toString();
     if (config.apiKey.trimmed().isEmpty() && !legacyApiKey.trimmed().isEmpty()) {
@@ -109,6 +114,10 @@ bool ConfigStorage::save(const AppConfig &config, QString *error) const
                       config.agentWorkspaceDirectory.trimmed().isEmpty()
                           ? AppConfig::defaultAgentWorkspaceDirectory()
                           : config.agentWorkspaceDirectory.trimmed());
+    settings.setValue(AgentProjectDirectoryKey,
+                      config.agentProjectDirectory.trimmed().isEmpty()
+                          ? AppConfig::defaultAgentProjectDirectory()
+                          : config.agentProjectDirectory.trimmed());
     settings.sync();
 
     if (settings.status() != QSettings::NoError) {

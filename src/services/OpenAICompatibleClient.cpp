@@ -61,6 +61,11 @@ OpenAICompatibleClient::OpenAICompatibleClient(QObject *parent)
 
 void OpenAICompatibleClient::sendChat(const AppConfig &config, const ChatSession &session)
 {
+    sendChatWithTools(config, session, QJsonArray());
+}
+
+void OpenAICompatibleClient::sendChatWithTools(const AppConfig &config, const ChatSession &session, const QJsonArray &tools)
+{
     cancel();
 
     m_streamParser.reset();
@@ -76,7 +81,7 @@ void OpenAICompatibleClient::sendChat(const AppConfig &config, const ChatSession
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(config.apiKey).toUtf8());
 
-    m_currentReply = m_networkManager.post(request, buildRequestBody(config, session));
+    m_currentReply = m_networkManager.post(request, buildRequestBody(config, session, tools));
 
     connect(m_currentReply, &QNetworkReply::readyRead, this, &OpenAICompatibleClient::handleReadyRead);
     connect(m_currentReply, &QNetworkReply::finished, this, &OpenAICompatibleClient::handleFinished);
@@ -132,7 +137,7 @@ QUrl OpenAICompatibleClient::chatCompletionsUrl(const QString &baseUrl) const
     return QUrl(normalized);
 }
 
-QByteArray OpenAICompatibleClient::buildRequestBody(const AppConfig &config, const ChatSession &session)
+QByteArray OpenAICompatibleClient::buildRequestBody(const AppConfig &config, const ChatSession &session, const QJsonArray &tools)
 {
     QJsonArray messages;
 
@@ -167,6 +172,10 @@ QByteArray OpenAICompatibleClient::buildRequestBody(const AppConfig &config, con
     }
     if (config.maxTokens.has_value()) {
         body.insert(QStringLiteral("max_tokens"), config.maxTokens.value());
+    }
+    if (!tools.isEmpty()) {
+        body.insert(QStringLiteral("tools"), tools);
+        body.insert(QStringLiteral("tool_choice"), QStringLiteral("auto"));
     }
 
     return QJsonDocument(body).toJson(QJsonDocument::Compact);
@@ -207,6 +216,15 @@ void OpenAICompatibleClient::handleReadyRead()
     const StreamParseResult result = m_streamParser.consume(data);
     for (const QString &delta : result.textDeltas) {
         emit textDeltaReceived(delta);
+    }
+    if (!result.toolCalls.isEmpty()) {
+        emit toolCallsReceived(result.toolCalls);
+    }
+    // V12.3: 流式工具调用参数完整时立即通知上层
+    for (const auto &event : result.blockEvents) {
+        if (event.type == ContentBlockEventType::ToolUseComplete) {
+            emit toolUseBlockComplete(event.toolName, event.arguments);
+        }
     }
 
     if (result.done) {
@@ -249,6 +267,15 @@ void OpenAICompatibleClient::handleFinished()
             for (const QString &delta : result.textDeltas) {
                 emit textDeltaReceived(delta);
             }
+            if (!result.toolCalls.isEmpty()) {
+                emit toolCallsReceived(result.toolCalls);
+            }
+            // V12.3: blockEvents from remaining body
+            for (const auto &event : result.blockEvents) {
+                if (event.type == ContentBlockEventType::ToolUseComplete) {
+                    emit toolUseBlockComplete(event.toolName, event.arguments);
+                }
+            }
             if (result.done) {
                 m_doneReceived = true;
             }
@@ -257,6 +284,15 @@ void OpenAICompatibleClient::handleFinished()
         const StreamParseResult finalResult = m_streamParser.finish();
         for (const QString &delta : finalResult.textDeltas) {
             emit textDeltaReceived(delta);
+        }
+        if (!finalResult.toolCalls.isEmpty()) {
+            emit toolCallsReceived(finalResult.toolCalls);
+        }
+        // V12.3: blockEvents from finish result
+        for (const auto &event : finalResult.blockEvents) {
+            if (event.type == ContentBlockEventType::ToolUseComplete) {
+                emit toolUseBlockComplete(event.toolName, event.arguments);
+            }
         }
         if (finalResult.done) {
             m_doneReceived = true;
