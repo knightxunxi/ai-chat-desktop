@@ -1706,6 +1706,13 @@ void ApplicationController::removeScheduledTask(const QString &taskId)
         m_taskStorage->save(m_taskScheduler->allTasks());
 }
 
+void ApplicationController::updateScheduledTask(const ScheduledTask &task)
+{
+    m_taskScheduler->updateTask(task);
+    if (m_taskStorage)
+        m_taskStorage->save(m_taskScheduler->allTasks());
+}
+
 QVector<ScheduledTask> ApplicationController::scheduledTasks() const
 {
     return m_taskScheduler ? m_taskScheduler->allTasks() : QVector<ScheduledTask>();

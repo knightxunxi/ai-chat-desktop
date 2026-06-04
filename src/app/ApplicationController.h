@@ -116,6 +116,7 @@ public slots:
     // V15.1: 定时任务调度
     void addScheduledTask(const QString &name, const QString &cron, const QString &prompt);
     void removeScheduledTask(const QString &taskId);
+    void updateScheduledTask(const ScheduledTask &task);
     QVector<ScheduledTask> scheduledTasks() const;
 
 signals:

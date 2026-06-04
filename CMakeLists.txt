@@ -176,8 +176,6 @@ qt_add_executable(AIChatDesktop
     src/ui/SettingsDialog.cpp
     src/ui/ToolsDialog.h
     src/ui/ToolsDialog.cpp
-    src/ui/ScheduledTaskDialog.h
-    src/ui/ScheduledTaskDialog.cpp
 )
 
 qt_add_resources(AIChatDesktop "app_resources"
