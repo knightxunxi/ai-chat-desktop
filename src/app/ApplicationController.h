@@ -17,6 +17,21 @@
 #include <QObject>
 #include <QVector>
 
+#include <memory>
+
+// Forward declarations for V13.3
+class HookManager;
+class SkillManager;
+struct SkillDefinition;
+
+// V15.4: MCP 注册表前向声明
+class McpRegistry;
+
+// V15.1 调度器
+#include "scheduler/ScheduledTask.h"
+class TaskScheduler;
+class TaskStorage;
+
 // V12.3 流式工具执行 — 待处理的结果缓存
 struct PendingToolResult {
     QString toolName;
@@ -33,6 +48,7 @@ class ApplicationController : public QObject
 
 public:
     explicit ApplicationController(QObject *parent = nullptr);
+    ~ApplicationController() override;
 
     // 功能：加载配置、提示词模板和聊天历史；使用模块：MainWindow 构造时调用。
     void initialize();
@@ -97,6 +113,11 @@ public slots:
     // V12.4: 设置高权限模式（允许执行需确认的工具）；使用模块：MainWindow 高权限复选框。
     void setHighPermissionMode(bool enabled);
 
+    // V15.1: 定时任务调度
+    void addScheduledTask(const QString &name, const QString &cron, const QString &prompt);
+    void removeScheduledTask(const QString &taskId);
+    QVector<ScheduledTask> scheduledTasks() const;
+
 signals:
     void configChanged();          // 功能：配置变化通知；使用模块：MainWindow 刷新模型和语言。
     void promptTemplatesChanged(); // 功能：模板变化通知；使用模块：MainWindow 刷新角色显示文案。
@@ -110,6 +131,8 @@ signals:
     void generatingChanged(bool generating);             // 功能：生成状态变化；使用模块：MainWindow 切换发送/停止按钮。
     // V12.6: Agent 循环迭代更新。参数: 当前轮次, 总轮次上限。
     void agentLoopIterationUpdated(int iteration, int maxIterations);
+    // V13.3: Agent 循环完成后发送技能摘要；使用模块：MainWindow/ChatView 显示技能使用情况。
+    void agentLoopSkillSummary(const QString &summary);
     void retryAvailableChanged(bool available);          // 功能：重试可用状态变化；使用模块：MainWindow 显示或隐藏重试按钮。
     void configurationMissing();                         // 功能：缺少必要配置；使用模块：MainWindow 弹出设置提示。
     void statusMessage(const QString &english, const QString &chinese, int timeoutMs); // 功能：状态栏消息；使用模块：MainWindow。
@@ -201,6 +224,20 @@ private:
     QStringList m_agentLoopObservations;
     int m_agentLoopIteration = 0;
     static constexpr int kMaxAgentLoopIterations = 50;
+
+    // V13.3: Skills + Hooks 系统
+    std::unique_ptr<SkillManager> m_skillManager;
+    std::unique_ptr<HookManager> m_hookManager;
+    QVector<SkillDefinition> m_matchedSkills;
+
+    // V15.4: MCP 注册表
+    std::unique_ptr<McpRegistry> m_mcpRegistry;
+
+    // V15.1: 调度器
+    std::unique_ptr<TaskScheduler> m_taskScheduler;
+    TaskStorage *m_taskStorage = nullptr;
+    // V15.2: 任务触发后持久化状态
+    void onScheduledTaskTriggered(const ScheduledTask &task);
 
     // V12.6: 执行一次循环迭代（被 handleRequestFinished 调用）
     void executeAgentLoopIteration();

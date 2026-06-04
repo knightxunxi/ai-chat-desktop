@@ -10,6 +10,15 @@
 #include "app/ProjectInstructionService.h"
 #include "app/SessionSummaryList.h"
 #include "app/TokenEstimator.h"
+#include "hooks/BuiltinHooks.h"
+#include "hooks/HookDefinition.h"
+#include "hooks/HookManager.h"
+#include "mcp/McpRegistry.h"
+#include "scheduler/ScheduledTask.h"
+#include "scheduler/TaskScheduler.h"
+#include "scheduler/TaskStorage.h"
+#include "skills/SkillDefinition.h"
+#include "skills/SkillManager.h"
 
 #include "storage/ChatSessionExporter.h"
 #include "support/AppLogger.h"
@@ -19,6 +28,7 @@
 #include "memory/ProjectMemoryManager.h"
 
 #include <QDateTime>
+#include <QDir>
 #include <QStringList>
 
 namespace {
@@ -71,6 +81,13 @@ ApplicationController::ApplicationController(QObject *parent)
     connect(&m_aiClient, &OpenAICompatibleClient::toolUseBlockComplete, this, &ApplicationController::handleToolUseBlockComplete);
     connect(&m_aiClient, &OpenAICompatibleClient::requestFinished, this, &ApplicationController::handleRequestFinished);
     connect(&m_aiClient, &OpenAICompatibleClient::requestFailed, this, &ApplicationController::handleRequestFailed);
+}
+
+ApplicationController::~ApplicationController()
+{
+    if (m_taskStorage && m_taskScheduler) {
+        m_taskStorage->save(m_taskScheduler->allTasks());
+    }
 }
 
 void ApplicationController::initialize()
@@ -126,6 +143,52 @@ void ApplicationController::initialize()
     m_summaryClient.reconfigure(m_config);
     m_contextWindowManager = ContextWindowManager(getContextWindowTokens());
     m_contextWindowManager.setSummaryClient(&m_summaryClient);
+
+    // V13.3: Skills + Hooks 系统初始化
+    m_hookManager = std::make_unique<HookManager>();
+
+    // 注册内置 Hook
+    m_hookManager->registerHook(new TimestampHook());
+    m_hookManager->registerHook(new RateLimitHook());
+    m_hookManager->registerHook(new SensitiveFilterHook());
+
+    m_skillManager = std::make_unique<SkillManager>();
+
+    // 设置双目录（如果配置了项目目录）
+    const QString userSkillsDir = QDir::homePath() + QStringLiteral("/.codex/skills");
+    QString projectSkillsDir;
+    if (!m_config.agentProjectDirectory.isEmpty()) {
+        projectSkillsDir = QDir::cleanPath(m_config.agentProjectDirectory + QStringLiteral("/.workbuddy/skills"));
+    }
+    m_skillManager->initialize(userSkillsDir, projectSkillsDir);
+
+    // V15.1: 初始化调度器
+    m_taskScheduler = std::make_unique<TaskScheduler>(this);
+    const QString taskFilePath = QDir::cleanPath(
+        m_config.agentProjectDirectory + QStringLiteral("/.workbuddy/scheduled_tasks.json"));
+    m_taskStorage = new TaskStorage(taskFilePath);
+
+    // 加载持久化任务
+    auto tasks = m_taskStorage->load();
+    for (auto &t : tasks)
+        m_taskScheduler->addTask(t);
+
+    // 连接触发信号
+    connect(m_taskScheduler.get(), &TaskScheduler::taskTriggered,
+            this, &ApplicationController::onScheduledTaskTriggered);
+
+    m_taskScheduler->start();
+
+    // V15.4: 初始化 MCP 注册表
+    m_mcpRegistry = std::make_unique<McpRegistry>(this);
+
+    if (!m_config.agentProjectDirectory.isEmpty()) {
+        const QString mcpConfigPath = QDir::cleanPath(
+            m_config.agentProjectDirectory + QStringLiteral("/.workbuddy/mcp_servers.json"));
+        m_mcpRegistry->loadConfig(mcpConfigPath);
+    }
+
+    m_mcpRegistry->connectAll();
 }
 
 const AppConfig &ApplicationController::config() const
@@ -691,6 +754,11 @@ void ApplicationController::sendAgentLoopMessage(const QString &content)
     m_agentLoopIteration = 0;
     m_agentLoopObservations.clear();
 
+    // V13.3: 匹配技能
+    if (m_skillManager) {
+        m_matchedSkills = m_skillManager->matchSkills(trimmedContent);
+    }
+
     // 第一轮复用 sendUnifiedMessage 的逻辑
     sendUnifiedMessage(content);
 }
@@ -774,6 +842,12 @@ void ApplicationController::executeAgentLoopIteration()
 
     if (m_agentLoopIteration >= kMaxAgentLoopIterations) {
         m_isAgentLoopActive = false;
+        // V13.3: 发送技能摘要
+        if (m_skillManager && !m_matchedSkills.isEmpty()) {
+            const QString summary = m_skillManager->skillSummary(m_matchedSkills);
+            emit agentLoopSkillSummary(summary);
+            emit statusMessage(summary, summary, 5000);
+        }
         emit statusMessage(
             QStringLiteral("Agent loop reached max iterations (%1)").arg(kMaxAgentLoopIterations),
             QStringLiteral("Agent 循环已达最大轮次 (%1)").arg(kMaxAgentLoopIterations),
@@ -1241,6 +1315,12 @@ void ApplicationController::handleRequestFinished()
             // V12.6: Chat 响应 = AI 判断任务完成
             if (m_isAgentLoopActive) {
                 m_isAgentLoopActive = false;
+                // V13.3: 发送技能摘要
+                if (m_skillManager && !m_matchedSkills.isEmpty()) {
+                    const QString summary = m_skillManager->skillSummary(m_matchedSkills);
+                    emit agentLoopSkillSummary(summary);
+                    emit statusMessage(summary, summary, 5000);
+                }
                 m_currentAssistantContent = response.chatMessage + streamingResultsSummary
                     + QStringLiteral("\n\n---\n")
                     + text("Task completed.", "任务完成。");
@@ -1607,4 +1687,35 @@ bool ApplicationController::hasPersistableCurrentSession() const
 QString ApplicationController::text(const QString &english, const QString &chinese) const
 {
     return m_config.language == AppLanguage::English ? english : chinese;
+}
+
+// V15.1: 定时任务调度
+
+void ApplicationController::addScheduledTask(const QString &name, const QString &cron, const QString &prompt)
+{
+    auto task = ScheduledTask::create(name, cron, prompt);
+    m_taskScheduler->addTask(task);
+    if (m_taskStorage)
+        m_taskStorage->save(m_taskScheduler->allTasks());
+}
+
+void ApplicationController::removeScheduledTask(const QString &taskId)
+{
+    m_taskScheduler->removeTask(taskId);
+    if (m_taskStorage)
+        m_taskStorage->save(m_taskScheduler->allTasks());
+}
+
+QVector<ScheduledTask> ApplicationController::scheduledTasks() const
+{
+    return m_taskScheduler ? m_taskScheduler->allTasks() : QVector<ScheduledTask>();
+}
+
+// V15.2: 任务触发后持久化更新后的状态（lastRun, nextRun）
+void ApplicationController::onScheduledTaskTriggered(const ScheduledTask &task)
+{
+    AppLogger::info("Scheduler", "Task triggered: " + task.name);
+    sendAgentLoopMessage(task.agentPrompt);
+    if (m_taskStorage)
+        m_taskStorage->save(m_taskScheduler->allTasks());
 }
