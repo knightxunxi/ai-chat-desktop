@@ -14,6 +14,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets
     Network
     Sql
+    Test
 )
 
 qt_standard_project_setup()
@@ -72,6 +73,18 @@ qt_add_executable(AIChatDesktop
     src/support/AppLogger.cpp
     src/support/LogFileReader.h
     src/support/LogFileReader.cpp
+    src/skills/SkillDefinition.h
+    src/skills/SkillFileParser.h
+    src/skills/SkillFileParser.cpp
+    src/skills/SkillManager.h
+    src/skills/SkillManager.cpp
+    src/hooks/HookDefinition.h
+    src/hooks/HookManager.h
+    src/hooks/HookManager.cpp
+    src/hooks/BuiltinHooks.h
+    src/hooks/BuiltinHooks.cpp
+    src/hooks/ScriptHookRunner.h
+    src/hooks/ScriptHookRunner.cpp
     src/tools/AgentToolCatalog.h
     src/tools/AgentToolCatalog.cpp
     src/tools/AgentToolRegistry.h
@@ -125,6 +138,15 @@ qt_add_executable(AIChatDesktop
     src/tools/AssistantService.cpp
     src/tools/WorkspacePolicy.h
     src/tools/WorkspacePolicy.cpp
+    src/scheduler/ScheduledTask.h
+    src/scheduler/TaskScheduler.h
+    src/scheduler/TaskScheduler.cpp
+    src/scheduler/TaskStorage.h
+    src/scheduler/TaskStorage.cpp
+    src/mcp/McpConnector.h
+    src/mcp/McpConnector.cpp
+    src/mcp/McpRegistry.h
+    src/mcp/McpRegistry.cpp
     src/storage/CredentialStorage.h
     src/storage/WindowsCredentialStorage.h
     src/storage/WindowsCredentialStorage.cpp
@@ -148,10 +170,14 @@ qt_add_executable(AIChatDesktop
     src/ui/MessageWidget.cpp
     src/ui/RolePromptDialog.h
     src/ui/RolePromptDialog.cpp
+    src/ui/ScheduledTaskDialog.h
+    src/ui/ScheduledTaskDialog.cpp
     src/ui/SettingsDialog.h
     src/ui/SettingsDialog.cpp
     src/ui/ToolsDialog.h
     src/ui/ToolsDialog.cpp
+    src/ui/ScheduledTaskDialog.h
+    src/ui/ScheduledTaskDialog.cpp
 )
 
 qt_add_resources(AIChatDesktop "app_resources"

@@ -68,6 +68,8 @@ private:
     void openToolsDialog();
     // 功能：打开文件工具窗口；使用模块：文件工具按钮。
     void openFileToolsDialog();
+    // V15.3: 打开调度任务管理窗口；使用模块：调度任务按钮。
+    void openScheduledTaskDialog();
     // 功能：根据当前输入生成 Agent 计划；使用模块：已隐藏的 Agent 计划按钮（内部 API 保留）。
     void generateAgentPlan();
     // V12.5: openAgentPlanDialog 和 insertToolOutputIntoInput 已移除，计划改为自动执行。
@@ -131,6 +133,8 @@ private:
     QPushButton *m_fileToolsButton = nullptr; // 功能：文件工具入口；使用模块：顶部工具区。
     QPushButton *m_agentPlanButton = nullptr; // 功能：Agent 计划入口；使用模块：顶部工具区。
     QPushButton *m_logButton = nullptr;      // 功能：日志窗口入口；使用模块：顶部工具区。
+    QPushButton *m_schedulerButton = nullptr; // 功能：调度任务入口；使用模块：顶部工具区。
+    QPushButton *m_scheduledTaskButton = nullptr; // V15.3: 调度任务入口；使用模块：顶部工具区。
     ChatView *m_chatView = nullptr;          // 功能：聊天消息列表视图；使用模块：主内容区。
     QTextEdit *m_messageInput = nullptr;     // 功能：用户输入框；使用模块：底部输入区。
     QPushButton *m_retryButton = nullptr;    // 功能：失败重试按钮；使用模块：底部输入区。

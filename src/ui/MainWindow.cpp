@@ -5,6 +5,7 @@
 #include "ui/FileToolsDialog.h"
 #include "ui/LogViewerDialog.h"
 #include "ui/RolePromptDialog.h"
+#include "ui/ScheduledTaskDialog.h"
 #include "ui/SettingsDialog.h"
 #include "ui/ToolsDialog.h"
 
@@ -171,8 +172,14 @@ void MainWindow::setupUi()
     m_logButton = new QPushButton(header);
     m_logButton->setObjectName(QStringLiteral("logButton"));
 
+    m_schedulerButton = new QPushButton(header);
+    m_schedulerButton->setObjectName(QStringLiteral("schedulerButton"));
+
     m_settingsButton = new QPushButton(header);
     m_settingsButton->setObjectName(QStringLiteral("settingsButton"));
+
+    m_scheduledTaskButton = new QPushButton(header);
+    m_scheduledTaskButton->setObjectName(QStringLiteral("scheduledTaskButton"));
 
     headerLayout->addWidget(titleGroup, 1);
     headerLayout->addWidget(m_systemPromptButton);
@@ -180,7 +187,9 @@ void MainWindow::setupUi()
     headerLayout->addWidget(m_fileToolsButton);
     headerLayout->addWidget(m_agentPlanButton);
     headerLayout->addWidget(m_logButton);
+    headerLayout->addWidget(m_schedulerButton);
     headerLayout->addWidget(m_settingsButton);
+    headerLayout->addWidget(m_scheduledTaskButton);
 
     m_chatView = new ChatView(mainPanel);
 
@@ -258,10 +267,12 @@ void MainWindow::setupUi()
     connect(m_chatAutoExecuteButton, &QPushButton::clicked, this, &MainWindow::toggleChatAutoExecute); // V12.4
     connect(m_highPermissionCheckbox, &QCheckBox::toggled, this, &MainWindow::toggleHighPermission);  // V12.4
     connect(m_settingsButton, &QPushButton::clicked, this, &MainWindow::openSettingsDialog);
+    connect(m_scheduledTaskButton, &QPushButton::clicked, this, &MainWindow::openScheduledTaskDialog);
     connect(m_toolsButton, &QPushButton::clicked, this, &MainWindow::openToolsDialog);
     connect(m_fileToolsButton, &QPushButton::clicked, this, &MainWindow::openFileToolsDialog);
     connect(m_agentPlanButton, &QPushButton::clicked, this, &MainWindow::generateAgentPlan);
     connect(m_logButton, &QPushButton::clicked, this, &MainWindow::openLogViewerDialog);
+    connect(m_schedulerButton, &QPushButton::clicked, this, &MainWindow::openScheduledTaskDialog);
     connect(m_systemPromptButton, &QPushButton::clicked, this, &MainWindow::editSystemPrompt);
     connect(m_newChatButton, &QPushButton::clicked, this, &MainWindow::startNewChat);
     connect(m_renameChatButton, &QPushButton::clicked, this, &MainWindow::renameCurrentChat);
@@ -432,7 +443,9 @@ void MainWindow::applyLanguage()
     m_fileToolsButton->setText(text(QStringLiteral("File Tools"), QStringLiteral("文件工具")));
     m_agentPlanButton->setText(text(QStringLiteral("Agent Plan"), QStringLiteral("Agent 计划")));
     m_logButton->setText(text(QStringLiteral("Logs"), QStringLiteral("日志")));
+    m_schedulerButton->setText(text(QStringLiteral("Scheduler"), QStringLiteral("调度任务")));
     m_settingsButton->setText(text(QStringLiteral("Settings"), QStringLiteral("设置")));
+    m_scheduledTaskButton->setText(text(QStringLiteral("Scheduled Tasks"), QStringLiteral("调度任务")));
     m_retryButton->setText(text(QStringLiteral("Retry"), QStringLiteral("重试")));
     m_personaLabel->setText(text(QStringLiteral("Role: %1"), QStringLiteral("角色：%1")).arg(currentRoleDisplayName()));
     m_messageInput->setPlaceholderText(text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
@@ -570,6 +583,12 @@ void MainWindow::openToolsDialog()
 {
     ToolsDialog dialog(m_controller.config().language, this);
     // V12.5: insertToolOutputIntoInput 已移除，工具输出不再插入聊天输入框
+    dialog.exec();
+}
+
+void MainWindow::openScheduledTaskDialog()
+{
+    ScheduledTaskDialog dialog(&m_controller, this);
     dialog.exec();
 }
 
@@ -855,7 +874,9 @@ void MainWindow::setGenerating(bool generating)
     m_fileToolsButton->setEnabled(true);
     m_agentPlanButton->setEnabled(!generating);
     m_settingsButton->setEnabled(!generating);
+    m_scheduledTaskButton->setEnabled(!generating);
     m_logButton->setEnabled(true);
+    m_schedulerButton->setEnabled(true);
     m_retryButton->setEnabled(!generating && m_retryButton->isVisible());
     updateSendButtonAppearance();
     updateSendButtonState();

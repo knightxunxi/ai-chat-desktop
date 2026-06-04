@@ -4,6 +4,16 @@ set(AGENT_TOOL_REGISTRY_SOURCES
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.h
+    # V15.4: MCP 依赖（AgentToolRegistry.registerExternalTools 使用 McpConnector）
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.h
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookDefinition.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.h
     ${PROJECT_SOURCE_DIR}/src/tools/CommandPolicy.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/CommandPolicy.h
     ${PROJECT_SOURCE_DIR}/src/tools/CommandRunner.cpp
@@ -48,6 +58,11 @@ set(AGENT_TOOL_REGISTRY_SOURCES
     ${PROJECT_SOURCE_DIR}/src/tools/ForegroundValidator.h
     ${PROJECT_SOURCE_DIR}/src/tools/AssistantService.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/AssistantService.h
+    # V15.4: MCP 依赖（AgentToolRegistry.registerExternalTools 使用 McpConnector）
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.h
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.h
 )
 
 add_executable(CoreModelSmokeTest
@@ -140,6 +155,16 @@ add_executable(AgentPlanExecutorTest
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.h
+    # V15.4: MCP 依赖（AgentToolRegistry.registerExternalTools 使用 McpConnector）
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.h
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookDefinition.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.h
     ${PROJECT_SOURCE_DIR}/src/tools/CommandPolicy.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/CommandPolicy.h
     ${PROJECT_SOURCE_DIR}/src/tools/CommandRunner.cpp
@@ -326,6 +351,11 @@ add_executable(AgentLoopControllerTest
     ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
     ${PROJECT_SOURCE_DIR}/src/services/AIClient.h
     ${AGENT_TOOL_REGISTRY_SOURCES}
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillDefinition.h
 )
 
 target_link_libraries(AgentLoopControllerTest PRIVATE
@@ -747,6 +777,155 @@ target_include_directories(ToolsDialogSmokeTest PRIVATE
 
 add_test(NAME ToolsDialogSmokeTest COMMAND ToolsDialogSmokeTest)
 
+add_executable(ScheduledTaskDialogSmokeTest
+    ui/ScheduledTaskDialogSmokeTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/ScheduledTaskDialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/ScheduledTaskDialog.h
+    ${PROJECT_SOURCE_DIR}/src/app/ApplicationController.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/ApplicationController.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlan.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanExecutor.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanExecutor.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopController.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopController.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopActionParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopActionParser.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopPromptBuilder.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentLoopPromptBuilder.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanParser.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanPromptBuilder.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentPlanPromptBuilder.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentCommandSkillCatalog.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentCommandSkillCatalog.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentCommandSkillFileService.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentCommandSkillFileService.h
+    ${PROJECT_SOURCE_DIR}/src/app/AgentToolCallPlanBuilder.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/AgentToolCallPlanBuilder.h
+    ${PROJECT_SOURCE_DIR}/src/app/ContextWindowManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/ContextWindowManager.h
+    ${PROJECT_SOURCE_DIR}/src/app/SummaryAPIClient.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/SummaryAPIClient.h
+    ${PROJECT_SOURCE_DIR}/src/app/TokenEstimator.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/TokenEstimator.h
+    ${PROJECT_SOURCE_DIR}/src/app/ProjectInstructionService.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/ProjectInstructionService.h
+    ${PROJECT_SOURCE_DIR}/src/app/SessionSummaryList.cpp
+    ${PROJECT_SOURCE_DIR}/src/app/SessionSummaryList.h
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskScheduler.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskScheduler.h
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskStorage.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskStorage.h
+    ${PROJECT_SOURCE_DIR}/src/scheduler/ScheduledTask.h
+    ${PROJECT_SOURCE_DIR}/src/services/OpenAICompatibleClient.cpp
+    ${PROJECT_SOURCE_DIR}/src/services/OpenAICompatibleClient.h
+    ${PROJECT_SOURCE_DIR}/src/services/AIClient.h
+    ${PROJECT_SOURCE_DIR}/src/services/RequestErrorCategory.h
+    ${PROJECT_SOURCE_DIR}/src/services/StreamParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/services/StreamParser.h
+    ${PROJECT_SOURCE_DIR}/src/services/ToolCall.h
+    ${PROJECT_SOURCE_DIR}/src/storage/ConfigStorage.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/ConfigStorage.h
+    ${PROJECT_SOURCE_DIR}/src/storage/ChatHistoryStorage.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/ChatHistoryStorage.h
+    ${PROJECT_SOURCE_DIR}/src/storage/ChatSessionExporter.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/ChatSessionExporter.h
+    ${PROJECT_SOURCE_DIR}/src/storage/PromptTemplateStorage.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/PromptTemplateStorage.h
+    ${PROJECT_SOURCE_DIR}/src/storage/CredentialStorage.h
+    ${PROJECT_SOURCE_DIR}/src/storage/WindowsCredentialStorage.cpp
+    ${PROJECT_SOURCE_DIR}/src/storage/WindowsCredentialStorage.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillDefinition.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookDefinition.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/ScriptHookRunner.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/ScriptHookRunner.h
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.h
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.h
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.h
+    ${PROJECT_SOURCE_DIR}/src/tools/CommandPolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/CommandPolicy.h
+    ${PROJECT_SOURCE_DIR}/src/tools/CommandRunner.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/CommandRunner.h
+    ${PROJECT_SOURCE_DIR}/src/tools/FileInteractionService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/FileInteractionService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonCompactTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonFormatTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/JsonTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/LocalTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/MarkdownCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ProjectMemoryService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ProjectMemoryService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextCleanupTool.h
+    ${PROJECT_SOURCE_DIR}/src/tools/TextTools.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspaceFileService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.h
+    ${PROJECT_SOURCE_DIR}/src/tools/GitReviewService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/GitReviewService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/LogSummaryService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/LogSummaryService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/CsvDataService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/CsvDataService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ProjectFindService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ProjectFindService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WindowDetector.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WindowDetector.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ScreenCaptureService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ScreenCaptureService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/SystemInfoService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/SystemInfoService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/OcrService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/OcrService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/UiAutomationService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/UiAutomationService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/InputSimulator.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/InputSimulator.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ForegroundValidator.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/ForegroundValidator.h
+    ${PROJECT_SOURCE_DIR}/src/tools/AssistantService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/AssistantService.h
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.h
+    ${PROJECT_SOURCE_DIR}/src/support/LogFileReader.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/LogFileReader.h
+    ${PROJECT_SOURCE_DIR}/src/core/ProviderPreset.cpp
+    ${PROJECT_SOURCE_DIR}/src/core/ProviderPreset.h
+    ${PROJECT_SOURCE_DIR}/src/memory/ProjectMemoryManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/memory/ProjectMemoryManager.h
+    ${PROJECT_SOURCE_DIR}/src/memory/DailyMemoryWriter.cpp
+    ${PROJECT_SOURCE_DIR}/src/memory/DailyMemoryWriter.h
+    ${PROJECT_SOURCE_DIR}/src/memory/MemoryEntry.h
+)
+
+target_link_libraries(ScheduledTaskDialogSmokeTest PRIVATE
+    Qt6::Core
+    Qt6::Widgets
+    Qt6::Network
+    Qt6::Sql
+)
+
+target_include_directories(ScheduledTaskDialogSmokeTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME ScheduledTaskDialogSmokeTest COMMAND ScheduledTaskDialogSmokeTest)
+
 add_executable(AgentPlanDialogSmokeTest
     ui/AgentPlanDialogSmokeTest.cpp
     ${PROJECT_SOURCE_DIR}/src/app/AgentLoopController.cpp
@@ -765,6 +944,21 @@ add_executable(AgentPlanDialogSmokeTest
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolCatalog.h
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/AgentToolRegistry.h
+    # V15.4: MCP 依赖
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.h
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookDefinition.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillDefinition.h
     ${PROJECT_SOURCE_DIR}/src/tools/CommandPolicy.cpp
     ${PROJECT_SOURCE_DIR}/src/tools/CommandPolicy.h
     ${PROJECT_SOURCE_DIR}/src/tools/CommandRunner.cpp
@@ -1078,6 +1272,22 @@ set(APPLICATION_CONTROLLER_TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/src/memory/DailyMemoryWriter.h
     ${PROJECT_SOURCE_DIR}/src/memory/ProjectMemoryManager.cpp
     ${PROJECT_SOURCE_DIR}/src/memory/ProjectMemoryManager.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookDefinition.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillDefinition.h
+    # V15.1: 调度器依赖（ApplicationController 使用 TaskScheduler/TaskStorage）
+    ${PROJECT_SOURCE_DIR}/src/scheduler/ScheduledTask.h
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskScheduler.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskScheduler.h
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskStorage.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskStorage.h
 )
 
 add_executable(ChatToolExecutionTest
@@ -1170,3 +1380,167 @@ target_include_directories(ProjectMemoryManagerTest PRIVATE
 )
 
 add_test(NAME ProjectMemoryManagerTest COMMAND ProjectMemoryManagerTest)
+
+# --- V13.3 Skills + Hooks 测试 ---
+
+add_executable(SkillManagerTest
+    skills/SkillManagerTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillDefinition.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillFileParser.h
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/skills/SkillManager.h
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.h
+)
+
+target_link_libraries(SkillManagerTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(SkillManagerTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME SkillManagerTest COMMAND SkillManagerTest)
+
+add_executable(HookManagerTest
+    hooks/HookManagerTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookDefinition.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/HookManager.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/BuiltinHooks.h
+    ${PROJECT_SOURCE_DIR}/src/hooks/ScriptHookRunner.cpp
+    ${PROJECT_SOURCE_DIR}/src/hooks/ScriptHookRunner.h
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.cpp
+    ${PROJECT_SOURCE_DIR}/src/support/AppLogger.h
+)
+
+target_link_libraries(HookManagerTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(HookManagerTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME HookManagerTest COMMAND HookManagerTest)
+
+# --- V14.1 OcrService 测试 ---
+
+add_executable(OcrServiceTest
+    tools/OcrServiceTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/OcrService.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/OcrService.h
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/WorkspacePolicy.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+)
+
+target_link_libraries(OcrServiceTest PRIVATE
+    Qt6::Core
+    Qt6::Gui
+)
+
+target_include_directories(OcrServiceTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME OcrServiceTest COMMAND OcrServiceTest)
+
+# --- V14.2 InputSimulator 测试 ---
+
+add_executable(InputSimulatorTest
+    tools/InputSimulatorTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/InputSimulator.cpp
+    ${PROJECT_SOURCE_DIR}/src/tools/InputSimulator.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+)
+
+target_link_libraries(InputSimulatorTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(InputSimulatorTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME InputSimulatorTest COMMAND InputSimulatorTest)
+
+# --- V15.1 调度器测试 ---
+
+add_executable(CronParserTest
+    scheduler/CronParserTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/ScheduledTask.h
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskScheduler.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskScheduler.h
+)
+
+target_link_libraries(CronParserTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(CronParserTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME CronParserTest COMMAND CronParserTest)
+
+add_executable(TaskSchedulerTest
+    scheduler/TaskSchedulerTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/ScheduledTask.h
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskScheduler.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskScheduler.h
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskStorage.cpp
+    ${PROJECT_SOURCE_DIR}/src/scheduler/TaskStorage.h
+)
+
+target_link_libraries(TaskSchedulerTest PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+target_include_directories(TaskSchedulerTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME TaskSchedulerTest COMMAND TaskSchedulerTest)
+
+# --- V15.4 MCP 测试 ---
+
+add_executable(McpConnectorTest
+    mcp/McpConnectorTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+)
+
+target_link_libraries(McpConnectorTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(McpConnectorTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME McpConnectorTest COMMAND McpConnectorTest)
+
+add_executable(McpRegistryTest
+    mcp/McpRegistryTest.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpConnector.h
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.cpp
+    ${PROJECT_SOURCE_DIR}/src/mcp/McpRegistry.h
+    ${PROJECT_SOURCE_DIR}/src/tools/ToolResult.h
+)
+
+target_link_libraries(McpRegistryTest PRIVATE
+    Qt6::Core
+)
+
+target_include_directories(McpRegistryTest PRIVATE
+    ${PROJECT_SOURCE_DIR}/src
+)
+
+add_test(NAME McpRegistryTest COMMAND McpRegistryTest)
