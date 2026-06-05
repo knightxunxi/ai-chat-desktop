@@ -1,6 +1,6 @@
 # Windows 打包说明
 
-本文档用于生成一个可在 Windows 上运行的发布目录。当前发布说明已同步到 V3 / `0.3.0`。
+本文档用于生成一个可在 Windows 上运行的发布目录。当前发布说明已同步到 `1.0`。
 
 ## 1. 前置条件
 
@@ -69,13 +69,13 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 & "D:\QT\6.10.2\mingw_64\bin\windeployqt.exe" release\AIChatDesktop\AIChatDesktop.exe
 ```
 
-本轮 V3 发布准备执行结果：
+本轮 1.0 发布准备执行结果：
 
 - `build-release-qt` 构建通过。
-- `ctest --test-dir build-release-qt --output-on-failure` 通过，15 个测试全部通过。
+- `ctest --test-dir build-release-qt --output-on-failure` 通过，65 个测试全部通过。
 - `windeployqt release\AIChatDesktop\AIChatDesktop.exe` 执行成功。
 - 发布目录启动/关闭 smoke check 通过。
-- 已生成 `release\AIChatDesktop-0.3.0-windows.zip`。
+- 已生成 `release\AIChatDesktop-1.0-windows.zip`。
 - `windeployqt` 提示未找到 `dxcompiler.dll` 和 `dxil.dll`，并跳过 `qopensslbackend.dll`。当前发布目录包含 `qschannelbackend.dll`，但发布前仍建议在目标机器上验证 HTTPS 请求。
 
 ## 4. 发布前检查
@@ -99,7 +99,7 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 推荐压缩命令：
 
 ```powershell
-Compress-Archive -Path release\AIChatDesktop\* -DestinationPath release\AIChatDesktop-0.3.0-windows.zip -Force
+Compress-Archive -Path release\AIChatDesktop\* -DestinationPath release\AIChatDesktop-1.0-windows.zip -Force
 ```
 
 压缩包生成后，建议解压到一个临时目录再运行一次，确认没有依赖遗漏。
@@ -135,7 +135,7 @@ cmake -S . -B build-release-qt -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -
 
 ## 6. 发布说明草稿
 
-版本：0.3.0
+版本：1.0
 
 V3 能力：
 

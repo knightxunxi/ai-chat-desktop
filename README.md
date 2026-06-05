@@ -2,7 +2,7 @@
 
 Qt6/C++ desktop AI coding assistant for Windows. CodeXX combines a streaming chat client, an agentic execution loop, local tools, memory, skills, hooks, MCP integration, and scheduled tasks into a native Widgets application.
 
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Version](https://img.shields.io/badge/version-1.0-blue)
 ![Tests](https://img.shields.io/badge/tests-65%2F65-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows%2010%2B-blue)
 ![Qt](https://img.shields.io/badge/Qt-6.x-green)
@@ -152,7 +152,7 @@ Copy-Item build-release-qt\AIChatDesktop.exe release\AIChatDesktop\
 
 windeployqt release\AIChatDesktop\AIChatDesktop.exe
 Compress-Archive -Path release\AIChatDesktop\* `
-  -DestinationPath release\AIChatDesktop-0.3.0-windows.zip `
+  -DestinationPath release\AIChatDesktop-1.0-windows.zip `
   -Force
 ```
 
