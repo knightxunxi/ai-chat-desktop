@@ -1,61 +1,184 @@
 sequenceDiagram
-    participant UI as AgentPlanDialog
-    participant Ctrl as AgentLoopController::executeLoop()
-    participant Runner as AiLoopRunner (匿名空间)
-    participant AIClient as AIClient (async)
-    participant Loop as QEventLoop
-    participant Builder as AgentLoopPromptBuilder
-    participant Parser as AgentLoopActionParser
-    participant Registry as AgentToolRegistry
+    actor User
+    participant MW as MainWindow
+    participant AC as ApplicationController<br/>(thin glue)
+    participant CC as ConfigCoordinator
+    participant SC as SessionCoordinator
+    participant MC as MessageCoordinator
+    participant AGC as AgentCoordinator
+    participant AI as OpenAICompatibleClient
 
-    UI->>Ctrl: executeLoop(aiClient, config, goal, registry, context, options, callbacks, language)
-    
-    Note over Ctrl: 初始化 QElapsedTimer, audit trail, observations=[]
+    %% ── 初始化流程 ──
+    rect rgb(230, 245, 230)
+        Note over User,AI: === 应用启动初始化 ===
+        MW->>AC: new ApplicationController()
+        AC->>AC: 创建 m_aiClient (OpenAICompatibleClient)
+        AC->>AC: 创建 m_chatHistoryStorage
+        AC->>AC: 创建 m_contextWindowManager
+        AC->>AC: 创建 m_summaryClient
+        AC->>AC: 创建 m_skillManager, m_hookManager, m_mcpRegistry, m_taskScheduler
+        AC->>CC: new ConfigCoordinator(this)
+        AC->>SC: new SessionCoordinator(this)
+        AC->>MC: new MessageCoordinator(this)
+        AC->>AGC: new AgentCoordinator(this)
+        AC->>MC: setAiClient(&m_aiClient)
+        AC->>MC: setContextWindowManager(&m_contextWindowManager)
+        AC->>MC: setSummaryClient(&m_summaryClient)
+        AC->>SC: initialize(&m_chatHistoryStorage)
+        AC->>AGC: setAiClient(&m_aiClient)
+        AC->>AGC: setSkillManager(m_skillManager.get())
+        AC->>AGC: setHookManager(m_hookManager.get())
+        AC->>AGC: setMcpRegistry(m_mcpRegistry.get())
+        AC->>AGC: setChatHistoryStorage(&m_chatHistoryStorage)
+        
+        AC->>AC: 信号连接 (Coordinator signals → AC signals)
+        connect CC::configChanged → AC::configChanged
+        connect SC::sessionListChanged → AC::sessionListChanged
+        connect MC::userMessageAdded → AC::userMessageAdded
+        connect AGC::agentLoopThought → AC::agentLoopThought
+        connect CC::configChanged → MC::syncConfig
+        
+        AC->>CC: initialize()
+        CC->>CC: m_configStorage.loadConfig()
+        CC->>CC: m_promptTemplateStorage.load()
+        
+        AC->>SC: initialize(&m_chatHistoryStorage)
+        SC->>SC: reloadSessionSummaries()
+        SC->>SC: 如果无会话，startNewChat()
+        
+        MW->>AC: config()
+        AC->>CC: config()
+        CC-->>AC: AppConfig
+        AC-->>MW: AppConfig
+        
+        MW->>AC: sessionSummaries()
+        AC->>SC: sessionSummaries()
+        SC-->>AC: QVector~ChatSession~
+        AC-->>MW: QVector~ChatSession~
+    end
 
-    loop while true
-        Ctrl->>Ctrl: 检查 shouldStop / maxSteps / maxRuntime
-        alt 终止条件触发
-            Ctrl-->>UI: AgentLoopRunResult(StepLimitReached/Stopped/...)
+    %% ── 发送聊天消息流程 ──
+    rect rgb(230, 230, 245)
+        Note over User,AI: === 用户发送聊天消息 ===
+        User->>MW: 输入文本 + 点击发送
+        MW->>AC: sendMessage(content)
+        AC->>MC: sendMessage(content)
+        
+        MC->>MC: 检查配置完整性
+        alt 配置不完整
+            MC-->>AC: emit configurationMissing()
+            AC-->>MW: emit configurationMissing()
+            MW->>MW: showConfigurationMissingWarning()
+        else 配置完整
+            MC->>MC: m_session.addMessage(User, content)
+            MC-->>AC: emit userMessageAdded(content)
+            AC-->>MW: emit userMessageAdded(content)
+            MW->>MW: addUserMessage(content)
+            
+            MC->>MC: startAssistantRequest()
+            MC->>MC: setGenerating(true)
+            MC-->>AC: emit generatingChanged(true)
+            AC-->>MW: emit generatingChanged(true)
+            
+            MC->>MC: 构建请求体 (system prompt + messages + tools)
+            MC-->>AC: emit assistantMessageStarted()
+            AC-->>MW: emit assistantMessageStarted()
+            MW->>MW: addAssistantPlaceholder()
+            
+            MC->>AI: m_aiClient->sendChatRequest(body)
+            
+            loop 流式响应
+                AI-->>MC: textDeltaReceived(delta)
+                MC->>MC: handleTextDelta(delta)
+                MC->>MC: m_currentAssistantContent += delta
+                MC-->>AC: emit assistantMessageUpdated(m_currentAssistantContent)
+                AC-->>MW: emit assistantMessageUpdated(content)
+                MW->>MW: ChatView::updateLastAssistantMessage(content)
+            end
+            
+            AI-->>MC: requestFinished()
+            MC->>MC: handleRequestFinished()
+            MC->>MC: 保存助手消息到会话
+            MC->>MC: setGenerating(false)
+            MC-->>AC: emit generatingChanged(false)
+            AC-->>MW: emit generatingChanged(false)
+            
+            MC->>SC: saveCurrentSession() via AC
+            SC->>SC: m_chatHistoryStorage->saveSession()
+            SC-->>AC: emit sessionListChanged()
+            AC-->>MW: emit sessionListChanged()
         end
+    end
 
-        Ctrl->>Builder: buildNextActionPrompt(goal, observations, catalog, lang, completed, max)
-        Builder-->>Ctrl: prompt string
-
-        Ctrl->>Runner: call(aiClient, config, prompt, maxStepMs)
-        Runner->>AIClient: sendChat(config, session)
-        Runner->>Loop: exec()
-        Note over Loop: 阻塞等待...
-        AIClient-->>Runner: textDeltaReceived(delta) × N
-        AIClient-->>Runner: requestFinished()
-        Loop-->>Runner: quit()
-        Runner-->>Ctrl: AiLoopResponse{ok=true, fullText="..."}
-
-        alt AI 调用失败
-            Ctrl-->>UI: AgentLoopRunResult(Failed, error)
+    %% ── Agent 循环流程 ──
+    rect rgb(245, 230, 230)
+        Note over User,AI: === Agent 连续循环 ===
+        User->>MW: 切换 Agent 模式 + 发送目标
+        MW->>AC: sendAgentLoopMessage(content)
+        AC->>AGC: sendAgentLoopMessage(content)
+        
+        AGC->>AGC: m_isAgentLoopActive = true
+        AGC->>AGC: m_agentLoopGoal = content
+        AGC->>AGC: m_agentLoopIteration = 0
+        
+        loop Agent 循环 (max 50 iterations)
+            AGC->>AGC: continueAgentLoop()
+            AGC->>AGC: 构建 Agent 提示词
+            AGC->>AGC: (含目标 + 工具列表 + 历史观测 + Skills/Hooks 上下文)
+            
+            AGC-->>AC: emit agentLoopPromptDebug(prompt) [if debug mode]
+            AC-->>MW: emit agentLoopPromptDebug(prompt)
+            
+            AGC->>AI: m_aiClient->sendChatRequest(agentPrompt)
+            
+            AI-->>AGC: textDeltaReceived / toolUseBlockComplete
+            
+            alt 工具调用
+                AGC->>AGC: handleToolUseBlockComplete(toolName, args)
+                AGC->>AGC: 执行工具
+                AGC-->>AC: emit agentLoopThought(iteration, reasoning, toolId, title)
+                AC-->>MW: emit agentLoopThought(...)
+                AGC-->>AC: emit agentLoopToolFinished(iteration, toolId, ok, preview)
+                AC-->>MW: emit agentLoopToolFinished(...)
+                AGC->>AGC: 收集观测结果
+            end
+            
+            AI-->>AGC: requestFinished()
+            AGC->>AGC: executeAgentLoopIteration()
+            
+            alt AI 返回 done=true 或达到上限
+                AGC->>AGC: m_isAgentLoopActive = false
+                AGC-->>AC: emit agentLoopSkillSummary(summary)
+                AC-->>MW: emit agentLoopSkillSummary(summary)
+            else 继续循环
+                AGC->>AGC: m_agentLoopIteration++
+                AGC-->>AC: emit agentLoopIterationUpdated(iteration, max)
+                AC-->>MW: emit agentLoopIterationUpdated(...)
+                AGC->>AGC: saveAgentLoopState() [checkpoint]
+            end
         end
+        
+        AGC->>SC: saveCurrentSession() via AC
+        SC-->>AC: emit sessionListChanged()
+        AC-->>MW: emit sessionListChanged()
+    end
 
-        Ctrl->>Parser: parseJsonAction(fullText, catalog)
-        Parser-->>Ctrl: AgentLoopActionParseResult
-
-        alt 解析失败
-            Ctrl->>Ctrl: observations << "[parse error]"
-            Ctrl->>Ctrl: 继续下一轮
-        end
-
-        alt action.done == true
-            Ctrl-->>UI: AgentLoopRunResult(Completed)
-        end
-
-        Ctrl->>Ctrl: callbacks.stepStarted(index)
-        Ctrl->>Registry: execute(toolId, parameters, context)
-        Registry-->>Ctrl: ToolResult
-        Ctrl->>Ctrl: callbacks.stepFinished(index, toolResult)
-
-        alt ToolResult 失败
-            Ctrl-->>UI: AgentLoopRunResult(Failed, error)
-        end
-
-        Ctrl->>Ctrl: observations << toolResult.output
-        Ctrl->>Ctrl: executedStepCount++
-        Ctrl->>Ctrl: 检查 maxStepMs 超时
+    %% ── 会话切换流程 ──
+    rect rgb(245, 245, 230)
+        Note over User,AI: === 会话切换 ===
+        User->>MW: 点击侧边栏会话
+        MW->>AC: switchToSession(sessionId)
+        AC->>SC: switchToSession(sessionId)
+        
+        SC->>SC: saveCurrentSession() [保存当前会话]
+        SC->>SC: m_chatHistoryStorage->loadSession(sessionId)
+        SC->>SC: m_session = loadedSession
+        
+        SC-->>AC: emit currentSessionChanged()
+        AC-->>MW: emit currentSessionChanged()
+        MW->>MW: populateChatView()
+        
+        SC-->>AC: emit sessionListChanged()
+        AC-->>MW: emit sessionListChanged()
+        MW->>MW: populateSessionList() + updateCurrentSessionListItem()
     end

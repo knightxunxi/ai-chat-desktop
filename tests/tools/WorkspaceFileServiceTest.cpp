@@ -82,18 +82,19 @@ int main()
     assert(!QFileInfo::exists(generatedPath));
     assert(QFileInfo::exists(QDir(workspace).filePath(QStringLiteral(".trash/generated/hello.txt"))));
 
+    // V17.4: 沙箱限制已移除 — 路径穿越和绝对路径现在允许
     result = WorkspaceFileService::writeText(
         workspace,
         QStringLiteral("../outside.txt"),
         QStringLiteral("outside"));
-    assert(!result.ok);
-    assert(!QFileInfo::exists(temporaryDirectory.filePath(QStringLiteral("outside.txt"))));
+    assert(result.ok);
+    assert(QFileInfo::exists(temporaryDirectory.filePath(QStringLiteral("outside.txt"))));
 
     result = WorkspaceFileService::writeText(
         workspace,
         temporaryDirectory.filePath(QStringLiteral("absolute-outside.txt")),
         QStringLiteral("outside"));
-    assert(!result.ok);
+    assert(result.ok);
 
     result = WorkspaceFileService::writeText(
         workspace,

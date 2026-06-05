@@ -280,9 +280,9 @@ int main()
         assert(tempDir.isValid());
         const QString projectDir = tempDir.path();
 
-        // 生成超过 1000 字符的内容
+        // 生成超过 2000 字符的内容 (kMaxDailyLogChars = 2000)
         QString longContent;
-        for (int i = 0; i < 100; ++i) {
+        for (int i = 0; i < 150; ++i) {
             longContent += QStringLiteral("0123456789ABCDEF"); // 16 * 100 = 1600
         }
 

@@ -1,67 +1,254 @@
 classDiagram
-    class LoopTerminationPolicy {
-        +int maxSteps = 10
-        +qint64 maxRuntimeMs = 60000
-        +qint64 maxStepMs = 30000
-        +function~bool()~ shouldStop
-        +TerminationReason check(int completed, qint64 elapsed, qint64 stepMs) const
-        +QString reasonLabel(TerminationReason) const
+    direction TB
+
+    %% ── ApplicationController (薄胶水层) ──
+    class ApplicationController {
+        -ConfigCoordinator m_configCoordinator
+        -SessionCoordinator m_sessionCoordinator
+        -MessageCoordinator m_messageCoordinator
+        -AgentCoordinator m_agentCoordinator
+        -OpenAICompatibleClient m_aiClient
+        -ChatHistoryStorage m_chatHistoryStorage
+        -ContextWindowManager m_contextWindowManager
+        -SummaryAPIClient m_summaryClient
+        -unique_ptr~SkillManager~ m_skillManager
+        -unique_ptr~HookManager~ m_hookManager
+        -unique_ptr~McpRegistry~ m_mcpRegistry
+        -unique_ptr~TaskScheduler~ m_taskScheduler
+        +initialize()
+        +config() AppConfig
+        +aiClient() AIClient*
+        +currentSession() ChatSession
+        +sessionSummaries() QVector~ChatSession~
+        +promptTemplates() QVector~PromptTemplate~
+        +isGenerating() bool
+        +saveConfig(config)
+        +savePromptTemplates(templates)
+        +startNewChat()
+        +switchToSession(sessionId)
+        +sendMessage(content)
+        +sendAgentLoopMessage(content)
+        +addScheduledTask(name, cron, prompt)
     }
 
-    class TerminationReason {
-        <<enum>>
-        None
-        StepLimit
-        RuntimeLimit
-        StepTimeout
-        Stopped
-        AIDone
-        AIError
-        ParseError
+    %% ── ConfigCoordinator ──
+    class ConfigCoordinator {
+        -AppConfig m_config
+        -ConfigStorage m_configStorage
+        -QVector~PromptTemplate~ m_promptTemplates
+        -PromptTemplateStorage m_promptTemplateStorage
+        +initialize()
+        +config() AppConfig
+        +promptTemplates() QVector~PromptTemplate~
+        +saveConfig(config)
+        +savePromptTemplates(templates)
+        %% signals:
+        %% configChanged()
+        %% promptTemplatesChanged()
     }
 
-    class AiLoopResponse {
-        +bool ok
-        +QString fullText
-        +QString errorMessage
-        +RequestErrorCategory errorCategory
-        +static AiLoopResponse success(QString text)
-        +static AiLoopResponse failure(QString msg, RequestErrorCategory cat)
+    %% ── SessionCoordinator ──
+    class SessionCoordinator {
+        -ChatSession m_session
+        -QVector~ChatSession~ m_sessionSummaries
+        -SessionListFilter m_sessionListFilter
+        -QString m_sessionSearchQuery
+        -bool m_historyAvailable
+        -ChatHistoryStorage* m_chatHistoryStorage
+        +initialize(storage)
+        +currentSession() ChatSession
+        +sessionSummaries() QVector~ChatSession~
+        +sessionListFilter() SessionListFilter
+        +startNewChat()
+        +switchToSession(sessionId)
+        +deleteCurrentSession()
+        +renameCurrentSession(title)
+        +searchSessions(query)
+        +setSessionListFilter(filter)
+        +toggleCurrentSessionFavorite()
+        +toggleCurrentSessionArchived()
+        +saveCurrentSession(moveToTop) bool
+        +editCurrentMessage(messageId, newContent) bool
+        +truncateCurrentSessionFrom(messageId)
+        +createMessageBranch(parentMessageId)
+        +exportCurrentSessionMarkdown(filePath) bool
+        -reloadSessionSummaries() bool
+        -upsertCurrentSessionSummary(moveToTop)
+        -sessionMatchesCurrentFilter(session) bool
+        -hasPersistableCurrentSession() bool
+        %% signals: sessionListChanged, sessionListFilterChanged, currentSessionChanged, currentChatCleared
     }
 
-    class AgentLoopOptions {
-        +int maxSteps = 10
-        +qint64 maxRuntimeMs = 60000
-        +qint64 maxStepMs = 30000
-        +function~bool()~ shouldStop
+    %% ── MessageCoordinator ──
+    class MessageCoordinator {
+        -AppConfig m_config
+        -QString m_currentAssistantContent
+        -QString m_lastRequestUserContent
+        -QString m_retryUserContent
+        -bool m_isGenerating
+        -bool m_retryAvailable
+        -QJsonArray m_pendingImages
+        -QVector~PendingToolResult~ m_pendingToolResults
+        -OpenAICompatibleClient* m_aiClient
+        -ContextWindowManager* m_contextWindowManager
+        -SummaryAPIClient* m_summaryClient
+        +setAiClient(client)
+        +setContextWindowManager(manager)
+        +setSummaryClient(client)
+        +syncConfig(config)
+        +isGenerating() bool
+        +sendMessage(content)
+        +sendMessageWithImages(content, images)
+        +cancelCurrentRequest()
+        +retryLastRequest()
+        +sendUnifiedMessage(content)
+        -startAssistantRequest(userContent)
+        -handleTextDelta(delta)
+        -handleToolCallsReceived(toolCalls)
+        -handleToolUseBlockComplete(toolName, arguments)
+        -handleRequestFinished()
+        -handleRequestFailed(message, category)
+        -setGenerating(generating)
+        -setRetryAvailable(available)
+        -requestFailureMessage(category, detail) QString
+        -retryAgentRequestWithoutNativeTools(category) bool
+        %% signals: userMessageAdded, assistantMessageStarted, assistantMessageUpdated, generatingChanged, retryAvailableChanged, configurationMissing, statusMessage, startupWarning, tokenUsageUpdated
     }
 
-    class AgentLoopRunResult {
-        +AgentLoopRunStatus status
-        +int executedStepCount
-        +QString error
-        +QString lastToolId
-        +QString lastOutput
-        +QStringList auditTrail
+    %% ── AgentCoordinator ──
+    class AgentCoordinator {
+        -AppConfig m_config
+        -AgentLoopState m_agentLoopState
+        -QString m_agentLoopGoal
+        -QStringList m_agentLoopObservations
+        -int m_agentLoopIteration
+        -bool m_isAgentLoopActive
+        -bool m_agentDebugMode
+        -bool m_nativeToolRequestActive
+        -bool m_nativeToolFallbackAttempted
+        -QString m_agentPlanResponseBuffer
+        -ToolCallList m_agentToolCalls
+        -ChatSession m_pendingAgentRequestSession
+        -int m_pendingAgentPlanContinuationDepth
+        -QVector~SkillDefinition~ m_matchedSkills
+        -AIClient* m_aiClient
+        -SkillManager* m_skillManager
+        -HookManager* m_hookManager
+        -McpRegistry* m_mcpRegistry
+        -ChatHistoryStorage* m_chatHistoryStorage
+        +setAiClient(client)
+        +setConfig(config)
+        +setSkillManager(skills)
+        +setHookManager(hooks)
+        +setMcpRegistry(mcp)
+        +setChatHistoryStorage(storage)
+        +agentDebugMode() bool
+        +hasPendingAgentState() bool
+        +pendingAgentState() AgentLoopState
+        +sendAgentLoopMessage(content)
+        +generateAgentPlan(goal, continuationDepth)
+        +setAgentDebugMode(enabled)
+        +resumeAgentLoop()
+        +clearAgentLoopState()
+        +executePlanAndReportToChat(plan)
+        -executeAgentLoopIteration()
+        -continueAgentLoop()
+        -saveAgentLoopState()
+        -agentStateFilePath() QString
+        %% signals: agentLoopIterationUpdated, agentLoopSkillSummary, agentLoopThought, agentLoopToolFinished, agentLoopPromptDebug, agentResumeAvailable
     }
 
-    class AgentLoopCallbacks {
-        +function~void(int)~ stepStarted
-        +function~void(int, ToolResult)~ stepFinished
+    %% ── MainWindow (外部消费者，不变) ──
+    class MainWindow {
+        -ApplicationController m_controller
+        +setupUi()
+        +connectController()
+        +populateSessionList()
+        +populateChatView()
     }
 
-    LoopTerminationPolicy --> TerminationReason : uses
-    AgentLoopOptions --> LoopTerminationPolicy : can construct from
-
-    namespace AgentLoopController {
-        AgentLoopRunResult executeLoop(
-            AIClient* aiClient,
-            const AppConfig& config,
-            const QString& userGoal,
-            const AgentToolRegistry& registry,
-            const AgentToolExecutionContext& context,
-            const AgentLoopOptions& options,
-            const AgentLoopCallbacks& callbacks,
-            AppLanguage language
-        )
+    %% ── 外部依赖类 ──
+    class OpenAICompatibleClient {
+        +sendChatRequest()
+        +cancelRequest()
+        %% signals: textDeltaReceived, toolCallsReceived, toolUseBlockComplete, requestFinished, requestFailed
     }
+
+    class AIClient {
+        <<interface>>
+        +sendChatRequest()
+        +cancelRequest()
+    }
+
+    class ChatHistoryStorage {
+        +loadSessionList()
+        +loadSession(sessionId)
+        +saveSession(session)
+        +deleteSession(sessionId)
+        +searchSessions(query)
+    }
+
+    class ConfigStorage {
+        +loadConfig() AppConfig
+        +saveConfig(config)
+    }
+
+    class PromptTemplateStorage {
+        +load() QVector~PromptTemplate~
+        +save(templates)
+    }
+
+    class ContextWindowManager {
+        +maybeCompress(session)
+    }
+
+    class SummaryAPIClient {
+        +generateSummary()
+    }
+
+    class SkillManager {
+        +matchSkills(goal)
+        +getSkillPrompt() QString
+    }
+
+    class HookManager {
+        +runHook()
+    }
+
+    class McpRegistry {
+        +registerExternalTools()
+    }
+
+    class TaskScheduler {
+        +addTask()
+        +removeTask()
+        +updateTask()
+    }
+
+    %% ── 关系 ──
+    ApplicationController *-- ConfigCoordinator : owns
+    ApplicationController *-- SessionCoordinator : owns
+    ApplicationController *-- MessageCoordinator : owns
+    ApplicationController *-- AgentCoordinator : owns
+    ApplicationController *-- OpenAICompatibleClient : owns
+    ApplicationController *-- ChatHistoryStorage : owns
+    ApplicationController *-- ContextWindowManager : owns
+    ApplicationController *-- SummaryAPIClient : owns
+    ApplicationController *-- SkillManager : owns
+    ApplicationController *-- HookManager : owns
+    ApplicationController *-- McpRegistry : owns
+    ApplicationController *-- TaskScheduler : owns
+
+    SessionCoordinator --> ChatHistoryStorage : uses (ptr)
+    MessageCoordinator --> OpenAICompatibleClient : uses (ptr)
+    MessageCoordinator --> ContextWindowManager : uses (ptr)
+    MessageCoordinator --> SummaryAPIClient : uses (ptr)
+    AgentCoordinator --> AIClient : uses (ptr)
+    AgentCoordinator --> SkillManager : uses (ptr)
+    AgentCoordinator --> HookManager : uses (ptr)
+    AgentCoordinator --> McpRegistry : uses (ptr)
+    AgentCoordinator --> ChatHistoryStorage : uses (ptr)
+
+    OpenAICompatibleClient --|> AIClient : implements
+
+    MainWindow --> ApplicationController : uses

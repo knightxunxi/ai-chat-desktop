@@ -75,13 +75,41 @@ void OpenAICompatibleClient::sendChatWithTools(const AppConfig &config, const Ch
     const QUrl requestUrl = chatCompletionsUrl(config.baseUrl);
     AppLogger::info(QStringLiteral("AIClient"),
                     QStringLiteral("Chat request started. url=%1 model=%2 messages=%3 systemPrompt=%4")
-                        .arg(requestUrl.toString(), config.modelName, QString::number(requestMessageCount(session)), yesNo(session.hasSystemPrompt())));
+                        .arg(requestUrl.toString(), config.modelName,
+                             QString::number(requestMessageCount(session)),
+                             yesNo(session.hasSystemPrompt())));
 
     QNetworkRequest request(requestUrl);
     request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
     request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(config.apiKey).toUtf8());
 
     m_currentReply = m_networkManager.post(request, buildRequestBody(config, session, tools));
+
+    connect(m_currentReply, &QNetworkReply::readyRead, this, &OpenAICompatibleClient::handleReadyRead);
+    connect(m_currentReply, &QNetworkReply::finished, this, &OpenAICompatibleClient::handleFinished);
+}
+
+void OpenAICompatibleClient::sendChatWithImages(const AppConfig &config, const ChatSession &session,
+                                                  const QJsonArray &tools, const QJsonArray &images)
+{
+    cancel();
+
+    m_streamParser.reset();
+    m_errorBody.clear();
+    m_doneReceived = false;
+
+    const QUrl requestUrl = chatCompletionsUrl(config.baseUrl);
+    AppLogger::info(QStringLiteral("AIClient"),
+                    QStringLiteral("Chat request with images started. url=%1 model=%2 messages=%3 images=%4")
+                        .arg(requestUrl.toString(), config.modelName,
+                             QString::number(requestMessageCount(session)),
+                             QString::number(images.size())));
+
+    QNetworkRequest request(requestUrl);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+    request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(config.apiKey).toUtf8());
+
+    m_currentReply = m_networkManager.post(request, buildRequestBody(config, session, tools, images));
 
     connect(m_currentReply, &QNetworkReply::readyRead, this, &OpenAICompatibleClient::handleReadyRead);
     connect(m_currentReply, &QNetworkReply::finished, this, &OpenAICompatibleClient::handleFinished);
@@ -161,6 +189,101 @@ QByteArray OpenAICompatibleClient::buildRequestBody(const AppConfig &config, con
         messageObject.insert(QStringLiteral("role"), messageRoleToString(message.role));
         messageObject.insert(QStringLiteral("content"), message.content);
         messages.append(messageObject);
+    }
+
+    QJsonObject body;
+    body.insert(QStringLiteral("model"), config.modelName);
+    body.insert(QStringLiteral("messages"), messages);
+    body.insert(QStringLiteral("stream"), true);
+    if (config.temperature.has_value()) {
+        body.insert(QStringLiteral("temperature"), config.temperature.value());
+    }
+    if (config.maxTokens.has_value()) {
+        body.insert(QStringLiteral("max_tokens"), config.maxTokens.value());
+    }
+    if (!tools.isEmpty()) {
+        body.insert(QStringLiteral("tools"), tools);
+        body.insert(QStringLiteral("tool_choice"), QStringLiteral("auto"));
+    }
+
+    return QJsonDocument(body).toJson(QJsonDocument::Compact);
+}
+
+QByteArray OpenAICompatibleClient::buildRequestBody(const AppConfig &config, const ChatSession &session,
+                                                     const QJsonArray &tools, const QJsonArray &images)
+{
+    QJsonArray messages;
+
+    if (session.hasSystemPrompt()) {
+        QJsonObject systemMessage;
+        systemMessage.insert(QStringLiteral("role"), QStringLiteral("system"));
+        systemMessage.insert(QStringLiteral("content"), session.systemPrompt.trimmed());
+        messages.append(systemMessage);
+    }
+
+    // V17.1-fix: 扫描找到最后一条 User 消息的索引（而非依赖最后一条消息，
+    // 因为 ApplicationController 可能在发送前追加了空的 Assistant 占位消息）
+    int lastUserIndex = -1;
+    for (int i = 0; i < session.messages.size(); ++i) {
+        if (session.messages[i].role == MessageRole::User
+            && !session.messages[i].content.trimmed().isEmpty()) {
+            lastUserIndex = i;
+        }
+    }
+
+    int msgIndex = -1;
+    for (const ChatMessage &message : session.messages) {
+        ++msgIndex;
+
+        if (message.role == MessageRole::System) {
+            continue;
+        }
+
+        if (message.content.trimmed().isEmpty()) {
+            continue;
+        }
+
+        // 最后一条 User 消息如果带了图片，用多模态 content 格式
+        bool isLastUserMessage = (msgIndex == lastUserIndex
+                                  && message.role == MessageRole::User);
+
+        if (isLastUserMessage && !images.isEmpty()) {
+            QJsonObject msgObj;
+            msgObj.insert(QStringLiteral("role"), QStringLiteral("user"));
+            QJsonArray contentArray;
+
+            // 文本部分
+            QJsonObject textPart;
+            textPart.insert(QStringLiteral("type"), QStringLiteral("text"));
+            textPart.insert(QStringLiteral("text"), message.content);
+            contentArray.append(textPart);
+
+            // 图片部分 — DeepSeek 格式：{type: "image", image: {data: "<base64>", format: "base64"}}
+            for (const QJsonValue &img : images) {
+                // 剥离 "data:image/png;base64," 前缀，只保留原始 base64
+                QString rawBase64 = img.toString();
+                static const QString kBase64Prefix = QStringLiteral("data:image/png;base64,");
+                if (rawBase64.startsWith(kBase64Prefix)) {
+                    rawBase64 = rawBase64.mid(kBase64Prefix.length());
+                }
+
+                QJsonObject imgPart;
+                imgPart.insert(QStringLiteral("type"), QStringLiteral("image"));
+                QJsonObject imgData;
+                imgData.insert(QStringLiteral("data"), rawBase64);
+                imgData.insert(QStringLiteral("format"), QStringLiteral("base64"));
+                imgPart.insert(QStringLiteral("image"), imgData);
+                contentArray.append(imgPart);
+            }
+
+            msgObj.insert(QStringLiteral("content"), contentArray);
+            messages.append(msgObj);
+        } else {
+            QJsonObject msgObj;
+            msgObj.insert(QStringLiteral("role"), messageRoleToString(message.role));
+            msgObj.insert(QStringLiteral("content"), message.content);
+            messages.append(msgObj);
+        }
     }
 
     QJsonObject body;

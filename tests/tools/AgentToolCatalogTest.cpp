@@ -29,8 +29,8 @@ int main()
 
     const AgentToolDescriptor *fileTool = findAgentToolDescriptor(catalog, QStringLiteral("file.read_text"));
     assert(fileTool != nullptr);
-    assert(fileTool->risk == AgentToolRisk::Medium);
-    assert(fileTool->resultMayContainSensitiveContent);
+    assert(fileTool->risk == AgentToolRisk::Low);
+    assert(!fileTool->resultMayContainSensitiveContent);
 
     const AgentToolDescriptor *workspaceWriteTool = findAgentToolDescriptor(catalog, QStringLiteral("workspace.write_text"));
     assert(workspaceWriteTool != nullptr);

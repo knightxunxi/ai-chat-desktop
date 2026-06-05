@@ -266,9 +266,44 @@ QLabel#messageCodeLanguage {
 QPlainTextEdit#messageCodeBlock {
     border: none;
     background: #f1f5f9;
-    color: #0f172a;
+    color: #24292f;
     font-family: Consolas, "Cascadia Mono", monospace;
     font-size: 13px;
+}
+
+/* V16.2: 表格样式 */
+QFrame#messageTableFrame {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+QFrame#messageTableFrame table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+QFrame#messageTableFrame th {
+    background-color: #e5e7eb;
+    padding: 6px 12px;
+    text-align: left;
+    border: 1px solid #d1d5db;
+}
+
+QFrame#messageTableFrame td {
+    padding: 6px 12px;
+    border: 1px solid #d1d5db;
+}
+
+QFrame#messageTableFrame tr:nth-child(even) {
+    background-color: #f9fafb;
+}
+
+/* V16.2: 引用块样式 */
+QFrame#messageQuoteFrame {
+    border-left: 3px solid #6b7280;
+    background-color: #f3f4f6;
+    padding: 8px 12px;
+    margin: 8px 0;
 }
 
 QPushButton#copyMessageButton {
@@ -378,4 +413,400 @@ QTextEdit#rolePromptEdit {
 QTextEdit#messageInput:focus,
 QTextEdit#rolePromptEdit:focus {
     border-color: #2563eb;
+}
+
+/* V16.1: Agent 思考步骤卡片 */
+QFrame#agentStepWidget {
+    border-left: 3px solid #bfdbfe;
+    border-top: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #ffffff;
+    padding: 0;
+}
+
+QLabel#agentStepHeader {
+    color: #1e293b;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QLabel#agentStepReasoning {
+    color: #64748b;
+    font-size: 12px;
+}
+
+QLabel#agentStepResult {
+    color: #334155;
+    font-size: 12px;
+}
+
+/* V16.3: 右键菜单 */
+QMenu {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px;
+}
+QMenu::item {
+    padding: 6px 24px;
+    border-radius: 4px;
+}
+QMenu::item:selected {
+    background: #eff6ff;
+    color: #1e40af;
+}
+QMenu::separator {
+    height: 1px;
+    background: #e2e8f0;
+    margin: 2px 8px;
+}
+QMenu::item:disabled {
+    color: #9ca3af;
+}
+
+/* V16.3: 暗色主题 — 黑底白字灰边框 */
+QWidget[darkMode="true"] QMainWindow {
+    background: #0d0d0d;
+}
+QWidget[darkMode="true"] QWidget#centralRoot {
+    background: #111111;
+}
+QWidget[darkMode="true"] QWidget#mainPanel {
+    background: #111111;
+}
+QWidget[darkMode="true"] QFrame#sidebar {
+    background: #161616;
+    border-right: 1px solid #333333;
+}
+QWidget[darkMode="true"] QScrollArea#chatScrollArea {
+    background: #111111;
+}
+QWidget[darkMode="true"] QWidget#chatContainer {
+    background: #111111;
+}
+QWidget[darkMode="true"] QFrame#assistantMessage {
+    background: #1a1a1a;
+    border-color: #3a3a3a;
+    color: #e0e0e0;
+}
+QWidget[darkMode="true"] QFrame#userMessage {
+    background: #0d1b2a;
+    border-color: #2a4a6a;
+}
+QWidget[darkMode="true"] QFrame#systemMessage {
+    background: #1a1406;
+    border-color: #5a4a1a;
+}
+QWidget[darkMode="true"] QFrame#messageCodeBlockFrame {
+    background: #1a1a1a;
+    border-color: #3a3a3a;
+}
+QWidget[darkMode="true"] QPlainTextEdit#messageCodeBlock {
+    background: #252525;
+    color: #cccccc;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    font-size: 13px;
+}
+QWidget[darkMode="true"] QLabel#messageCodeLanguage {
+    color: #aaaaaa;
+}
+QWidget[darkMode="true"] QLabel#messageContent {
+    color: #e0e0e0;
+}
+QWidget[darkMode="true"] QLabel#messageRole {
+    color: #888888;
+}
+QWidget[darkMode="true"] QFrame#composer {
+    background: #161616;
+    border-top: 1px solid #333333;
+}
+QWidget[darkMode="true"] QTextEdit#messageInput {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #3a3a3a;
+}
+QWidget[darkMode="true"] QPushButton {
+    color: #e0e0e0;
+    background: #2a2a2a;
+    border-color: #444444;
+}
+QWidget[darkMode="true"] QPushButton:hover {
+    background: #3a3a3a;
+    border-color: #555555;
+}
+QWidget[darkMode="true"] QPushButton:disabled {
+    color: #666666;
+    background: #1e1e1e;
+    border-color: #333333;
+}
+QWidget[darkMode="true"] QLineEdit,
+QWidget[darkMode="true"] QComboBox {
+    background: #1e1e1e;
+    color: #e0e0e0;
+    border-color: #3a3a3a;
+}
+QWidget[darkMode="true"] QLineEdit:focus,
+QWidget[darkMode="true"] QComboBox:focus {
+    border-color: #4a7cf7;
+}
+QWidget[darkMode="true"] QFrame#chatHeader {
+    background: #1a1a1a;
+    border-bottom: 1px solid #333333;
+}
+QWidget[darkMode="true"] QLabel#modelLabel {
+    color: #e0e0e0;
+}
+QWidget[darkMode="true"] QLabel#personaLabel {
+    color: #888888;
+}
+QWidget[darkMode="true"] QScrollBar:vertical {
+    background: #1a1a1a;
+}
+QWidget[darkMode="true"] QScrollBar::handle:vertical {
+    background: #555555;
+}
+QWidget[darkMode="true"] QFrame#sessionFilterBar {
+    background: #2a2a2a;
+    border-color: #3a3a3a;
+}
+QWidget[darkMode="true"] QFrame#sessionFilterBar QPushButton {
+    color: #cccccc;
+}
+QWidget[darkMode="true"] QListWidget#sessionList {
+    color: #e0e0e0;
+}
+QWidget[darkMode="true"] QListWidget#sessionList::item:selected {
+    background: #333333;
+    color: #ffffff;
+}
+
+/* V16.3: 调试卡片 */
+QFrame#debugCard {
+    border: 1px dashed #94a3b8;
+    border-radius: 6px;
+    background: #fffbeb;
+}
+QPushButton#debugCardToggle {
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    padding: 2px 0;
+    border: none;
+    background: transparent;
+    min-height: 20px;
+}
+QPushButton#debugCardToggle:hover {
+    color: #78350f;
+}
+QLabel#debugCardBody {
+    color: #78350f;
+    font-size: 11px;
+    font-family: Consolas, "Cascadia Mono", monospace;
+    background: #fffbeb;
+    padding: 6px 8px;
+    border-radius: 4px;
+}
+
+QWidget[darkMode="true"] QFrame#debugCard {
+    background: #2d1f0e;
+    border-color: #78350f;
+}
+QWidget[darkMode="true"] QPushButton#debugCardToggle {
+    color: #fbbf24;
+}
+QWidget[darkMode="true"] QLabel#debugCardBody {
+    color: #fcd34d;
+    background: #2d1f0e;
+}
+
+/* ─── CH-8: 消息编辑框样式 ─────────────────────────────────────── */
+
+QPlainTextEdit#messageEditInput {
+    border: 2px solid #2563eb;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 14px;
+    padding: 8px 10px;
+}
+
+QWidget[darkMode="true"] QPlainTextEdit#messageEditInput {
+    border-color: #3b82f6;
+    background: #334155;
+    color: #e5e7eb;
+}
+
+QPushButton#editConfirmButton {
+    background: #2563eb;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 4px 16px;
+}
+
+QPushButton#editConfirmButton:hover {
+    background: #1d4ed8;
+}
+
+QPushButton#editCancelButton {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 4px 16px;
+}
+
+QPushButton#editCancelButton:hover {
+    background: #e2e8f0;
+}
+
+QWidget[darkMode="true"] QPushButton#editCancelButton {
+    background: #334155;
+    color: #94a3b8;
+}
+
+QWidget[darkMode="true"] QPushButton#editCancelButton:hover {
+    background: #475569;
+}
+
+/* ─── AG-6: 确认弹窗样式 ───────────────────────────────────────── */
+
+QDialog#confirmToolDialog {
+    background: #ffffff;
+    border-radius: 12px;
+}
+
+QWidget[darkMode="true"] QDialog#confirmToolDialog {
+    background: #1e293b;
+}
+
+QLabel#confirmToolTitle {
+    color: #111827;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QWidget[darkMode="true"] QLabel#confirmToolTitle {
+    color: #f1f5f9;
+}
+
+QLabel#confirmToolDesc {
+    color: #6b7280;
+    font-size: 13px;
+}
+
+QWidget[darkMode="true"] QLabel#confirmToolDesc {
+    color: #94a3b8;
+}
+
+QFrame#confirmActionPreview {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: 6px;
+}
+
+QWidget[darkMode="true"] QFrame#confirmActionPreview {
+    background: #422006;
+    border-color: #92400e;
+}
+
+QLabel#confirmSectionTitle {
+    color: #92400e;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QWidget[darkMode="true"] QLabel#confirmSectionTitle {
+    color: #fbbf24;
+}
+
+QLabel#confirmActionBody {
+    color: #78350f;
+    font-size: 13px;
+}
+
+QWidget[darkMode="true"] QLabel#confirmActionBody {
+    color: #fcd34d;
+}
+
+QFrame#confirmParamPreview {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+QWidget[darkMode="true"] QFrame#confirmParamPreview {
+    background: #1e293b;
+    border-color: #334155;
+}
+
+QPushButton#confirmParamToggle {
+    color: #475569;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: left;
+    border: none;
+    background: transparent;
+    min-height: 20px;
+    padding: 0;
+}
+
+QWidget[darkMode="true"] QPushButton#confirmParamToggle {
+    color: #94a3b8;
+}
+
+QLabel#confirmParamBody {
+    color: #334155;
+    font-size: 11px;
+    font-family: Consolas, monospace;
+}
+
+QWidget[darkMode="true"] QLabel#confirmParamBody {
+    color: #cbd5e1;
+}
+
+QPushButton#confirmExecuteBtn {
+    background: #dc2626;
+    color: #ffffff;
+    font-weight: 600;
+    padding: 6px 20px;
+}
+
+QPushButton#confirmExecuteBtn:hover {
+    background: #b91c1c;
+}
+
+QPushButton#confirmCancelBtn {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 6px 20px;
+}
+
+QPushButton#confirmCancelBtn:hover {
+    background: #e2e8f0;
+}
+
+QWidget[darkMode="true"] QPushButton#confirmCancelBtn {
+    background: #334155;
+    color: #94a3b8;
+}
+
+QWidget[darkMode="true"] QPushButton#confirmCancelBtn:hover {
+    background: #475569;
+}
+
+/* ─── AG-4: Agent 执行回放样式 ─────────────────────────────────── */
+
+QFrame#agentReplayDivider {
+    margin-top: 16px;
+}
+
+QLabel#agentReplayLabel {
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QWidget[darkMode="true"] QLabel#agentReplayLabel {
+    color: #94a3b8;
 }

@@ -2,6 +2,7 @@
 
 #include "core/AppConfig.h"
 
+#include <QCheckBox>
 #include <QDialog>
 
 class QComboBox;
@@ -21,6 +22,10 @@ public:
 
     // 功能：返回窗口中编辑后的配置；使用模块：MainWindow::openSettingsDialog。
     AppConfig config() const;
+
+    // V16.3: Agent 调试模式 getter/setter（不在 AppConfig 中持久化）
+    bool debugMode() const { return m_debugMode; }
+    void setDebugMode(bool enabled) { m_debugMode = enabled; }
 
 private:
     // 功能：创建表单控件和布局；使用模块：构造函数。
@@ -58,4 +63,8 @@ private:
     QLineEdit *m_agentProjectEdit = nullptr; // 功能：Agent 项目目录输入；使用模块：生成 AppConfig。
     QComboBox *m_languageCombo = nullptr;   // 功能：语言选择；使用模块：界面语言切换。
     QDialogButtonBox *m_buttonBox = nullptr; // 功能：确认/取消按钮；使用模块：标准对话框操作。
+
+    // V16.3: Agent 调试模式（移到设置界面）
+    bool m_debugMode = false;
+    QCheckBox *m_debugModeCheckbox = nullptr;
 };

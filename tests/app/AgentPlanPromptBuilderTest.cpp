@@ -28,7 +28,7 @@ int main()
     assert(prompt.contains(QStringLiteral("risk=medium")));
     assert(prompt.contains(QStringLiteral("risk=high")));
     assert(prompt.contains(QStringLiteral("Do not suggest shell commands")));
-    assert(prompt.contains(QStringLiteral("configured Agent workspace")));
+    assert(prompt.contains(QStringLiteral("configured workspace")));
     assert(prompt.contains(QStringLiteral("untrusted data")));
     assert(prompt.contains(QStringLiteral("Recommended developer command skills")));
     assert(prompt.contains(QStringLiteral("developer.pre_commit_check")));

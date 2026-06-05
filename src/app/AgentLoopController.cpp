@@ -4,8 +4,12 @@
 #include "app/AgentLoopPromptBuilder.h"
 #include "core/AppConfig.h"
 #include "core/ChatSession.h"
+#include "hooks/HookDefinition.h"
+#include "hooks/HookManager.h"
 #include "services/AIClient.h"
 #include "services/RequestErrorCategory.h"
+#include "skills/SkillDefinition.h"
+#include "skills/SkillManager.h"
 #include "support/AppLogger.h"
 
 #include <QElapsedTimer>
@@ -380,7 +384,9 @@ AgentLoopRunResult executeLoop(
     const AgentToolExecutionContext &context,
     const AgentLoopOptions &options,
     const AgentLoopCallbacks &callbacks,
-    AppLanguage language)
+    AppLanguage language,
+    HookManager *hooks,
+    SkillManager *skills)
 {
     AgentLoopRunResult result;
 
@@ -391,6 +397,12 @@ AgentLoopRunResult executeLoop(
 
     if (options.maxSteps <= 0) {
         return finishWith(result, AgentLoopRunStatus::Failed, QStringLiteral("Maximum step count must be positive."));
+    }
+
+    // V13.3: on_agent_start Hook
+    if (hooks != nullptr) {
+        hooks->executeHooks(HookPoint::OnAgentStart,
+                            HookContext::forAgentLifecycle(HookPoint::OnAgentStart, userGoal));
     }
 
     // 2. 初始化计时器和收集容器
@@ -411,6 +423,12 @@ AgentLoopRunResult executeLoop(
         }
     }
 
+    // V13.3: 技能匹配（pre_send 阶段）
+    QVector<SkillDefinition> matchedSkills;
+    if (skills != nullptr) {
+        matchedSkills = skills->matchSkills(userGoal);
+    }
+
     // 5. 主循环
     while (true) {
         const qint64 elapsedMs = runtimeTimer.elapsed();
@@ -423,6 +441,11 @@ AgentLoopRunResult executeLoop(
 
         // a. 检查用户停止请求
         if (policy.shouldStop && policy.shouldStop()) {
+            // V13.3: on_agent_stop
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(result, AgentLoopRunStatus::Stopped,
                               QStringLiteral("User requested stop."));
         }
@@ -430,17 +453,47 @@ AgentLoopRunResult executeLoop(
         // b. 检查步数上限和运行时间上限
         const TerminationReason preCheck = policy.check(completedSteps, elapsedMs);
         if (preCheck == TerminationReason::StepLimit) {
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(result, AgentLoopRunStatus::StepLimitReached,
                               QStringLiteral("Step limit of %1 reached.").arg(policy.maxSteps));
         }
         if (preCheck == TerminationReason::RuntimeLimit) {
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(result, AgentLoopRunStatus::RuntimeLimitReached,
                               QStringLiteral("Runtime limit of %1 ms reached.").arg(policy.maxRuntimeMs));
         }
 
         // ----- 思考阶段：构建提示词 -----
-        const QString prompt = AgentLoopPromptBuilder::buildNextActionPrompt(
-            userGoal, observations, toolCatalog, language, completedSteps, policy.maxSteps);
+        QString prompt = AgentLoopPromptBuilder::buildNextActionPrompt(
+            userGoal, observations, toolCatalog, language, completedSteps, policy.maxSteps, matchedSkills);
+
+        // V13.3: pre_send Hook
+        if (hooks != nullptr) {
+            HookContext preSendCtx = HookContext::forPreSend(prompt, userGoal, completedSteps, QString());
+            QVector<HookResult> preSendResults = hooks->executeHooks(HookPoint::PreSend, preSendCtx);
+
+            // 检查是否有 Reject
+            for (const HookResult &hr : preSendResults) {
+                if (hr.isReject()) {
+                    if (hooks != nullptr) {
+                        hooks->executeHooks(HookPoint::OnAgentStop,
+                                            HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+                    }
+                    return finishWith(result, AgentLoopRunStatus::Failed,
+                                      QStringLiteral("PreSend hook rejected: %1").arg(hr.rejectionReason()));
+                }
+                // 应用 Modify
+                if (hr.action == HookAction::Modify && hr.modifiedContext.contains(QStringLiteral("prompt"))) {
+                    prompt = hr.modifiedContext.value(QStringLiteral("prompt")).toString();
+                }
+            }
+        }
 
         // c. 调用 AI
         const AiLoopResponse aiResponse = AiLoopRunner::call(aiClient, config, prompt, policy.maxStepMs);
@@ -450,14 +503,38 @@ AgentLoopRunResult executeLoop(
             logAudit(&result.auditTrail,
                      QStringLiteral("Think: ai_error=%1 category=%2")
                          .arg(aiResponse.errorMessage, RequestErrorCategoryHelpers::toString(aiResponse.errorCategory)));
+
+            // V13.3: on_error Hook
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnError,
+                                    HookContext::forError(aiResponse.errorMessage, completedSteps));
+            }
+
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(result, AgentLoopRunStatus::Failed, aiResponse.errorMessage);
         }
 
         // ----- 解析阶段 -----
         logAudit(&result.auditTrail, QStringLiteral("Think: ai_response_length=%1").arg(aiResponse.fullText.size()));
 
+        // V13.3: post_receive Hook
+        QString aiResponseText = aiResponse.fullText;
+        if (hooks != nullptr) {
+            HookContext postReceiveCtx = HookContext::forPostReceive(aiResponseText, completedSteps);
+            QVector<HookResult> postResults = hooks->executeHooks(HookPoint::PostReceive, postReceiveCtx);
+
+            for (const HookResult &hr : postResults) {
+                if (hr.action == HookAction::Modify && hr.modifiedContext.contains(QStringLiteral("response"))) {
+                    aiResponseText = hr.modifiedContext.value(QStringLiteral("response")).toString();
+                }
+            }
+        }
+
         const AgentLoopActionParseResult parseResult =
-            AgentLoopActionParser::parseJsonAction(aiResponse.fullText, toolCatalog);
+            AgentLoopActionParser::parseJsonAction(aiResponseText, toolCatalog);
 
         // e. 解析失败不终止，将错误作为 observation 注入继续循环
         if (!parseResult.ok) {
@@ -475,6 +552,11 @@ AgentLoopRunResult executeLoop(
             logAudit(&result.auditTrail,
                      QStringLiteral("Think: done=true message=%1").arg(action.message));
             result.lastOutput = action.message;
+            // V13.3: on_agent_stop
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(result, AgentLoopRunStatus::Completed);
         }
 
@@ -488,12 +570,24 @@ AgentLoopRunResult executeLoop(
             callbacks.stepStarted(completedSteps);
         }
 
+        // V13.3: on_tool_execute (before)
+        if (hooks != nullptr) {
+            hooks->executeHooks(HookPoint::OnToolExecute,
+                                HookContext::forToolExecute(action.step.toolId, action.step.parameters, true));
+        }
+
         // h. 执行工具
         QElapsedTimer stepTimer;
         stepTimer.start();
         const ToolResult toolResult = registry.execute(
-            action.step.toolId, action.step.parameters, context);
+            action.step.toolId, action.step.parameters, context, hooks);
         const qint64 stepElapsedMs = stepTimer.elapsed();
+
+        // V13.3: on_tool_execute (after)
+        if (hooks != nullptr) {
+            hooks->executeHooks(HookPoint::OnToolExecute,
+                                HookContext::forToolExecute(action.step.toolId, action.step.parameters, false));
+        }
 
         result.lastToolId = action.step.toolId;
         result.lastOutput = toolResult.output;
@@ -510,6 +604,15 @@ AgentLoopRunResult executeLoop(
                          .arg(action.step.toolId)
                          .arg(stepElapsedMs)
                          .arg(toolResult.error));
+            // V13.3: on_error Hook
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnError,
+                                    HookContext::forError(toolResult.error, completedSteps));
+            }
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(result, AgentLoopRunStatus::Failed, toolResult.error);
         }
 
@@ -525,6 +628,10 @@ AgentLoopRunResult executeLoop(
 
         // l. 单步超时检查
         if (stepElapsedMs >= policy.maxStepMs) {
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(
                 result,
                 AgentLoopRunStatus::StepTimeout,
@@ -535,10 +642,18 @@ AgentLoopRunResult executeLoop(
         const qint64 updatedElapsedMs = runtimeTimer.elapsed();
         const TerminationReason postCheck = policy.check(completedSteps, updatedElapsedMs, stepElapsedMs);
         if (postCheck == TerminationReason::StepLimit) {
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(result, AgentLoopRunStatus::StepLimitReached,
                               QStringLiteral("Step limit of %1 reached.").arg(policy.maxSteps));
         }
         if (postCheck == TerminationReason::RuntimeLimit) {
+            if (hooks != nullptr) {
+                hooks->executeHooks(HookPoint::OnAgentStop,
+                                    HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+            }
             return finishWith(result, AgentLoopRunStatus::RuntimeLimitReached,
                               QStringLiteral("Runtime limit of %1 ms reached.").arg(policy.maxRuntimeMs));
         }

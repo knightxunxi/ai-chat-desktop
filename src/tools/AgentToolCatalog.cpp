@@ -1,5 +1,5 @@
-#include "tools/AgentToolCatalog.h"
-#include "tools/AgentToolRegistry.h"
+#include "tools/registry/AgentToolCatalog.h"
+#include "tools/registry/AgentToolRegistry.h"
 
 QString agentToolRiskToString(AgentToolRisk risk)
 {

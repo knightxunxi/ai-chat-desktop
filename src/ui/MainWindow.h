@@ -3,12 +3,16 @@
 #include "app/ApplicationController.h"
 #include "core/ChatSession.h"
 #include "core/SessionListFilter.h"
+#include "ui/AgentStepWidget.h"
 
 #include <QMainWindow>
+#include <QHash>
+#include <QVector>
 
 class ChatView;
-class QCheckBox;
+class MessageWidget;
 class QCloseEvent;
+class QFrame;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
@@ -28,6 +32,8 @@ public:
 protected:
     // 功能：窗口关闭前取消生成并退出应用；使用模块：用户点关闭、smoke test 自动关闭。
     void closeEvent(QCloseEvent *event) override;
+    // V17.1: 拦截粘贴事件以支持图片粘贴；使用模块：m_messageInput 上安装。
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
 private:
     // 功能：创建侧边栏、聊天区、输入区和顶部按钮；使用模块：构造函数。
@@ -66,8 +72,8 @@ private:
     void openLogViewerDialog();
     // 功能：打开本地工具窗口；使用模块：工具按钮。
     void openToolsDialog();
-    // 功能：打开文件工具窗口；使用模块：文件工具按钮。
-    void openFileToolsDialog();
+    // V15.5: openFileToolsDialog 已移除。FileInteractionService API 保留，见 docs/FileInteractionService-API.md
+
     // V15.3: 打开调度任务管理窗口；使用模块：调度任务按钮。
     void openScheduledTaskDialog();
     // 功能：根据当前输入生成 Agent 计划；使用模块：已隐藏的 Agent 计划按钮（内部 API 保留）。
@@ -95,12 +101,6 @@ private:
     void sendCurrentMessage();
     // 功能：切换聊天模式 / Agent 统一模式；使用模块：模式切换按钮。
     void toggleAgentMode();
-    // V12.4: 切换 Chat 模式自动执行工具开关；使用模块：自动执行按钮。
-    void toggleChatAutoExecute();
-    // V12.4: 切换高权限模式开关；使用模块：高权限复选框。
-    void toggleHighPermission();
-    // V12.4: 更新自动执行按钮外观；使用模块：toggleChatAutoExecute。
-    void updateChatAutoExecuteAppearance();
     // 功能：把用户消息增量加入聊天区；使用模块：userMessageAdded 信号。
     void addUserMessage(const QString &content);
     // 功能：添加助手回复占位；使用模块：assistantMessageStarted 信号。
@@ -115,6 +115,20 @@ private:
     void showStatusMessage(const QString &english, const QString &chinese, int timeoutMs);
     // 功能：启动期延迟弹警告；使用模块：startupWarning 信号。
     void showStartupWarning(const QString &english, const QString &chinese);
+    // V16.3: 右键菜单处理；使用模块：MessageWidget 右键信号。
+    void onMessageDeleteRequested(MessageWidget *msg);
+    void onMessageRegenerateRequested();
+    void onQuoteReplyRequested(const QString &content);
+    // CH-8: 消息编辑确认后截断并重新发送；使用模块：MessageWidget::editConfirmed 信号。
+    void onMessageEditConfirmed(const QString &messageId, const QString &newContent);
+    // V16.3: 主题切换；使用模块：主题切换按钮。
+    void toggleDarkMode();
+    // V16.3: Agent 调试模式；使用模块：转发调试信号。
+    void onAgentDebugPrompt(const QString &prompt);
+
+    // V17.1: 图片粘贴处理
+    void onImagePasted(const QImage &image);
+    void clearPendingImages();
 
     ApplicationController m_controller;      // 功能：主业务控制器；使用模块：主窗口所有用户操作。
     QListWidget *m_sessionList = nullptr;    // 功能：会话列表；使用模块：侧边栏会话展示和切换。
@@ -130,23 +144,24 @@ private:
     QPushButton *m_deleteChatButton = nullptr; // 功能：删除按钮；使用模块：侧边栏操作区。
     QPushButton *m_systemPromptButton = nullptr; // 功能：角色提示词入口；使用模块：顶部工具区。
     QPushButton *m_toolsButton = nullptr;     // 功能：本地工具入口；使用模块：顶部工具区。
-    QPushButton *m_fileToolsButton = nullptr; // 功能：文件工具入口；使用模块：顶部工具区。
     QPushButton *m_agentPlanButton = nullptr; // 功能：Agent 计划入口；使用模块：顶部工具区。
     QPushButton *m_logButton = nullptr;      // 功能：日志窗口入口；使用模块：顶部工具区。
-    QPushButton *m_schedulerButton = nullptr; // 功能：调度任务入口；使用模块：顶部工具区。
-    QPushButton *m_scheduledTaskButton = nullptr; // V15.3: 调度任务入口；使用模块：顶部工具区。
+    QPushButton *m_scheduledTaskButton = nullptr; // 功能：调度任务入口；使用模块：顶部工具区。
     ChatView *m_chatView = nullptr;          // 功能：聊天消息列表视图；使用模块：主内容区。
     QTextEdit *m_messageInput = nullptr;     // 功能：用户输入框；使用模块：底部输入区。
     QPushButton *m_retryButton = nullptr;    // 功能：失败重试按钮；使用模块：底部输入区。
     QPushButton *m_sendButton = nullptr;     // 功能：发送/停止按钮；使用模块：底部输入区。
     QPushButton *m_modeToggleButton = nullptr; // 功能：Chat/Agent 模式切换按钮；使用模块：底部输入区。
     bool m_isAgentMode = false;              // 功能：当前是否处于 Agent 统一模式；使用模块：sendCurrentMessage 路由。
-    // V12.4: Chat 模式自动执行工具 UI 控件
-    QPushButton *m_chatAutoExecuteButton = nullptr; // 功能：Chat 模式自动执行工具开关按钮；使用模块：底部输入区。
-    QCheckBox *m_highPermissionCheckbox = nullptr;  // 功能：高权限模式复选框；使用模块：底部输入区。
-    bool m_chatAutoExecute = false;   // 功能：Chat 模式自动执行工具状态；使用模块：sendCurrentMessage 路由。
-    bool m_highPermissionMode = false; // 功能：高权限模式状态；使用模块：toggleHighPermission。
     QPushButton *m_settingsButton = nullptr; // 功能：设置入口；使用模块：顶部工具区。
     QLabel *m_modelLabel = nullptr;          // 功能：当前模型展示；使用模块：顶部标题区。
     QLabel *m_personaLabel = nullptr;        // 功能：当前角色展示；使用模块：顶部标题区。
+    QVector<AgentStepWidget *> m_agentSteps;   // V16.1: Agent 思考步骤卡片列表
+    QHash<QString, MessageWidget *> m_messageWidgets; // CH-8: 消息 ID 到 MessageWidget 的映射
+    QPushButton *m_themeToggleButton = nullptr;  // V16.3: 主题切换按钮
+
+    // V17.1: 图片预览
+    // V17.1: 待发送图片 base64 列表
+    QVector<QString> m_pendingImages; // data:image/png;base64,... 格式
+    static constexpr int kMaxPendingImages = 3;
 };

@@ -13,6 +13,9 @@
 // Forward declarations for executeLoop() parameters.
 struct AppConfig;
 class AIClient;
+class HookManager;
+class SkillManager;
+struct SkillDefinition;
 
 enum class AgentLoopRunStatus {
     Completed,
@@ -100,6 +103,7 @@ AgentLoopRunResult runPlan(
     const AgentLoopCallbacks &callbacks = AgentLoopCallbacks());
 
 // 功能：每步调 AI → 解析 → 执行工具 → 收集观测 → 继续的无限循环；使用模块：V12 Agentic Loop 核心运行时。
+// V13.3: 新增 hooks/skills 参数（默认 nullptr），向后兼容 runPlan()。
 AgentLoopRunResult executeLoop(
     AIClient *aiClient,
     const AppConfig &config,
@@ -108,6 +112,8 @@ AgentLoopRunResult executeLoop(
     const AgentToolExecutionContext &context,
     const AgentLoopOptions &options = AgentLoopOptions(),
     const AgentLoopCallbacks &callbacks = AgentLoopCallbacks(),
-    AppLanguage language = AppLanguage::Chinese);
+    AppLanguage language = AppLanguage::Chinese,
+    HookManager *hooks = nullptr,
+    SkillManager *skills = nullptr);
 
 } // namespace AgentLoopController

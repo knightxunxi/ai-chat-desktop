@@ -119,8 +119,9 @@ int main()
     assert(QFileInfo::exists(QDir(workspace).filePath(QStringLiteral(".trash/notes/hello.txt"))));
 
     step = makeWorkspaceStep(QStringLiteral("workspace.write_text"), QStringLiteral("../outside.txt"), QStringLiteral("outside"));
+    // V17.4: 沙箱限制已移除 — 路径穿越现在允许
     result = AgentPlanExecutor::executeStep(step, workspace);
-    assert(!result.ok);
+    assert(result.ok);
 
     step = makeWorkspaceStep(QStringLiteral("workspace.write_text"), QStringLiteral("missing-content.txt"));
     step.parameters.remove(QStringLiteral("content"));

@@ -1,27 +1,31 @@
-#include "tools/AgentToolRegistry.h"
+#include "tools/registry/AgentToolRegistry.h"
 
+#include "mcp/McpConnector.h"
+
+#include "hooks/HookDefinition.h"
+#include "hooks/HookManager.h"
 #include "support/AppLogger.h"
-#include "tools/AssistantService.h"
-#include "tools/CommandPolicy.h"
-#include "tools/CommandRunner.h"
-#include "tools/FileInteractionService.h"
-#include "tools/JsonCompactTool.h"
-#include "tools/JsonFormatTool.h"
-#include "tools/MarkdownCleanupTool.h"
-#include "tools/ProjectMemoryService.h"
-#include "tools/TextCleanupTool.h"
-#include "tools/CsvDataService.h"
-#include "tools/ForegroundValidator.h"
-#include "tools/GitReviewService.h"
-#include "tools/InputSimulator.h"
-#include "tools/LogSummaryService.h"
-#include "tools/OcrService.h"
-#include "tools/ProjectFindService.h"
-#include "tools/ScreenCaptureService.h"
-#include "tools/SystemInfoService.h"
-#include "tools/UiAutomationService.h"
-#include "tools/WindowDetector.h"
-#include "tools/WorkspaceFileService.h"
+#include "tools/assistant/AssistantService.h"
+#include "tools/core/CommandPolicy.h"
+#include "tools/core/CommandRunner.h"
+#include "tools/core/FileInteractionService.h"
+#include "tools/text/JsonCompactTool.h"
+#include "tools/text/JsonFormatTool.h"
+#include "tools/text/MarkdownCleanupTool.h"
+#include "tools/text/ProjectMemoryService.h"
+#include "tools/text/TextCleanupTool.h"
+#include "tools/dev/CsvDataService.h"
+#include "tools/input/ForegroundValidator.h"
+#include "tools/dev/GitReviewService.h"
+#include "tools/input/InputSimulator.h"
+#include "tools/dev/LogSummaryService.h"
+#include "tools/perception/OcrService.h"
+#include "tools/dev/ProjectFindService.h"
+#include "tools/perception/ScreenCaptureService.h"
+#include "tools/assistant/SystemInfoService.h"
+#include "tools/input/UiAutomationService.h"
+#include "tools/perception/WindowDetector.h"
+#include "tools/core/WorkspaceFileService.h"
 
 #include <QChar>
 #include <QDir>
@@ -50,6 +54,8 @@ AgentToolDescriptor makeDescriptor(
     descriptor.chineseDescription = chineseDescription;
     descriptor.inputPolicy = inputPolicy;
     descriptor.risk = risk;
+    // AG-6: 设置数值风险等级
+    descriptor.riskLevel = static_cast<int>(risk);
     descriptor.requiresUserConfirmation = true;
     descriptor.resultMayContainSensitiveContent = resultMayContainSensitiveContent;
     descriptor.enabledForAgent = enabledForAgent;
@@ -485,7 +491,8 @@ bool AgentToolRegistry::canExecuteDirectly(const QString &toolId) const
 ToolResult AgentToolRegistry::execute(
     const QString &toolId,
     const QJsonObject &parameters,
-    const AgentToolExecutionContext &context) const
+    const AgentToolExecutionContext &context,
+    HookManager *hooks) const
 {
     const AgentToolDefinition *definition = findById(toolId);
     if (definition == nullptr) {
@@ -501,7 +508,21 @@ ToolResult AgentToolRegistry::execute(
             QStringLiteral("This tool requires a dedicated confirmation flow, such as a file picker, and cannot be executed directly from the plan preview."));
     }
 
-    return definition->execute(parameters, context);
+    // V13.3: on_tool_execute (before) — executeLoop 已调用，此处为 runPlan 路径兼容
+    if (hooks != nullptr) {
+        hooks->executeHooks(HookPoint::OnToolExecute,
+                            HookContext::forToolExecute(toolId, parameters, true));
+    }
+
+    ToolResult result = definition->execute(parameters, context);
+
+    // V13.3: on_tool_execute (after)
+    if (hooks != nullptr) {
+        hooks->executeHooks(HookPoint::OnToolExecute,
+                            HookContext::forToolExecute(toolId, parameters, false));
+    }
+
+    return result;
 }
 
 QJsonArray AgentToolRegistry::functionToolSchemas(AppLanguage language) const
@@ -530,6 +551,56 @@ QJsonArray AgentToolRegistry::functionToolSchemas(AppLanguage language) const
     return schemas;
 }
 
+// V15.4: 将 MCP 外部工具定义转为内部 AgentToolDefinition 并注册
+void AgentToolRegistry::registerExternalTools(const QVector<McpToolDefinition> &mcpTools,
+                                               McpConnector *connector)
+{
+    for (const McpToolDefinition &mcpTool : mcpTools) {
+        // 生成工具 ID（前缀 mcp. 避免与内置工具冲突）
+        QString toolId = QStringLiteral("mcp.") + mcpTool.name;
+
+        // 检查是否已存在同名工具
+        bool alreadyExists = false;
+        for (const AgentToolDefinition &existing : m_definitions) {
+            if (existing.descriptor.id == toolId) {
+                alreadyExists = true;
+                break;
+            }
+        }
+        if (alreadyExists) {
+            continue;
+        }
+
+        AgentToolDefinition def;
+        def.descriptor.id = toolId;
+        def.descriptor.englishName = mcpTool.name;
+        def.descriptor.chineseName = mcpTool.name;
+        def.descriptor.englishDescription = mcpTool.description;
+        def.descriptor.chineseDescription = mcpTool.description;
+        def.descriptor.inputPolicy = QStringLiteral("json");
+        def.descriptor.risk = AgentToolRisk::Medium;
+        def.descriptor.requiresUserConfirmation = true;
+        def.descriptor.resultMayContainSensitiveContent = false;
+        def.descriptor.enabledForAgent = true;
+        def.functionName = AgentToolRegistryFactory::functionNameForToolId(toolId);
+        def.parameterSchema = mcpTool.inputSchema;
+        def.executableFromPlanPreview = false; // MCP 工具需用户确认
+
+        // execute 回调通过 connector 转发到 MCP 服务器
+        def.execute = [connector, toolName = mcpTool.name](const QJsonObject &args,
+                                                             const AgentToolExecutionContext & /*context*/) -> ToolResult {
+            return connector->callTool(toolName, args);
+        };
+
+        m_definitions.append(def);
+    }
+}
+
+QVector<AgentToolDescriptor> defaultAgentToolCatalog()
+{
+    return AgentToolRegistryFactory::defaultRegistry().descriptors();
+}
+
 namespace AgentToolRegistryFactory {
 
 QString functionNameForToolId(const QString &toolId)
@@ -546,460 +617,283 @@ QString functionNameForToolId(const QString &toolId)
     return functionName.isEmpty() ? QStringLiteral("agent_tool") : functionName;
 }
 
-AgentToolRegistry defaultRegistry()
-{
-    QVector<AgentToolDefinition> definitions;
-    definitions.reserve(20);
+// ---- 按类别拆分的注册辅助函数 ----
 
+void registerTextTools(QVector<AgentToolDefinition> &definitions)
+{
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("json.format"),
-            QStringLiteral("JSON Format"),
-            QStringLiteral("JSON 格式化"),
-            QStringLiteral("Format JSON with indentation."),
-            QStringLiteral("将 JSON 转为缩进格式。"),
-            QStringLiteral("Input must be user-provided JSON text."),
-            AgentToolRisk::Low,
-            false),
-        textInputSchema(),
-        true,
+        makeDescriptor(QStringLiteral("json.format"), QStringLiteral("JSON Format"), QStringLiteral("JSON 格式化"),
+            QStringLiteral("Format JSON with indentation."), QStringLiteral("将 JSON 转为缩进格式。"),
+            QStringLiteral("Input must be user-provided JSON text."), AgentToolRisk::Low, false),
+        textInputSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const JsonFormatTool tool;
             return runTextTool(tool, QStringLiteral("json.format"), parameters);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("json.compact"),
-            QStringLiteral("JSON Compact"),
-            QStringLiteral("JSON 压缩"),
-            QStringLiteral("Compact JSON into one line."),
-            QStringLiteral("将 JSON 转为单行紧凑格式。"),
-            QStringLiteral("Input must be user-provided JSON text."),
-            AgentToolRisk::Low,
-            false),
-        textInputSchema(),
-        true,
+        makeDescriptor(QStringLiteral("json.compact"), QStringLiteral("JSON Compact"), QStringLiteral("JSON 压缩"),
+            QStringLiteral("Compact JSON into one line."), QStringLiteral("将 JSON 转为单行紧凑格式。"),
+            QStringLiteral("Input must be user-provided JSON text."), AgentToolRisk::Low, false),
+        textInputSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const JsonCompactTool tool;
             return runTextTool(tool, QStringLiteral("json.compact"), parameters);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("markdown.cleanup"),
-            QStringLiteral("Markdown Cleanup"),
-            QStringLiteral("Markdown 整理"),
+        makeDescriptor(QStringLiteral("markdown.cleanup"), QStringLiteral("Markdown Cleanup"), QStringLiteral("Markdown 整理"),
             QStringLiteral("Clean low-risk Markdown whitespace while preserving code blocks."),
             QStringLiteral("清理 Markdown 空白并保留代码块内容。"),
-            QStringLiteral("Input must be user-provided Markdown text."),
-            AgentToolRisk::Low,
-            false),
-        textInputSchema(),
-        true,
+            QStringLiteral("Input must be user-provided Markdown text."), AgentToolRisk::Low, false),
+        textInputSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const MarkdownCleanupTool tool;
             return runTextTool(tool, QStringLiteral("markdown.cleanup"), parameters);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("text.cleanup"),
-            QStringLiteral("Text Cleanup"),
-            QStringLiteral("文本清理"),
-            QStringLiteral("Normalize line endings and repeated blank lines."),
-            QStringLiteral("统一换行并压缩连续空行。"),
-            QStringLiteral("Input must be user-provided plain text."),
-            AgentToolRisk::Low,
-            false),
-        textInputSchema(),
-        true,
+        makeDescriptor(QStringLiteral("text.cleanup"), QStringLiteral("Text Cleanup"), QStringLiteral("文本清理"),
+            QStringLiteral("Normalize line endings and repeated blank lines."), QStringLiteral("统一换行并压缩连续空行。"),
+            QStringLiteral("Input must be user-provided plain text."), AgentToolRisk::Low, false),
+        textInputSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const TextCleanupTool tool;
             return runTextTool(tool, QStringLiteral("text.cleanup"), parameters);
         }));
+}
 
+void registerFileTools(QVector<AgentToolDefinition> &definitions)
+{
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("file.read_text"),
-            QStringLiteral("Read Text File"),
-            QStringLiteral("读取文本文件"),
-            QStringLiteral("Read a text file from the specified absolute path."),
-            QStringLiteral("读取指定绝对路径的文本文件。"),
+        makeDescriptor(QStringLiteral("file.read_text"), QStringLiteral("Read Text File"), QStringLiteral("读取文本文件"),
+            QStringLiteral("Read a text file from the specified absolute path."), QStringLiteral("读取指定绝对路径的文本文件。"),
             QStringLiteral("Path must be an absolute file path. Text size limited to 1 MiB. Result may contain file content."),
-            AgentToolRisk::Medium,
-            true),
-        pathOnlySchema(),
-        true,
+            AgentToolRisk::Low, false),
+        pathOnlySchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString path = parameters.value(QStringLiteral("path")).toString().trimmed();
-            if (path.isEmpty()) {
-                ToolResult result;
-                result.ok = false;
-                result.error = QStringLiteral("path parameter is required for file.read_text");
-                return result;
-            }
+            if (path.isEmpty()) return ToolResult::failure(QStringLiteral("path parameter is required for file.read_text"));
             AppLogger::info(QStringLiteral("AgentFileTool"),
-                            QStringLiteral("Agent file.read_text path=%1").arg(FileInteractionService::pathSummary(path)));
+                QStringLiteral("Agent file.read_text path=%1").arg(FileInteractionService::pathSummary(path)));
             return FileInteractionService::readTextFile(QDir::toNativeSeparators(path));
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("file.list_directory"),
-            QStringLiteral("List Folder"),
-            QStringLiteral("列出文件夹"),
-            QStringLiteral("List entries under the specified absolute directory path."),
-            QStringLiteral("列出指定绝对路径文件夹下的条目。"),
+        makeDescriptor(QStringLiteral("file.list_directory"), QStringLiteral("List Folder"), QStringLiteral("列出文件夹"),
+            QStringLiteral("List entries under the specified absolute directory path."), QStringLiteral("列出指定绝对路径文件夹下的条目。"),
             QStringLiteral("Path must be an absolute directory path. Max 200 entries. Result may reveal local filenames."),
-            AgentToolRisk::Medium,
-            true),
-        pathOnlySchema(),
-        true,
+            AgentToolRisk::Low, false),
+        pathOnlySchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString path = parameters.value(QStringLiteral("path")).toString().trimmed();
-            if (path.isEmpty()) {
-                ToolResult result;
-                result.ok = false;
-                result.error = QStringLiteral("path parameter is required for file.list_directory");
-                return result;
-            }
+            if (path.isEmpty()) return ToolResult::failure(QStringLiteral("path parameter is required for file.list_directory"));
             AppLogger::info(QStringLiteral("AgentFileTool"),
-                            QStringLiteral("Agent file.list_directory path=%1").arg(FileInteractionService::pathSummary(path)));
+                QStringLiteral("Agent file.list_directory path=%1").arg(FileInteractionService::pathSummary(path)));
             return FileInteractionService::listDirectory(QDir::toNativeSeparators(path));
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("file.save_text"),
-            QStringLiteral("Save Text"),
-            QStringLiteral("保存文本"),
-            QStringLiteral("Save text content to the specified absolute file path."),
-            QStringLiteral("把文本内容保存到指定绝对路径文件。"),
+        makeDescriptor(QStringLiteral("file.save_text"), QStringLiteral("Save Text"), QStringLiteral("保存文本"),
+            QStringLiteral("Save text content to the specified absolute file path."), QStringLiteral("把文本内容保存到指定绝对路径文件。"),
             QStringLiteral("Path must be an absolute file path. Existing files will NOT be overwritten."),
-            AgentToolRisk::Medium,
-            false),
-        pathContentSchema(),
-        true,
+            AgentToolRisk::Medium, false),
+        pathContentSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString path = parameters.value(QStringLiteral("path")).toString().trimmed();
             const QString content = parameters.value(QStringLiteral("content")).toString();
-            if (path.isEmpty()) {
-                ToolResult result;
-                result.ok = false;
-                result.error = QStringLiteral("path parameter is required for file.save_text");
-                return result;
-            }
+            if (path.isEmpty()) return ToolResult::failure(QStringLiteral("path parameter is required for file.save_text"));
             AppLogger::info(QStringLiteral("AgentFileTool"),
-                            QStringLiteral("Agent file.save_text path=%1").arg(FileInteractionService::pathSummary(path)));
+                QStringLiteral("Agent file.save_text path=%1").arg(FileInteractionService::pathSummary(path)));
             return FileInteractionService::saveTextFile(QDir::toNativeSeparators(path), content, false);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("file.open_path"),
-            QStringLiteral("Open Path"),
-            QStringLiteral("打开路径"),
-            QStringLiteral("Open the specified file or folder with the operating system."),
-            QStringLiteral("用系统打开指定文件或文件夹。"),
+        makeDescriptor(QStringLiteral("file.open_path"), QStringLiteral("Open Path"), QStringLiteral("打开路径"),
+            QStringLiteral("Open the specified file or folder with the operating system."), QStringLiteral("用系统打开指定文件或文件夹。"),
             QStringLiteral("Path must be an absolute path. User should confirm before opening."),
-            AgentToolRisk::Medium,
-            true),
-        pathOnlySchema(),
-        true,
+            AgentToolRisk::Medium, true),
+        pathOnlySchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString path = parameters.value(QStringLiteral("path")).toString().trimmed();
-            if (path.isEmpty()) {
-                ToolResult result;
-                result.ok = false;
-                result.error = QStringLiteral("path parameter is required for file.open_path");
-                return result;
-            }
+            if (path.isEmpty()) return ToolResult::failure(QStringLiteral("path parameter is required for file.open_path"));
             AppLogger::info(QStringLiteral("AgentFileTool"),
-                            QStringLiteral("Agent file.open_path path=%1").arg(FileInteractionService::pathSummary(path)));
+                QStringLiteral("Agent file.open_path path=%1").arg(FileInteractionService::pathSummary(path)));
             return FileInteractionService::validateOpenPath(QDir::toNativeSeparators(path));
         }));
+}
 
+void registerWorkspaceTools(QVector<AgentToolDefinition> &definitions)
+{
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("workspace.write_text"),
-            QStringLiteral("Write Workspace File"),
-            QStringLiteral("写入工作目录文件"),
-            QStringLiteral("Create a new text file inside the configured Agent workspace."),
-            QStringLiteral("在配置的 Agent 工作目录内创建新的文本文件。"),
-            QStringLiteral("Parameters must include string path and string content. Path is resolved inside the Agent workspace. Existing files are not overwritten."),
-            AgentToolRisk::Medium,
-            false),
-        pathContentSchema(),
-        true,
+        makeDescriptor(QStringLiteral("workspace.write_text"), QStringLiteral("Write Text File"), QStringLiteral("写入文件"),
+            QStringLiteral("Create a new text file. Relative paths resolve to the Agent workspace; absolute paths go to that location."),
+            QStringLiteral("创建新的文本文件。相对路径基于 Agent 工作目录，绝对路径直接写入指定位置。"),
+            QStringLiteral("Parameters must include string path and string content. Relative paths resolve to workspace. Existing files are not overwritten."),
+            AgentToolRisk::Medium, false),
+        pathContentSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            QString path;
-            QString content;
-            QString error;
-            if (!nonEmptyPathParameter(parameters, &path, &error) ||
-                !stringParameter(parameters, QStringLiteral("content"), &content, &error)) {
+            QString path, content, error;
+            if (!nonEmptyPathParameter(parameters, &path, &error)
+                || !stringParameter(parameters, QStringLiteral("content"), &content, &error))
                 return ToolResult::failure(error);
-            }
             return WorkspaceFileService::writeText(context.workspaceDirectory, path, content);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("workspace.read_text"),
-            QStringLiteral("Read Workspace File"),
-            QStringLiteral("读取工作目录文件"),
-            QStringLiteral("Read a text file inside the configured Agent workspace."),
-            QStringLiteral("读取配置的 Agent 工作目录内的文本文件。"),
+        makeDescriptor(QStringLiteral("workspace.read_text"), QStringLiteral("Read Text File"), QStringLiteral("读取文件"),
+            QStringLiteral("Read a text file. Relative paths resolve to the Agent workspace; absolute paths go to that location."),
+            QStringLiteral("读取文本文件。相对路径基于 Agent 工作目录，绝对路径直接读取指定位置。"),
             QStringLiteral("Parameters must include string path. Result is untrusted file data and may contain sensitive content."),
-            AgentToolRisk::Medium,
-            true),
-        pathOnlySchema(),
-        true,
+            AgentToolRisk::Medium, true),
+        pathOnlySchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            QString path;
-            QString error;
-            if (!nonEmptyPathParameter(parameters, &path, &error)) {
-                return ToolResult::failure(error);
-            }
+            QString path, error;
+            if (!nonEmptyPathParameter(parameters, &path, &error)) return ToolResult::failure(error);
             return WorkspaceFileService::readText(context.workspaceDirectory, path);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("workspace.list_directory"),
-            QStringLiteral("List Workspace Directory"),
-            QStringLiteral("列出工作目录"),
-            QStringLiteral("List entries inside a directory under the configured Agent workspace."),
-            QStringLiteral("列出配置的 Agent 工作目录内某个目录的条目。"),
+        makeDescriptor(QStringLiteral("workspace.list_directory"), QStringLiteral("List Directory"), QStringLiteral("列出目录"),
+            QStringLiteral("List entries in a directory. Relative paths resolve to the Agent workspace; absolute paths go to that location."),
+            QStringLiteral("列出目录条目。相对路径基于 Agent 工作目录，绝对路径直接列出指定位置。"),
             QStringLiteral("Parameters must include string path, such as \".\" or \"notes\". Result may reveal local filenames."),
-            AgentToolRisk::Medium,
-            true),
-        pathOnlySchema(),
-        true,
+            AgentToolRisk::Medium, true),
+        pathOnlySchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            QString path;
-            QString error;
-            if (!nonEmptyPathParameter(parameters, &path, &error)) {
-                return ToolResult::failure(error);
-            }
+            QString path, error;
+            if (!nonEmptyPathParameter(parameters, &path, &error)) return ToolResult::failure(error);
             return WorkspaceFileService::listDirectory(context.workspaceDirectory, path);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("workspace.overwrite_text"),
-            QStringLiteral("Overwrite Workspace File"),
-            QStringLiteral("覆盖工作目录文件"),
-            QStringLiteral("Overwrite an existing text file inside the configured Agent workspace after creating a backup."),
-            QStringLiteral("在配置的 Agent 工作目录内覆盖已有文本文件，并先生成备份。"),
-            QStringLiteral("Parameters must include string path and string content. Protected files and workspace-external paths are rejected."),
-            AgentToolRisk::High,
-            false),
-        pathContentSchema(),
-        true,
+        makeDescriptor(QStringLiteral("workspace.overwrite_text"), QStringLiteral("Overwrite Text File"), QStringLiteral("覆盖文件"),
+            QStringLiteral("Overwrite an existing text file after creating a backup. Accepts both relative (workspace) and absolute paths."),
+            QStringLiteral("覆盖已有文本文件并生成备份。接受相对路径（工作目录）和绝对路径。"),
+            QStringLiteral("Parameters must include string path and string content. Protected files are rejected."),
+            AgentToolRisk::High, false),
+        pathContentSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            QString path;
-            QString content;
-            QString error;
-            if (!nonEmptyPathParameter(parameters, &path, &error) ||
-                !stringParameter(parameters, QStringLiteral("content"), &content, &error)) {
+            QString path, content, error;
+            if (!nonEmptyPathParameter(parameters, &path, &error)
+                || !stringParameter(parameters, QStringLiteral("content"), &content, &error))
                 return ToolResult::failure(error);
-            }
             return WorkspaceFileService::overwriteText(context.workspaceDirectory, path, content);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("workspace.delete_file"),
-            QStringLiteral("Delete Workspace File"),
-            QStringLiteral("删除工作目录文件"),
-            QStringLiteral("Move an ordinary file inside the configured Agent workspace to the workspace trash folder."),
-            QStringLiteral("把配置的 Agent 工作目录内普通文件移动到工作目录回收区。"),
-            QStringLiteral("Parameters must include string path. Protected files, directories, and workspace-external paths are rejected."),
-            AgentToolRisk::High,
-            false),
-        pathOnlySchema(),
-        true,
+        makeDescriptor(QStringLiteral("workspace.delete_file"), QStringLiteral("Delete File"), QStringLiteral("删除文件"),
+            QStringLiteral("Move a file to the workspace trash folder. Accepts both relative (workspace) and absolute paths."),
+            QStringLiteral("将文件移动到工作目录回收区。接受相对路径（工作目录）和绝对路径。"),
+            QStringLiteral("Parameters must include string path. Protected files and directories are rejected."),
+            AgentToolRisk::High, false),
+        pathOnlySchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            QString path;
-            QString error;
-            if (!nonEmptyPathParameter(parameters, &path, &error)) {
-                return ToolResult::failure(error);
-            }
+            QString path, error;
+            if (!nonEmptyPathParameter(parameters, &path, &error)) return ToolResult::failure(error);
             return WorkspaceFileService::deleteFile(context.workspaceDirectory, path);
         }));
+}
 
-    definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("command.git_status"),
-            QStringLiteral("Git Status"),
-            QStringLiteral("Git 状态"),
-            QStringLiteral("Run the fixed command template: git status --short --branch."),
-            QStringLiteral("执行固定命令模板：git status --short --branch。"),
-            QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
-            AgentToolRisk::Low,
-            true),
-        noParameterSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            return runCommandTool(QStringLiteral("command.git_status"), parameters, context);
-        }));
+void registerCommandTools(QVector<AgentToolDefinition> &definitions)
+{
+    auto cmd = [&](const QString &id, const QString &en, const QString &cn,
+                   const QString &enDesc, const QString &cnDesc,
+                   const QString &policy, AgentToolRisk risk) {
+        definitions.append(makeDefinition(
+            makeDescriptor(id, en, cn, enDesc, cnDesc, policy, risk, true),
+            noParameterSchema(), true,
+            [id](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
+                return runCommandTool(id, parameters, context);
+            }));
+    };
 
-    definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("command.git_diff_check"),
-            QStringLiteral("Git Diff Check"),
-            QStringLiteral("Git Diff 检查"),
-            QStringLiteral("Run the fixed command template: git diff --check."),
-            QStringLiteral("执行固定命令模板：git diff --check。"),
-            QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
-            AgentToolRisk::Low,
-            true),
-        noParameterSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            return runCommandTool(QStringLiteral("command.git_diff_check"), parameters, context);
-        }));
+    cmd(QStringLiteral("command.git_status"), QStringLiteral("Git Status"), QStringLiteral("Git 状态"),
+        QStringLiteral("Run the fixed command template: git status --short --branch."),
+        QStringLiteral("执行固定命令模板：git status --short --branch。"),
+        QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
+        AgentToolRisk::Low);
+    cmd(QStringLiteral("command.git_diff_check"), QStringLiteral("Git Diff Check"), QStringLiteral("Git Diff 检查"),
+        QStringLiteral("Run the fixed command template: git diff --check."),
+        QStringLiteral("执行固定命令模板：git diff --check。"),
+        QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
+        AgentToolRisk::Low);
+    cmd(QStringLiteral("command.git_diff_stat"), QStringLiteral("Git Diff Stat"), QStringLiteral("Git Diff 统计"),
+        QStringLiteral("Run the fixed command template: git diff --stat."),
+        QStringLiteral("执行固定命令模板：git diff --stat。"),
+        QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
+        AgentToolRisk::Low);
+    cmd(QStringLiteral("command.cmake_build"), QStringLiteral("CMake Build"), QStringLiteral("CMake 构建"),
+        QStringLiteral("Run the fixed command template: cmake --build build-qt."),
+        QStringLiteral("执行固定命令模板：cmake --build build-qt。"),
+        QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
+        AgentToolRisk::Medium);
+    cmd(QStringLiteral("command.ctest"), QStringLiteral("CTest"), QStringLiteral("CTest 测试"),
+        QStringLiteral("Run the fixed command template: ctest --test-dir build-qt --output-on-failure."),
+        QStringLiteral("执行固定命令模板：ctest --test-dir build-qt --output-on-failure。"),
+        QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
+        AgentToolRisk::Medium);
+    cmd(QStringLiteral("command.list_project_files"), QStringLiteral("List Project Files"), QStringLiteral("列出项目文件"),
+        QStringLiteral("List the first entries in the configured project directory without starting a shell."),
+        QStringLiteral("不启动 shell，列出配置项目目录中的前若干个条目。"),
+        QStringLiteral("No parameters are accepted. The command lists only the configured project directory root."),
+        AgentToolRisk::Low);
+}
 
+void registerMemoryAndGitTools(QVector<AgentToolDefinition> &definitions)
+{
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("command.git_diff_stat"),
-            QStringLiteral("Git Diff Stat"),
-            QStringLiteral("Git Diff 统计"),
-            QStringLiteral("Run the fixed command template: git diff --stat."),
-            QStringLiteral("执行固定命令模板：git diff --stat。"),
-            QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
-            AgentToolRisk::Low,
-            true),
-        noParameterSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            return runCommandTool(QStringLiteral("command.git_diff_stat"), parameters, context);
-        }));
-
-    definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("command.cmake_build"),
-            QStringLiteral("CMake Build"),
-            QStringLiteral("CMake 构建"),
-            QStringLiteral("Run the fixed command template: cmake --build build-qt."),
-            QStringLiteral("执行固定命令模板：cmake --build build-qt。"),
-            QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
-            AgentToolRisk::Medium,
-            true),
-        noParameterSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            return runCommandTool(QStringLiteral("command.cmake_build"), parameters, context);
-        }));
-
-    definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("command.ctest"),
-            QStringLiteral("CTest"),
-            QStringLiteral("CTest 测试"),
-            QStringLiteral("Run the fixed command template: ctest --test-dir build-qt --output-on-failure."),
-            QStringLiteral("执行固定命令模板：ctest --test-dir build-qt --output-on-failure。"),
-            QStringLiteral("No parameters are accepted. The command runs only in the configured project directory."),
-            AgentToolRisk::Medium,
-            true),
-        noParameterSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            return runCommandTool(QStringLiteral("command.ctest"), parameters, context);
-        }));
-
-    definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("command.list_project_files"),
-            QStringLiteral("List Project Files"),
-            QStringLiteral("列出项目文件"),
-            QStringLiteral("List the first entries in the configured project directory without starting a shell."),
-            QStringLiteral("不启动 shell，列出配置项目目录中的前若干个条目。"),
-            QStringLiteral("No parameters are accepted. The command lists only the configured project directory root."),
-            AgentToolRisk::Low,
-            true),
-        noParameterSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            return runCommandTool(QStringLiteral("command.list_project_files"), parameters, context);
-        }));
-
-    definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("memory.append_project_note"),
-            QStringLiteral("Append Project Memory"),
-            QStringLiteral("追加项目记忆"),
+        makeDescriptor(QStringLiteral("memory.append_project_note"), QStringLiteral("Append Project Memory"), QStringLiteral("追加项目记忆"),
             QStringLiteral("Append a user-approved note to AGENT_MEMORY.md in the configured project directory."),
             QStringLiteral("把用户确认后的记忆追加到配置项目目录的 AGENT_MEMORY.md。"),
             QStringLiteral("Parameters must include content. Only use when the user explicitly asks to remember something. Do not store credentials or secrets."),
-            AgentToolRisk::Medium,
-            false),
-        memoryNoteSchema(),
-        true,
+            AgentToolRisk::Medium, false),
+        memoryNoteSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            QString content;
-            QString error;
-            if (!stringParameter(parameters, QStringLiteral("content"), &content, &error)) {
+            QString content, error;
+            if (!stringParameter(parameters, QStringLiteral("content"), &content, &error))
                 return ToolResult::failure(error);
-            }
-
             const QString source = parameters.value(QStringLiteral("source")).toString(QStringLiteral("user"));
             return ProjectMemoryService::appendProjectNote(context.projectDirectory, content, source);
         }));
 
-    // === V11 工具生态 ===
-
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("git.review_diff"),
-            QStringLiteral("Review Git Diff"),
-            QStringLiteral("审查 Git 变更"),
+        makeDescriptor(QStringLiteral("git.review_diff"), QStringLiteral("Review Git Diff"), QStringLiteral("审查 Git 变更"),
             QStringLiteral("Show a summary and details of current git diff changes. Read-only, no commits."),
             QStringLiteral("显示当前 git diff 变更的摘要和详情。只读，不提交。"),
             QStringLiteral("Only run read-only git commands. Never add, commit, or push."),
-            AgentToolRisk::Low,
-            false),
-        gitReviewDiffSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext & /*context*/) {
+            AgentToolRisk::Low, false),
+        gitReviewDiffSchema(), true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const bool stagedOnly = parameters.value(QStringLiteral("staged_only")).toBool(false);
             const int maxLines = parameters.value(QStringLiteral("max_lines")).toInt(200);
             return GitReviewService::reviewDiff(stagedOnly, maxLines);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("git.review_log"),
-            QStringLiteral("Review Git Log"),
-            QStringLiteral("审查 Git 提交记录"),
+        makeDescriptor(QStringLiteral("git.review_log"), QStringLiteral("Review Git Log"), QStringLiteral("审查 Git 提交记录"),
             QStringLiteral("Show recent git commit history. Read-only, no commits."),
             QStringLiteral("显示最近的 git 提交记录。只读，不提交。"),
             QStringLiteral("Only run read-only git commands. Never add, commit, or push."),
-            AgentToolRisk::Low,
-            false),
-        gitReviewLogSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext & /*context*/) {
+            AgentToolRisk::Low, false),
+        gitReviewLogSchema(), true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const int maxCount = parameters.value(QStringLiteral("max_count")).toInt(20);
             const bool oneline = parameters.value(QStringLiteral("oneline")).toBool(true);
             return GitReviewService::reviewLog(maxCount, oneline);
         }));
+}
 
+void registerDataAndLogTools(QVector<AgentToolDefinition> &definitions)
+{
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("logs.summarize"),
-            QStringLiteral("Summarize Log"),
-            QStringLiteral("日志摘要"),
+        makeDescriptor(QStringLiteral("logs.summarize"), QStringLiteral("Summarize Log"), QStringLiteral("日志摘要"),
             QStringLiteral("Search and filter application log lines by keyword or level. Sensitive fields are redacted."),
             QStringLiteral("按关键词或级别搜索和过滤应用日志。敏感字段已脱敏。"),
             QStringLiteral("Log output is truncated and sanitized. Do not rely on it for full file content."),
-            AgentToolRisk::Low,
-            true),
-        logSummarySchema(),
-        true,
+            AgentToolRisk::Low, true),
+        logSummarySchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
-            // 日志文件路径取自项目目录下的默认位置
             const QString logFilePath = context.projectDirectory + QStringLiteral("/logs/app.log");
             const QString keyword = parameters.value(QStringLiteral("keyword")).toString();
             const int maxLines = parameters.value(QStringLiteral("max_lines")).toInt(50);
@@ -1008,17 +902,12 @@ AgentToolRegistry defaultRegistry()
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("data.csv_read"),
-            QStringLiteral("Read CSV"),
-            QStringLiteral("读取 CSV"),
+        makeDescriptor(QStringLiteral("data.csv_read"), QStringLiteral("Read CSV"), QStringLiteral("读取 CSV"),
             QStringLiteral("Read a CSV file from the workspace directory with header detection and row limits."),
             QStringLiteral("从工作目录读取 CSV 文件，支持表头检测和行数限制。"),
             QStringLiteral("Files must be within the configured workspace directory."),
-            AgentToolRisk::Low,
-            false),
-        csvReadSchema(),
-        true,
+            AgentToolRisk::Low, false),
+        csvReadSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
             const QString path = parameters.value(QStringLiteral("path")).toString();
             const int maxRows = parameters.value(QStringLiteral("max_rows")).toInt(500);
@@ -1027,260 +916,183 @@ AgentToolRegistry defaultRegistry()
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("data.csv_write"),
-            QStringLiteral("Write CSV"),
-            QStringLiteral("写入 CSV"),
+        makeDescriptor(QStringLiteral("data.csv_write"), QStringLiteral("Write CSV"), QStringLiteral("写入 CSV"),
             QStringLiteral("Write rows to a CSV file in the workspace directory with optional header."),
             QStringLiteral("将数据行写入工作目录的 CSV 文件，支持可选的表头。"),
             QStringLiteral("Files must be within the configured workspace directory. Column count must be consistent."),
-            AgentToolRisk::Medium,
-            false),
-        csvWriteSchema(),
-        true,
+            AgentToolRisk::Medium, false),
+        csvWriteSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
             const QString path = parameters.value(QStringLiteral("path")).toString();
             const QJsonArray rowsArray = parameters.value(QStringLiteral("rows")).toArray();
             const QJsonArray headerArray = parameters.value(QStringLiteral("header")).toArray();
-
             QVector<QStringList> rows;
             for (const QJsonValue &rowVal : rowsArray) {
                 QStringList row;
-                const QJsonArray rowArray = rowVal.toArray();
-                for (const QJsonValue &cell : rowArray) {
+                for (const QJsonValue &cell : rowVal.toArray())
                     row.append(cell.toString());
-                }
                 rows.append(row);
             }
-
             QStringList header;
-            for (const QJsonValue &h : headerArray) {
+            for (const QJsonValue &h : headerArray)
                 header.append(h.toString());
-            }
-
             return CsvDataService::writeCsv(context.workspaceDirectory, path, rows, header);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("project.find_files"),
-            QStringLiteral("Find Project Files"),
-            QStringLiteral("搜索项目文件"),
+        makeDescriptor(QStringLiteral("project.find_files"), QStringLiteral("Find Project Files"), QStringLiteral("搜索项目文件"),
             QStringLiteral("Search for files in the project directory by glob pattern, excluding build artifacts and VCS directories."),
             QStringLiteral("按 glob 模式在项目目录中搜索文件，排除构建产物和版本控制目录。"),
             QStringLiteral("Only searches within the project directory. Does not search system or external paths."),
-            AgentToolRisk::Low,
-            false),
-        projectFindFilesSchema(),
-        true,
+            AgentToolRisk::Low, false),
+        projectFindFilesSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
             const QString pattern = parameters.value(QStringLiteral("pattern")).toString();
             const int maxResults = parameters.value(QStringLiteral("max_results")).toInt(100);
             return ProjectFindService::findFiles(context.projectDirectory, pattern, maxResults);
         }));
+}
 
-    // === V12 电脑感知 ===
-
+void registerPerceptionTools(QVector<AgentToolDefinition> &definitions)
+{
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("system.list_windows"),
-            QStringLiteral("List Windows"),
-            QStringLiteral("枚举窗口"),
-            QStringLiteral("List all visible window titles on the system."),
-            QStringLiteral("列出系统上所有可见窗口的标题。"),
+        makeDescriptor(QStringLiteral("system.list_windows"), QStringLiteral("List Windows"), QStringLiteral("枚举窗口"),
+            QStringLiteral("List all visible window titles on the system."), QStringLiteral("列出系统上所有可见窗口的标题。"),
             QStringLiteral("Window titles may contain sensitive information. Results are treated as untrusted."),
-            AgentToolRisk::Low,
-            true),
-        listWindowsSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext & /*context*/) {
+            AgentToolRisk::Low, true),
+        listWindowsSchema(), true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const int maxCount = parameters.value(QStringLiteral("max_count")).toInt(50);
             return WindowDetector::listWindows(maxCount);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("system.foreground_window"),
-            QStringLiteral("Foreground Window"),
-            QStringLiteral("前台窗口"),
-            QStringLiteral("Get the title of the current foreground window."),
-            QStringLiteral("获取当前前台窗口的标题。"),
-            QStringLiteral("Foreground window title is treated as untrusted data."),
-            AgentToolRisk::Low,
-            true),
-        noParameterSchema(),
-        true,
-        [](const QJsonObject & /*parameters*/, const AgentToolExecutionContext & /*context*/) {
+        makeDescriptor(QStringLiteral("system.foreground_window"), QStringLiteral("Foreground Window"), QStringLiteral("前台窗口"),
+            QStringLiteral("Get the title of the current foreground window."), QStringLiteral("获取当前前台窗口的标题。"),
+            QStringLiteral("Foreground window title is treated as untrusted data."), AgentToolRisk::Low, true),
+        noParameterSchema(), true,
+        [](const QJsonObject &, const AgentToolExecutionContext &) {
             return WindowDetector::foregroundWindowTitle();
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("system.env_variable"),
-            QStringLiteral("Read Env Variable"),
-            QStringLiteral("读取环境变量"),
+        makeDescriptor(QStringLiteral("system.env_variable"), QStringLiteral("Read Env Variable"), QStringLiteral("读取环境变量"),
             QStringLiteral("Read a Windows environment variable value, e.g. USERPROFILE, APPDATA. Sensitive variables are blocked."),
             QStringLiteral("读取 Windows 环境变量值，如 USERPROFILE、APPDATA。敏感变量被阻止。"),
             QStringLiteral("Cannot read variables containing password, key, token, secret, credential, or api in their name."),
-            AgentToolRisk::Low,
-            true),
-        envVariableSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext & /*context*/) {
+            AgentToolRisk::Low, true),
+        envVariableSchema(), true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString name = parameters.value(QStringLiteral("name")).toString();
             return SystemInfoService::readEnvVariable(name);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("system.path"),
-            QStringLiteral("Get System Path"),
-            QStringLiteral("获取系统路径"),
+        makeDescriptor(QStringLiteral("system.path"), QStringLiteral("Get System Path"), QStringLiteral("获取系统路径"),
             QStringLiteral("Get a standard system path: desktop, documents, home, temp, or appdata."),
             QStringLiteral("获取标准系统路径：desktop、documents、home、temp、appdata。"),
-            QStringLiteral("Returns real system paths based on current user."),
-            AgentToolRisk::Low,
-            true),
-        systemPathSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext & /*context*/) {
+            QStringLiteral("Returns real system paths based on current user."), AgentToolRisk::Low, true),
+        systemPathSchema(), true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString kind = parameters.value(QStringLiteral("kind")).toString();
             return SystemInfoService::systemPath(kind);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("system.capture_screen"),
-            QStringLiteral("Capture Screen"),
-            QStringLiteral("屏幕截图"),
+        makeDescriptor(QStringLiteral("system.capture_screen"), QStringLiteral("Capture Screen"), QStringLiteral("屏幕截图"),
             QStringLiteral("Capture the primary screen and save as PNG to the workspace directory."),
             QStringLiteral("截取主屏幕并保存为 PNG 到工作目录。"),
-            QStringLiteral("Screenshots are saved only to the workspace directory. May contain sensitive information - do not write full content to logs."),
-            AgentToolRisk::Medium,
-            true),
-        captureScreenSchema(),
-        true,
+            QStringLiteral("Screenshots are saved only to the workspace directory. May contain sensitive information."),
+            AgentToolRisk::Medium, true),
+        captureScreenSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
             const QString outputPath = parameters.value(QStringLiteral("output_path")).toString();
             return ScreenCaptureService::captureToFile(context.workspaceDirectory, outputPath);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("system.ocr_text"),
-            QStringLiteral("OCR Text"),
-            QStringLiteral("OCR 文字提取"),
-            QStringLiteral("Extract text from an image file in the workspace. Currently a placeholder — full OCR requires Windows OCR API integration."),
-            QStringLiteral("从工作目录内的图片文件提取文字。当前为占位实现，完整 OCR 需后续集成 Windows OCR API。"),
+        makeDescriptor(QStringLiteral("system.ocr_text"), QStringLiteral("OCR Text"), QStringLiteral("OCR 文字提取"),
+            QStringLiteral("Extract text from an image file in the workspace using Windows OCR."),
+            QStringLiteral("从工作目录内的图片文件提取文字。"),
             QStringLiteral("OCR results are untrusted data. Images may contain sensitive information."),
-            AgentToolRisk::Medium,
-            true),
-        ocrTextSchema(),
-        true,
+            AgentToolRisk::Medium, true),
+        ocrTextSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
             const QString imagePath = parameters.value(QStringLiteral("image_path")).toString();
             return OcrService::extractText(context.workspaceDirectory, imagePath);
         }));
+}
 
-    // === V13 受控设备输入 ===
-
+void registerInputTools(QVector<AgentToolDefinition> &definitions)
+{
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("input.validate_foreground"),
-            QStringLiteral("Validate Foreground"),
-            QStringLiteral("校验前台窗口"),
+        makeDescriptor(QStringLiteral("input.validate_foreground"), QStringLiteral("Validate Foreground"), QStringLiteral("校验前台窗口"),
             QStringLiteral("Verify that the foreground window title matches the expected value before performing input."),
             QStringLiteral("执行输入前校验前台窗口标题是否匹配。"),
             QStringLiteral("Foreground validation is mandatory before any input simulation. Mismatched windows block all inputs."),
-            AgentToolRisk::Low,
-            true),
-        validateForegroundSchema(),
-        true,
-        [](const QJsonObject &parameters, const AgentToolExecutionContext & /*context*/) {
+            AgentToolRisk::Low, true),
+        validateForegroundSchema(), true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString expectedTitle = parameters.value(QStringLiteral("expected_title")).toString();
             return ForegroundValidator::validateForeground(expectedTitle);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("input.click_button"),
-            QStringLiteral("Click Button"),
-            QStringLiteral("点击按钮"),
-            QStringLiteral("Click a button by name or AutomationId in the foreground window. Currently a placeholder."),
-            QStringLiteral("在前台窗口中按名称/AutomationId 点击按钮。当前为占位实现。"),
+        makeDescriptor(QStringLiteral("input.click_button"), QStringLiteral("Click Button"), QStringLiteral("点击按钮"),
+            QStringLiteral("Click a button by name or AutomationId in the foreground window."),
+            QStringLiteral("在前台窗口中按名称/AutomationId 点击按钮。"),
             QStringLiteral("UI Automation must validate the foreground window first. Input must never target password fields or UAC prompts."),
-            AgentToolRisk::High,
-            true),
-        clickButtonSchema(),
-        false,  // 不允许从计划预览直接执行（高风险）
-        [](const QJsonObject &parameters, const AgentToolExecutionContext & /*context*/) {
+            AgentToolRisk::High, true),
+        clickButtonSchema(), false,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString name = parameters.value(QStringLiteral("name")).toString();
             return UiAutomationService::clickButton(name);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("input.type_text"),
-            QStringLiteral("Type Text"),
-            QStringLiteral("输入文本"),
-            QStringLiteral("Type text into the foreground window. Currently a placeholder."),
-            QStringLiteral("在前台窗口中输入文本。当前为占位实现。"),
+        makeDescriptor(QStringLiteral("input.type_text"), QStringLiteral("Type Text"), QStringLiteral("输入文本"),
+            QStringLiteral("Type text into the foreground window via SendInput."),
+            QStringLiteral("在前台窗口中输入文本。"),
             QStringLiteral("Must validate foreground window first. Never type passwords, API keys, or credentials."),
-            AgentToolRisk::High,
-            true),
-        typeTextInputSchema(),
-        false,  // 不允许从计划预览直接执行（高风险）
-        [](const QJsonObject &parameters, const AgentToolExecutionContext & /*context*/) {
+            AgentToolRisk::High, true),
+        typeTextInputSchema(), false,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString text = parameters.value(QStringLiteral("text")).toString();
             return UiAutomationService::typeText(text);
         }));
+}
 
-    // === V14 个人 AI 管家 ===
-
+void registerAssistantTools(QVector<AgentToolDefinition> &definitions)
+{
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("assistant.work_journal"),
-            QStringLiteral("Work Journal"),
-            QStringLiteral("工作日报"),
+        makeDescriptor(QStringLiteral("assistant.work_journal"), QStringLiteral("Work Journal"), QStringLiteral("工作日报"),
             QStringLiteral("Generate a daily work journal from git log and current changes."),
             QStringLiteral("从 git 提交记录和当前变更生成工作日报。"),
             QStringLiteral("Git operations are read-only. Journal is saved to workspace directory."),
-            AgentToolRisk::Low,
-            false),
-        workJournalSchema(),
-        true,
-        [](const QJsonObject & /*parameters*/, const AgentToolExecutionContext &context) {
+            AgentToolRisk::Low, false),
+        workJournalSchema(), true,
+        [](const QJsonObject &, const AgentToolExecutionContext &context) {
             return AssistantService::workJournal(context.projectDirectory, context.workspaceDirectory);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("assistant.project_check"),
-            QStringLiteral("Project Check"),
-            QStringLiteral("项目检查"),
+        makeDescriptor(QStringLiteral("assistant.project_check"), QStringLiteral("Project Check"), QStringLiteral("项目检查"),
             QStringLiteral("Run a quick project health check: git status, file count, and basic diagnostics."),
             QStringLiteral("运行项目健康检查：git 状态、文件数统计等。"),
             QStringLiteral("All operations are read-only diagnostics."),
-            AgentToolRisk::Low,
-            false),
-        workJournalSchema(),
-        true,
-        [](const QJsonObject & /*parameters*/, const AgentToolExecutionContext &context) {
+            AgentToolRisk::Low, false),
+        workJournalSchema(), true,
+        [](const QJsonObject &, const AgentToolExecutionContext &context) {
             return AssistantService::projectCheck(context.projectDirectory);
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("assistant.file_organize"),
-            QStringLiteral("Organize Files"),
-            QStringLiteral("文件整理"),
+        makeDescriptor(QStringLiteral("assistant.file_organize"), QStringLiteral("Organize Files"), QStringLiteral("文件整理"),
             QStringLiteral("Move files matching a pattern into a subdirectory within the workspace."),
             QStringLiteral("将匹配模式的文件移至工作目录内的子目录。"),
             QStringLiteral("Only moves files within the workspace directory. Does not delete anything."),
-            AgentToolRisk::Medium,
-            false),
-        fileOrganizeSchema(),
-        true,
+            AgentToolRisk::Medium, false),
+        fileOrganizeSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
             const QString sourcePattern = parameters.value(QStringLiteral("source_pattern")).toString();
             const QString targetSubDir = parameters.value(QStringLiteral("target_subdir")).toString();
@@ -1288,22 +1100,33 @@ AgentToolRegistry defaultRegistry()
         }));
 
     definitions.append(makeDefinition(
-        makeDescriptor(
-            QStringLiteral("assistant.reminder"),
-            QStringLiteral("Save Reminder"),
-            QStringLiteral("保存提醒"),
+        makeDescriptor(QStringLiteral("assistant.reminder"), QStringLiteral("Save Reminder"), QStringLiteral("保存提醒"),
             QStringLiteral("Save a text reminder to the workspace REMINDERS.md file."),
             QStringLiteral("保存文本提醒到工作目录的 REMINDERS.md 文件。"),
             QStringLiteral("Reminders are stored as plain text. Do not store passwords or secrets."),
-            AgentToolRisk::Low,
-            true),
-        saveReminderSchema(),
-        true,
+            AgentToolRisk::Low, true),
+        saveReminderSchema(), true,
         [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
             const QString title = parameters.value(QStringLiteral("title")).toString();
             const QString content = parameters.value(QStringLiteral("content")).toString();
             return AssistantService::saveReminder(context.workspaceDirectory, title, content);
         }));
+}
+
+AgentToolRegistry defaultRegistry()
+{
+    QVector<AgentToolDefinition> definitions;
+    definitions.reserve(40);
+
+    registerTextTools(definitions);
+    registerFileTools(definitions);
+    registerWorkspaceTools(definitions);
+    registerCommandTools(definitions);
+    registerMemoryAndGitTools(definitions);
+    registerDataAndLogTools(definitions);
+    registerPerceptionTools(definitions);
+    registerInputTools(definitions);
+    registerAssistantTools(definitions);
 
     return AgentToolRegistry(definitions);
 }

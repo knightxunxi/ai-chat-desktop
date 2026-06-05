@@ -1,4 +1,5 @@
 #include "app/AgentPlanParser.h"
+#include "app/AgentJsonHelpers.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -8,58 +9,9 @@
 
 namespace {
 
-QString requiredString(const QJsonObject &object, const QString &fieldName, bool *ok)
-{
-    const QJsonValue value = object.value(fieldName);
-    if (!value.isString()) {
-        *ok = false;
-        return QString();
-    }
-
-    const QString text = value.toString().trimmed();
-    if (text.isEmpty()) {
-        *ok = false;
-        return QString();
-    }
-
-    return text;
-}
-
 AgentPlanParseResult failureAtStep(int stepIndex, const QString &message)
 {
     return AgentPlanParseResult::failure(QStringLiteral("Step %1: %2").arg(stepIndex + 1).arg(message));
-}
-
-QString stripMarkdownFence(QString text)
-{
-    text = text.trimmed();
-    if (!text.startsWith(QStringLiteral("```"))) {
-        return text;
-    }
-
-    const int firstLineEnd = text.indexOf(QLatin1Char('\n'));
-    if (firstLineEnd < 0) {
-        return text;
-    }
-
-    text = text.mid(firstLineEnd + 1).trimmed();
-    if (text.endsWith(QStringLiteral("```"))) {
-        text.chop(3);
-    }
-
-    return text.trimmed();
-}
-
-QString extractJsonObjectCandidate(const QString &text)
-{
-    const QString unfenced = stripMarkdownFence(text);
-    const int firstBrace = unfenced.indexOf(QLatin1Char('{'));
-    const int lastBrace = unfenced.lastIndexOf(QLatin1Char('}'));
-    if (firstBrace < 0 || lastBrace < firstBrace) {
-        return unfenced;
-    }
-
-    return unfenced.mid(firstBrace, lastBrace - firstBrace + 1).trimmed();
 }
 
 } // namespace

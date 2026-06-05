@@ -17,17 +17,17 @@
 struct AgentLoopExecutionTestAccessor {
     using RequestKind = ApplicationController::ActiveRequestKind;
 
-    static bool isAgentLoopActive(const ApplicationController &c) { return c.m_isAgentLoopActive; }
-    static const QString &agentLoopGoal(const ApplicationController &c) { return c.m_agentLoopGoal; }
-    static const QStringList &agentLoopObservations(const ApplicationController &c) { return c.m_agentLoopObservations; }
-    static int agentLoopIteration(const ApplicationController &c) { return c.m_agentLoopIteration; }
+    static bool isAgentLoopActive(const ApplicationController &c) { return c.m_agentOrchestrator.m_isAgentLoopActive; }
+    static const QString &agentLoopGoal(const ApplicationController &c) { return c.m_agentOrchestrator.m_agentLoopGoal; }
+    static const QStringList &agentLoopObservations(const ApplicationController &c) { return c.m_agentOrchestrator.m_agentLoopObservations; }
+    static int agentLoopIteration(const ApplicationController &c) { return c.m_agentOrchestrator.m_agentLoopIteration; }
     static int maxAgentLoopIterations() { return 50; }
-    static auto &pendingToolResults(ApplicationController &c) { return c.m_pendingToolResults; }
+    static auto &pendingToolResults(ApplicationController &c) { return c.m_agentOrchestrator.m_pendingToolResults; }
     static auto activeRequestKind(const ApplicationController &c) { return c.m_activeRequestKind; }
     static void setActiveRequestKind(ApplicationController &c, RequestKind k) { c.m_activeRequestKind = k; }
     static void setGenerating(ApplicationController &c, bool v) { c.m_isGenerating = v; }
-    static auto &config(ApplicationController &c) { return c.m_config; }
-    static auto &session(ApplicationController &c) { return c.m_session; }
+    static auto &config(ApplicationController &c) { return const_cast<AppConfig &>(c.m_configCoordinator.config()); }
+    static auto &session(ApplicationController &c) { return c.m_sessionCoordinator.currentSession(); }
     static auto &currentContent(ApplicationController &c) { return c.m_currentAssistantContent; }
     static auto &agentPlanResponseBuffer(ApplicationController &c) { return c.m_agentPlanResponseBuffer; }
     static auto &agentToolCalls(ApplicationController &c) { return c.m_agentToolCalls; }
@@ -38,8 +38,6 @@ struct AgentLoopExecutionTestAccessor {
     static auto &retryUserContent(ApplicationController &c) { return c.m_retryUserContent; }
     static bool retryAvailable(const ApplicationController &c) { return c.m_retryAvailable; }
     static bool isGenerating(const ApplicationController &c) { return c.m_isGenerating; }
-    static bool chatAutoExecute(const ApplicationController &c) { return c.m_chatAutoExecute; }
-    static bool highPermissionMode(const ApplicationController &c) { return c.m_highPermissionMode; }
 
     // 调用私有方法
     static void callHandleRequestFinished(ApplicationController &c) {
@@ -51,7 +49,11 @@ struct AgentLoopExecutionTestAccessor {
     }
 
     static void callExecuteAgentLoopIteration(ApplicationController &c) {
-        c.executeAgentLoopIteration();
+        c.m_agentOrchestrator.executeAgentLoopIteration();
+    }
+
+    static void initOrchestrator(ApplicationController &c) {
+        c.m_agentOrchestrator.initialize(&c.m_aiClient, &c.m_configCoordinator, &c.m_sessionCoordinator);
     }
 };
 
@@ -86,6 +88,7 @@ int main()
     {
         ApplicationController controller;
         A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
         A::setGenerating(controller, true);  // 模拟正在生成中，sendAgentLoopMessage 会先 cancel
 
         // 重置生成状态后调用
@@ -106,6 +109,7 @@ int main()
     {
         ApplicationController controller;
         A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
 
         // 直接设置循环激活状态，模拟循环中
         // 通过 sendAgentLoopMessage 初始化
@@ -145,6 +149,7 @@ int main()
     {
         ApplicationController controller;
         A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
         A::setGenerating(controller, false);
         controller.sendAgentLoopMessage(QStringLiteral("Max iterations test"));
 
@@ -172,6 +177,7 @@ int main()
     {
         ApplicationController controller;
         A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
         A::setGenerating(controller, false);
 
         // 初始化循环状态
@@ -198,6 +204,7 @@ int main()
     {
         ApplicationController controller;
         A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
         A::setGenerating(controller, false);
         controller.sendAgentLoopMessage(QStringLiteral("Observation test"));
 
@@ -216,6 +223,7 @@ int main()
     {
         ApplicationController controller;
         A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
         A::setGenerating(controller, false);
 
         // 启动循环
@@ -244,6 +252,7 @@ int main()
     {
         ApplicationController controller;
         A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
         A::setGenerating(controller, false);
 
         // sendAgentLoopMessage 应初始化循环状态
@@ -269,6 +278,7 @@ int main()
     {
         ApplicationController controller;
         A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
 
         int signalReceived = 0;
         QMetaObject::Connection conn = QObject::connect(

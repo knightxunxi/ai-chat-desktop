@@ -120,14 +120,15 @@ int main()
 
     AgentPlan failingPlan;
     context.workspaceDirectory = temporaryDirectory.filePath(QStringLiteral("workspace-fail"));
-    failingPlan.summary = QStringLiteral("Fail outside workspace.");
-    failingPlan.steps.append(makeStep(QStringLiteral("step-1"), QStringLiteral("workspace.write_text"), writeParameters(QStringLiteral("../outside.txt"), QStringLiteral("bad"))));
+    // V17.4: 沙箱已移除 — 改为使用受保护路径 (.env) 来触发失败
+    failingPlan.summary = QStringLiteral("Fail on protected file.");
+    failingPlan.steps.append(makeStep(QStringLiteral("step-1"), QStringLiteral("workspace.write_text"), writeParameters(QStringLiteral(".env"), QStringLiteral("SECRET=bad"))));
     result = AgentLoopController::runPlan(&failingPlan, registry, context);
     assert(result.status == AgentLoopRunStatus::Failed);
     assert(result.executedStepCount == 0);
     assert(failingPlan.steps[0].status == AgentPlanStepStatus::Failed);
     assert(failingPlan.steps[0].output.contains(QStringLiteral("Tool failed")));
-    assert(result.error.contains(QStringLiteral("workspace"), Qt::CaseInsensitive));
+    assert(result.error.contains(QStringLiteral("Protected"), Qt::CaseInsensitive));
 
     AgentPlan repeatedPlan;
     context.workspaceDirectory = temporaryDirectory.filePath(QStringLiteral("workspace-repeat"));

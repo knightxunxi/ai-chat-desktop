@@ -1,5 +1,6 @@
-// V12.4: Chat 模式自动执行工具 — 路由逻辑测试
-// 不需要真实 AI，直接测试 ApplicationController 的路由逻辑
+// V16.3: Agent-only 工具执行路由测试
+// Chat 模式不再执行任何工具，仅 Agent 模式处理工具调用
+// 同时验证确认弹窗和高权限检查已被移除
 // ApplicationController 已声明 friend struct ChatToolExecutionTestAccessor
 
 #include "app/ApplicationController.h"
@@ -18,15 +19,12 @@
 struct ChatToolExecutionTestAccessor {
     using RequestKind = ApplicationController::ActiveRequestKind;
 
-    static auto &pendingToolResults(ApplicationController &c) { return c.m_pendingToolResults; }
-    static bool chatAutoExecute(const ApplicationController &c) { return c.m_chatAutoExecute; }
+    static auto &pendingToolResults(ApplicationController &c) { return c.m_agentOrchestrator.m_pendingToolResults; }
     static auto activeRequestKind(const ApplicationController &c) { return c.m_activeRequestKind; }
     static void setActiveRequestKind(ApplicationController &c, RequestKind k) { c.m_activeRequestKind = k; }
-    static void setChatAutoExecute(ApplicationController &c, bool v) { c.m_chatAutoExecute = v; }
-    static void setHighPermissionMode(ApplicationController &c, bool v) { c.m_highPermissionMode = v; }
     static void setGenerating(ApplicationController &c, bool v) { c.m_isGenerating = v; }
-    static auto &config(ApplicationController &c) { return c.m_config; }
-    static auto &session(ApplicationController &c) { return c.m_session; }
+    static auto &config(ApplicationController &c) { return const_cast<AppConfig &>(c.m_configCoordinator.config()); }
+    static auto &session(ApplicationController &c) { return c.m_sessionCoordinator.currentSession(); }
     static auto &currentContent(ApplicationController &c) { return c.m_currentAssistantContent; }
 
     // 调用私有 slot: handleToolUseBlockComplete
@@ -67,51 +65,8 @@ int main()
     AppLogger::initialize(&loggerError);
 
     // ================================================================
-    // Test 1: chat-mode-no-tools-by-default
-    // Chat 模式 + autoExecute=false → sendMessage 不走 tools
-    // ================================================================
-    {
-        ApplicationController controller;
-        AppConfig cfg;
-        cfg.apiKey = QStringLiteral("test-key");
-        cfg.baseUrl = QStringLiteral("http://localhost:8080/v1");
-        cfg.modelName = QStringLiteral("test-model");
-        A::config(controller) = cfg;
-
-        // 验证初始状态
-        assert(A::chatAutoExecute(controller) == false);
-
-        // 验证 sendMessage 不会设置 chatAutoExecute
-        assert(!A::chatAutoExecute(controller));
-
-        // 验证初始 activeRequestKind
-        assert(A::activeRequestKind(controller) == A::RequestKind::None);
-    }
-
-    // ================================================================
-    // Test 2: chat-mode-with-tools
-    // Chat 模式 + autoExecute=true → sendMessageWithTools 携带 tools
-    // ================================================================
-    {
-        ApplicationController controller;
-        AppConfig cfg;
-        cfg.apiKey = QStringLiteral("test-key");
-        cfg.baseUrl = QStringLiteral("http://localhost:8080/v1");
-        cfg.modelName = QStringLiteral("test-model");
-        A::config(controller) = cfg;
-
-        // 设置自动执行
-        controller.setChatAutoExecute(true);
-        assert(A::chatAutoExecute(controller) == true);
-
-        // 重置
-        controller.setChatAutoExecute(false);
-        assert(A::chatAutoExecute(controller) == false);
-    }
-
-    // ================================================================
-    // Test 3: tool-calls-blocked-in-plain-chat
-    // Chat 模式 + autoExecute=false → handleToolUseBlockComplete 直接 return
+    // Test 1: chat-mode-blocks-tools
+    // Chat 模式 → handleToolUseBlockComplete 直接 return
     // ================================================================
     {
         ApplicationController controller;
@@ -123,8 +78,6 @@ int main()
 
         // 模拟纯 Chat 模式状态
         A::setActiveRequestKind(controller, A::RequestKind::ChatMessage);
-        A::setChatAutoExecute(controller, false);
-        A::setHighPermissionMode(controller, false);
         assert(A::pendingToolResults(controller).isEmpty());
 
         // 调用 handleToolUseBlockComplete — 应该被阻断
@@ -133,14 +86,13 @@ int main()
             QStringLiteral("json_format"),
             QJsonObject{{QStringLiteral("input"), QStringLiteral("{}")}});
 
-        // 验证没有工具被添加（被阻断）
+        // 验证没有工具被添加（Chat 模式被阻断）
         assert(A::pendingToolResults(controller).isEmpty());
     }
 
     // ================================================================
-    // Test 4: tool-calls-allowed-in-chat-auto
-    // Chat 模式 + autoExecute=true + highPermission=true
-    // → handleToolUseBlockComplete 进入执行路径
+    // Test 2: agent-mode-allows-tools
+    // AgentPlan 模式 → handleToolUseBlockComplete 进入执行路径
     // ================================================================
     {
         ApplicationController controller;
@@ -150,10 +102,8 @@ int main()
         cfg.modelName = QStringLiteral("test-model");
         A::config(controller) = cfg;
 
-        // 模拟 Chat + autoExecute + highPermission 状态
-        A::setActiveRequestKind(controller, A::RequestKind::ChatMessage);
-        A::setChatAutoExecute(controller, true);
-        A::setHighPermissionMode(controller, true);
+        // 模拟 AgentPlan 模式
+        A::setActiveRequestKind(controller, A::RequestKind::AgentPlan);
         assert(A::pendingToolResults(controller).isEmpty());
 
         // 调用 handleToolUseBlockComplete — 应该进入执行路径
@@ -169,9 +119,8 @@ int main()
     }
 
     // ================================================================
-    // Test 5: high-permission-tool-skipped
-    // Chat 模式 + autoExecute=true + highPermission=false
-    // + requiresUserConfirmation=true → 工具被跳过
+    // Test 3: unified-agent-allows-tools
+    // UnifiedAgent 模式 → handleToolUseBlockComplete 进入执行路径
     // ================================================================
     {
         ApplicationController controller;
@@ -181,64 +130,80 @@ int main()
         cfg.modelName = QStringLiteral("test-model");
         A::config(controller) = cfg;
 
-        // 模拟 Chat + autoExecute + 无高权限
-        A::setActiveRequestKind(controller, A::RequestKind::ChatMessage);
-        A::setChatAutoExecute(controller, true);
-        A::setHighPermissionMode(controller, false);
+        // 模拟 UnifiedAgent 模式
+        A::setActiveRequestKind(controller, A::RequestKind::UnifiedAgent);
         assert(A::pendingToolResults(controller).isEmpty());
 
-        // 调用 handleToolUseBlockComplete
-        // json_format 工具 requiresUserConfirmation=true
+        // 调用 handleToolUseBlockComplete — 应该进入执行路径
         A::callHandleToolUseBlockComplete(
             controller,
             QStringLiteral("json_format"),
             QJsonObject{{QStringLiteral("input"), QStringLiteral("{}")}});
 
-        // 验证工具被跳过（pendingToolResults 有记录但 success=false）
+        // 验证工具被执行
         assert(!A::pendingToolResults(controller).isEmpty());
-        assert(A::pendingToolResults(controller).first().success == false);
-        assert(A::pendingToolResults(controller).first().result.contains(
-            QStringLiteral("跳过")) ||
-            A::pendingToolResults(controller).first().result.contains(
-                QStringLiteral("Skipped")));
-    }
-
-    // ================================================================
-    // Test 6: high-permission-tool-executed
-    // Chat 模式 + autoExecute=true + highPermission=true
-    // + requiresUserConfirmation=true → 工具正常执行
-    // ================================================================
-    {
-        ApplicationController controller;
-        AppConfig cfg;
-        cfg.apiKey = QStringLiteral("test-key");
-        cfg.baseUrl = QStringLiteral("http://localhost:8080/v1");
-        cfg.modelName = QStringLiteral("test-model");
-        A::config(controller) = cfg;
-
-        // 模拟 Chat + autoExecute + 高权限
-        A::setActiveRequestKind(controller, A::RequestKind::ChatMessage);
-        A::setChatAutoExecute(controller, true);
-        A::setHighPermissionMode(controller, true);
-        assert(A::pendingToolResults(controller).isEmpty());
-
-        // 调用 handleToolUseBlockComplete
-        A::callHandleToolUseBlockComplete(
-            controller,
-            QStringLiteral("json_format"),
-            QJsonObject{{QStringLiteral("input"), QStringLiteral("{}")}});
-
-        // 验证工具被执行且成功
-        assert(!A::pendingToolResults(controller).isEmpty());
-        assert(A::pendingToolResults(controller).first().success == true);
         assert(A::pendingToolResults(controller).first().toolName ==
                QStringLiteral("json_format"));
     }
 
     // ================================================================
-    // Test 7: pending-results-appended
-    // handleRequestFinished 在 Chat 模式 + pendingToolResults 非空时
-    // 正确追加结果到 m_currentAssistantContent
+    // Test 4: tool-executed-without-confirmation
+    // V16.3: 即使 requiresUserConfirmation=true 也直接执行（无弹窗）
+    // ================================================================
+    {
+        ApplicationController controller;
+        AppConfig cfg;
+        cfg.apiKey = QStringLiteral("test-key");
+        cfg.baseUrl = QStringLiteral("http://localhost:8080/v1");
+        cfg.modelName = QStringLiteral("test-model");
+        A::config(controller) = cfg;
+
+        // 模拟 AgentPlan 模式
+        A::setActiveRequestKind(controller, A::RequestKind::AgentPlan);
+        assert(A::pendingToolResults(controller).isEmpty());
+
+        // 调用 handleToolUseBlockComplete with json_format (requiresUserConfirmation=true)
+        A::callHandleToolUseBlockComplete(
+            controller,
+            QStringLiteral("json_format"),
+            QJsonObject{{QStringLiteral("input"), QStringLiteral("{}")}});
+
+        // 验证工具被执行且成功（不再跳过需要确认的工具）
+        assert(!A::pendingToolResults(controller).isEmpty());
+        assert(A::pendingToolResults(controller).first().success == true);
+    }
+
+    // ================================================================
+    // Test 5: chat-mode-tool-calls-received-blocked
+    // Chat 模式 → handleToolCallsReceived 直接 return
+    // ================================================================
+    {
+        ApplicationController controller;
+        AppConfig cfg;
+        cfg.apiKey = QStringLiteral("test-key");
+        cfg.baseUrl = QStringLiteral("http://localhost:8080/v1");
+        cfg.modelName = QStringLiteral("test-model");
+        A::config(controller) = cfg;
+
+        A::setActiveRequestKind(controller, A::RequestKind::ChatMessage);
+        assert(A::pendingToolResults(controller).isEmpty());
+
+        // handleToolCallsReceived should be blocked in Chat mode
+        ToolCallList calls;
+        ToolCall tc;
+        tc.functionName = QStringLiteral("json_format");
+        tc.id = QStringLiteral("call_1");
+        tc.arguments = QStringLiteral("{\"input\":\"{}\"}");
+        calls.append(tc);
+        A::callHandleToolCallsReceived(controller, calls);
+
+        // No tool execution should happen in Chat mode
+        assert(A::pendingToolResults(controller).isEmpty());
+    }
+
+    // ================================================================
+    // Test 6: pending-results-not-appended-in-chat
+    // handleRequestFinished 在 Chat 模式不再追加工具结果
     // ================================================================
     {
         ApplicationController controller;
@@ -250,7 +215,6 @@ int main()
 
         // 模拟 Chat 模式有 pending results
         A::setActiveRequestKind(controller, A::RequestKind::ChatMessage);
-        A::setChatAutoExecute(controller, true);
 
         // 手动添加 pending tool results
         PendingToolResult result1;
@@ -258,12 +222,6 @@ int main()
         result1.result = QStringLiteral("formatted JSON output");
         result1.success = true;
         A::pendingToolResults(controller).append(result1);
-
-        PendingToolResult result2;
-        result2.toolName = QStringLiteral("text_cleanup");
-        result2.result = QStringLiteral("cleaned text");
-        result2.success = true;
-        A::pendingToolResults(controller).append(result2);
 
         // 设置一些已有内容
         A::currentContent(controller) = QStringLiteral("Here is the response.");
@@ -277,23 +235,14 @@ int main()
         // 验证 pending results 被清空
         assert(A::pendingToolResults(controller).isEmpty());
 
-        // 验证 m_chatAutoExecute 被重置
-        assert(A::chatAutoExecute(controller) == false);
-
-        // 验证 content 包含工具结果
-        assert(A::currentContent(controller).contains(
+        // 验证 content 不再包含工具结果（V16.3: Chat 不追加）
+        assert(!A::currentContent(controller).contains(
             QStringLiteral("formatted JSON output")));
-        assert(A::currentContent(controller).contains(
-            QStringLiteral("cleaned text")));
-        assert(A::currentContent(controller).contains(
-            QStringLiteral("json_format")));
-        assert(A::currentContent(controller).contains(
-            QStringLiteral("text_cleanup")));
     }
 
     // ================================================================
-    // Test 8: cancel-resets-auto-execute
-    // cancelCurrentRequest 重置 m_chatAutoExecute 为 false
+    // Test 7: cancelCurrentRequest-still-works
+    // cancelCurrentRequest 在 Chat 模式下仍然正常工作
     // ================================================================
     {
         ApplicationController controller;
@@ -303,16 +252,14 @@ int main()
         cfg.modelName = QStringLiteral("test-model");
         A::config(controller) = cfg;
 
-        // 设置 activeRequestKind 和 m_chatAutoExecute
+        // 设置 Chat 模式并标记为 generating
         A::setActiveRequestKind(controller, A::RequestKind::ChatMessage);
-        A::setChatAutoExecute(controller, true);
         A::setGenerating(controller, true);
 
         // 调用 cancel
         controller.cancelCurrentRequest();
 
-        // 验证 m_chatAutoExecute 被重置
-        assert(A::chatAutoExecute(controller) == false);
+        // 验证 cancel 正常工作（不崩溃即可，Chat 模式无 m_chatAutoExecute 需要重置）
     }
 
     // ================================================================

@@ -1,4 +1,4 @@
-#include "tools/WorkspacePolicy.h"
+#include "tools/core/WorkspacePolicy.h"
 
 #include "core/AppConfig.h"
 
@@ -166,15 +166,7 @@ WorkspacePolicyDecision evaluateWorkspaceOperation(
         return decision;
     }
 
-    if (isUnsafeWorkspaceRoot(root)) {
-        decision.reason = QStringLiteral("Workspace directory is too broad or system-critical.");
-        return decision;
-    }
-
-    if (!isPathInsideWorkspace(root, decision.normalizedPath)) {
-        decision.reason = QStringLiteral("Autonomous file operations must stay inside the Agent workspace.");
-        return decision;
-    }
+    // V17.4: 移除工作目录沙箱限制 — 允许访问任意路径。保留对敏感文件的保护。
 
     if (isDestructiveOperation(operation) && isProtectedPath(decision.normalizedPath)) {
         decision.reason = QStringLiteral("Protected files cannot be created, deleted, or overwritten automatically.");
@@ -183,7 +175,7 @@ WorkspacePolicyDecision evaluateWorkspaceOperation(
 
     decision.allowed = true;
     decision.requiresConfirmation = false;
-    decision.reason = QStringLiteral("Operation is allowed inside the Agent workspace.");
+    decision.reason = QStringLiteral("Operation is allowed.");
     return decision;
 }
 

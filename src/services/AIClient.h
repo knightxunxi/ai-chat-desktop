@@ -26,6 +26,13 @@ public:
         Q_UNUSED(tools);
         sendChat(config, session);
     }
+    // V17.1: 带图片附件的多模态请求；使用模块：MainWindow 粘贴图片发送。
+    virtual void sendChatWithImages(const AppConfig &config, const ChatSession &session,
+                                    const QJsonArray &tools, const QJsonArray &images)
+    {
+        Q_UNUSED(images);
+        sendChatWithTools(config, session, tools);
+    }
     // 功能：取消当前请求；使用模块：停止生成、窗口关闭前清理。
     virtual void cancel() = 0;
 

@@ -2,10 +2,12 @@
 
 #include "core/ProviderPreset.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDoubleValidator>
 #include <QFormLayout>
+#include <QFrame>
 #include <QIntValidator>
 #include <QLabel>
 #include <QLineEdit>
@@ -168,6 +170,26 @@ void SettingsDialog::setupUi()
     m_formLayout->addRow(m_languageLabel, m_languageCombo);
 
     rootLayout->addLayout(m_formLayout);
+
+    // V16.3: Agent 调试模式（移到设置界面）
+    {
+        auto *debugSeparator = new QFrame(this);
+        debugSeparator->setFrameShape(QFrame::HLine);
+        rootLayout->addSpacing(8);
+        rootLayout->addWidget(debugSeparator);
+        rootLayout->addSpacing(4);
+
+        m_debugModeCheckbox = new QCheckBox(this);
+        m_debugModeCheckbox->setText(dialogText(m_initialConfig.language,
+            QStringLiteral("Developer: Show Agent loop prompts in chat"),
+            QStringLiteral("开发者：在聊天中显示 Agent 循环提示词")));
+        m_debugModeCheckbox->setChecked(m_debugMode);
+        connect(m_debugModeCheckbox, &QCheckBox::toggled, this, [this](bool checked) {
+            m_debugMode = checked;
+        });
+        rootLayout->addWidget(m_debugModeCheckbox);
+        rootLayout->addSpacing(4);
+    }
 
     m_buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);
     connect(m_buttonBox, &QDialogButtonBox::accepted, this, &SettingsDialog::accept);

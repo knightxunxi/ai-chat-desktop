@@ -854,7 +854,7 @@ tests/integration/DemoNotepadTest.cpp（新增，Windows 专用）
 
 ### 6.2 V15 详细规划
 
-> 暂缓——等 V12-V14 的核心基础设施稳定后再展开。
+> ✅ 详见 [46-v15-ai-butler-prd.md](./46-v15-ai-butler-prd.md)（2026-06-04 已创建完整 PRD）
 
 ---
 

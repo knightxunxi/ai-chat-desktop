@@ -1,5 +1,7 @@
 #include "app/AgentCommandSkillFileService.h"
 
+#include "skills/SkillFileParser.h"
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>

@@ -20,6 +20,9 @@ public:
 
     // 功能：生成 chat/completions 请求 JSON；使用模块：sendChat 和 OpenAICompatibleClientTest。
     static QByteArray buildRequestBody(const AppConfig &config, const ChatSession &session, const QJsonArray &tools = QJsonArray());
+    // V17.1: 支持多模态消息格式（文本 + 图片 base64）；使用模块：MainWindow 粘贴图片后发送。
+    static QByteArray buildRequestBody(const AppConfig &config, const ChatSession &session,
+                                       const QJsonArray &tools, const QJsonArray &images);
     // 功能：把 HTTP 状态码归类为认证、额度、模型、服务端等错误；使用模块：handleFinished 和单元测试。
     static RequestErrorCategory classifyHttpStatus(int statusCode);
 
@@ -27,6 +30,9 @@ public:
     void sendChat(const AppConfig &config, const ChatSession &session) override;
     // 功能：发起带 Function Calling tools 声明的聊天请求；使用模块：V9.2 Agent 计划生成。
     void sendChatWithTools(const AppConfig &config, const ChatSession &session, const QJsonArray &tools) override;
+    // V17.1: 发起带图片附件的聊天请求；使用模块：MainWindow 粘贴图片后发送多模态消息。
+    void sendChatWithImages(const AppConfig &config, const ChatSession &session,
+                            const QJsonArray &tools, const QJsonArray &images) override;
     // 功能：取消当前网络请求；使用模块：停止生成和关闭窗口时调用。
     void cancel() override;
 

@@ -17,7 +17,7 @@ int main(int argc, char *argv[])
     assert(qobject_cast<QDialog *>(&dialog) != nullptr);
 
     // 3. Verify table starts empty
-    auto *table = dialog.findChild<QTableWidget *>(QStringLiteral("taskTable"));
+    auto *table = dialog.findChild<QTableWidget *>();
     assert(table != nullptr);
     assert(table->rowCount() == 0);
     assert(table->columnCount() == 6);

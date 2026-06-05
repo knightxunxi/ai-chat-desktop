@@ -21,11 +21,12 @@ int main()
     assert(!decision.requiresConfirmation);
     assert(WorkspacePolicy::isPathInsideWorkspace(workspace, decision.normalizedPath));
 
+    // V17.4: 沙箱限制已移除 — ../outside.txt 现在允许访问
     decision = WorkspacePolicy::evaluateWorkspaceOperation(
         workspace,
         QStringLiteral("../outside.txt"),
         WorkspaceOperation::Write);
-    assert(!decision.allowed);
+    assert(decision.allowed);
 
     const QString absoluteInsidePath = QDir(workspace).filePath(QStringLiteral("notes.md"));
     decision = WorkspacePolicy::evaluateWorkspaceOperation(
@@ -34,12 +35,13 @@ int main()
         WorkspaceOperation::Overwrite);
     assert(decision.allowed);
 
+    // V17.4: 沙箱限制已移除 — 绝对路径 outside.md 现在允许访问
     const QString absoluteOutsidePath = QDir(temporaryDirectory.path()).filePath(QStringLiteral("outside.md"));
     decision = WorkspacePolicy::evaluateWorkspaceOperation(
         workspace,
         absoluteOutsidePath,
         WorkspaceOperation::Write);
-    assert(!decision.allowed);
+    assert(decision.allowed);
 
     decision = WorkspacePolicy::evaluateWorkspaceOperation(
         workspace,
