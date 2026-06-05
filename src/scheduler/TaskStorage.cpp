@@ -69,6 +69,10 @@ QJsonObject TaskStorage::taskToJson(const ScheduledTask &t) const
     obj[QStringLiteral("cronExpression")] = t.cronExpression;
     obj[QStringLiteral("agentPrompt")] = t.agentPrompt;
     obj[QStringLiteral("enabled")] = t.enabled;
+    if (t.lastRun.isValid())
+        obj[QStringLiteral("lastRun")] = t.lastRun.toUTC().toString(Qt::ISODate);
+    if (t.nextRun.isValid())
+        obj[QStringLiteral("nextRun")] = t.nextRun.toUTC().toString(Qt::ISODate);
     obj[QStringLiteral("maxRetries")] = t.maxRetries;
     return obj;
 }
@@ -81,6 +85,12 @@ ScheduledTask TaskStorage::jsonToTask(const QJsonObject &j) const
     t.cronExpression = j.value(QStringLiteral("cronExpression")).toString();
     t.agentPrompt = j.value(QStringLiteral("agentPrompt")).toString();
     t.enabled = j.value(QStringLiteral("enabled")).toBool(true);
+    t.lastRun = QDateTime::fromString(j.value(QStringLiteral("lastRun")).toString(), Qt::ISODate);
+    if (t.lastRun.isValid())
+        t.lastRun = t.lastRun.toUTC();
+    t.nextRun = QDateTime::fromString(j.value(QStringLiteral("nextRun")).toString(), Qt::ISODate);
+    if (t.nextRun.isValid())
+        t.nextRun = t.nextRun.toUTC();
     t.maxRetries = j.value(QStringLiteral("maxRetries")).toInt(3);
     return t;
 }

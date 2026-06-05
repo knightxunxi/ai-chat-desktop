@@ -1,0 +1,1 @@
+-I"D:/C1/Codex/build-release/tests/CoreModelSmokeTest_autogen/include" -ID:/C1/Codex/src -isystem D:/QT/6.10.2/mingw_64/include/QtCore -isystem D:/QT/6.10.2/mingw_64/include -isystem "D:/QT/6.10.2/mingw_64/mkspecs/win32-g++"

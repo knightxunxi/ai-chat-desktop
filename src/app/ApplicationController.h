@@ -38,7 +38,7 @@ public:
 
     // 功能：读取当前配置；使用模块：MainWindow/SettingsDialog 展示当前模型和语言。
     const AppConfig &config() const;
-    // 功能：获取 AI 客户端指针；使用模块：AgentPlanDialog 无限循环模式。
+    // 功能：获取 AI 客户端指针；使用模块：调试、测试和外部集成。
     AIClient *aiClient() { return &m_aiClient; }
     const AIClient *aiClient() const { return &m_aiClient; }
     // 功能：读取当前会话；使用模块：MainWindow 刷新聊天区和角色显示。
@@ -170,6 +170,7 @@ private:
     void handleRequestFinished();
     // 功能：处理请求失败；使用模块：OpenAICompatibleClient::requestFailed 信号。
     void handleRequestFailed(const QString &message, RequestErrorCategory category);
+    void handleResponseTruncated();  // V17.6 P2-2: 输出截断自动续接。
     // V12.3: 处理流式工具调用参数完整事件；使用模块：OpenAICompatibleClient::toolUseBlockComplete 信号。
     void handleToolUseBlockComplete(const QString &toolName, const QJsonObject &arguments);
     // 功能：创建助手占位消息并调用 AI 客户端；使用模块：sendMessage/retryLastRequest。
@@ -182,6 +183,19 @@ private:
     QString requestFailureMessage(RequestErrorCategory category, const QString &detail) const;
     // 功能：tools 请求不兼容时退回 JSON plan；使用模块：handleRequestFailed。
     bool retryAgentRequestWithoutNativeTools(RequestErrorCategory category);
+    // 功能：执行模型返回的原生工具调用，并把真实结果缓存为 Agent observation。
+    PendingToolResult executeAgentToolDefinition(const AgentToolDefinition &definition,
+                                                 const QString &toolName,
+                                                 const QJsonObject &arguments,
+                                                 const QString &reasoning,
+                                                 const QString &title);
+    PendingToolResult executeAgentToolCall(const QString &toolName, const QJsonObject &arguments);
+    QVector<PendingToolResult> executeAgentToolCalls(const ToolCallList &toolCalls);
+    void publishAgentToolResults(const QVector<PendingToolResult> &results, const QString &heading);
+    void continueAgentLoopWithToolResults(const QVector<PendingToolResult> &results);
+    bool handleAgentLoopActionResponse(const QString &responseText, const QString &extraDisplayText);
+    void completeAgentLoopWithMessage(const QString &message, const QString &extraDisplayText);
+    bool resumeAgentLoopAfterTruncation(const QString &partialResponse);
     // 功能：启动下一轮 Agent 循环 AI 请求（构建提示词 + 发送）。
     void continueAgentLoop();
 
@@ -194,12 +208,17 @@ private:
     ToolCallList m_agentToolCalls;                // 功能：Agent 原生工具调用缓存。
     ChatSession m_pendingAgentRequestSession;     // 功能：缓存 Agent 请求会话。
     int m_pendingAgentPlanContinuationDepth = 0;  // 功能：当前计划请求的继续轮次。
+    int m_retryAfterCompressionCount = 0;         // V17.6 P2-1: 上下文溢出后压缩重试计数
+    static constexpr int kMaxRetryAfterCompression = 3;
+    int m_truncationResumeCount = 0;              // V17.6 P2-2: 截断续接计数
+    static constexpr int kMaxTruncationResume = 2;
     QString m_lastRequestUserContent;             // 功能：记录最近请求的用户文本。
     QString m_retryUserContent;                   // 功能：当前可重试的用户文本。
     bool m_isGenerating = false;                  // 功能：是否正在请求 AI。
     bool m_retryAvailable = false;                // 功能：是否允许重试。
     bool m_nativeToolRequestActive = false;       // 功能：当前 Agent 请求是否携带 tools。
     bool m_nativeToolFallbackAttempted = false;   // 功能：是否已经降级重试过。
+    bool m_pendingTruncationResume = false;       // 功能：当前 Agent 请求完成收尾后是否需要续接截断输出。
     ActiveRequestKind m_activeRequestKind = ActiveRequestKind::None;
 
     // V17.1: 待发送图片列表

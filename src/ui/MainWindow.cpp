@@ -313,7 +313,11 @@ void MainWindow::connectController()
         updateCurrentSessionListItem();
         updateSendButtonState();
     });
-    connect(&m_controller, &ApplicationController::currentChatCleared, m_chatView, &ChatView::clearMessages);
+    connect(&m_controller, &ApplicationController::currentChatCleared, this, [this]() {
+        m_currentStepGroup = nullptr;
+        m_messageWidgets.clear();
+        m_chatView->clearMessages();
+    });
     connect(&m_controller, &ApplicationController::userMessageAdded, this, &MainWindow::addUserMessage);
     connect(&m_controller, &ApplicationController::assistantMessageStarted, this, &MainWindow::addAssistantPlaceholder);
     connect(&m_controller, &ApplicationController::assistantMessageUpdated, m_chatView, &ChatView::updateLastAssistantMessage);
@@ -337,21 +341,33 @@ void MainWindow::connectController()
             m_chatView->addMessage(MessageRole::System, summary);
         });
 
-    // V16.1: Agent 思考步骤可视化
+    // V16.1: Agent 思考步骤可视化 — V18.4 改为分组折叠
     connect(&m_controller, &ApplicationController::agentLoopThought,
         this, [this](int iter, const QString &reason, const QString &toolId, const QString &title) {
             auto *step = new AgentStepWidget(iter, reason, toolId, title, m_chatView);
-            m_chatView->addAgentStepWidget(step);
-            m_agentSteps.append(step);
+            if (!m_currentStepGroup) {
+                m_currentStepGroup = new AgentStepGroupWidget(m_chatView->getContentWidget());
+                m_chatView->addAgentStepWidget(nullptr); // 触发占位（由 group 替换）
+                // 将 group 插入到最后一个 message 之后
+                auto *layout = m_chatView->getContentWidget()->findChild<QVBoxLayout *>();
+                if (layout) layout->addWidget(m_currentStepGroup);
+            }
+            m_currentStepGroup->addStep(step);
         });
 
     connect(&m_controller, &ApplicationController::agentLoopToolFinished,
-        this, [this](int iter, const QString & /*toolId*/, bool ok, const QString &preview) {
-            for (auto *step : m_agentSteps) {
-                if (step != nullptr && step->iteration() == iter) {
-                    step->setResult(ok, preview);
-                    break;
-                }
+        this, [this](int iter, const QString &toolId, bool ok, const QString &preview) {
+            if (m_currentStepGroup) {
+                m_currentStepGroup->setStepResult(iter, toolId, ok, preview);
+            }
+        });
+
+    // V18.4: Agent 循环完成 → 折叠步骤组
+    connect(&m_controller, &ApplicationController::agentLoopCompleted,
+        this, [this]() {
+            if (m_currentStepGroup) {
+                m_currentStepGroup->finish();
+                m_currentStepGroup = nullptr;
             }
         });
 
@@ -451,6 +467,7 @@ void MainWindow::populateChatView()
         return;
     }
 
+    m_currentStepGroup = nullptr;
     m_chatView->clearMessages();
     m_messageWidgets.clear();
     if (m_controller.currentSession().messages.isEmpty()) {

@@ -1,34 +1,49 @@
+# Build
 build/
-build-*/
-cmake-build-*/
-out/
+build-qt/
+build-release-qt/
 release/
+cmake-build-*/
 
-*.user
-*.user.*
-*.autosave
-
-*.obj
-*.o
-*.lib
-*.a
-*.dll
-*.exe
-*.pdb
-*.ilk
-*.exp
-
+# IDE
+.idea/
 .vs/
 .vscode/
-.idea/
+*.user
+*.pro.user
 
-*.log
-logs/
+# Qt
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*_autogen/
 
-.env
-*.env
-config.local.*
-*.key
+# Binaries
+*.exe
+*.dll
+*.a
+*.lib
+*.so
+*.dylib
 
+# Test artifacts
+Testing/
+CTestTestfile.cmake
+
+# OS
+.DS_Store
 Thumbs.db
-Desktop.ini
+*.swp
+*.swo
+*~
+
+# Secrets
+.env
+*.key
+*.pem
+credentials.json
+
+# WorkBuddy (project memory, not to commit)
+.workbuddy/memory/
+.workbuddy/blobs/
+.workbuddy/clipboard-images/

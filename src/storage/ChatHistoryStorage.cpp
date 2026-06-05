@@ -2,6 +2,9 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -48,6 +51,115 @@ QString sessionFilterWhereClause(SessionListFilter filter)
     return QStringLiteral("s.is_archived = 0");
 }
 
+QJsonObject chatMessageToJson(const ChatMessage &message)
+{
+    QJsonObject object;
+    object.insert(QStringLiteral("id"), message.id);
+    object.insert(QStringLiteral("sessionId"), message.sessionId);
+    object.insert(QStringLiteral("role"), messageRoleToString(message.role));
+    object.insert(QStringLiteral("content"), message.content);
+    object.insert(QStringLiteral("createdAt"), toIsoUtc(message.createdAt));
+    return object;
+}
+
+ChatMessage chatMessageFromJson(const QJsonObject &object)
+{
+    ChatMessage message;
+    message.id = object.value(QStringLiteral("id")).toString();
+    message.sessionId = object.value(QStringLiteral("sessionId")).toString();
+    message.role = messageRoleFromString(object.value(QStringLiteral("role")).toString());
+    message.content = object.value(QStringLiteral("content")).toString();
+    message.createdAt = fromIsoUtc(object.value(QStringLiteral("createdAt")).toString());
+    return message;
+}
+
+QString agentStepsToJson(const QVector<AgentStepRecord> &steps)
+{
+    QJsonArray array;
+    for (const AgentStepRecord &step : steps) {
+        QJsonObject object;
+        object.insert(QStringLiteral("stepNumber"), step.stepNumber);
+        object.insert(QStringLiteral("reasoning"), step.reasoning);
+        object.insert(QStringLiteral("toolName"), step.toolName);
+        object.insert(QStringLiteral("toolArguments"), step.toolArguments);
+        object.insert(QStringLiteral("toolResult"), step.toolResult);
+        object.insert(QStringLiteral("status"), step.status);
+        object.insert(QStringLiteral("timestamp"), toIsoUtc(step.timestamp));
+        array.append(object);
+    }
+    return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+}
+
+QVector<AgentStepRecord> agentStepsFromJson(const QString &json)
+{
+    QVector<AgentStepRecord> steps;
+    const QJsonDocument document = QJsonDocument::fromJson(json.toUtf8());
+    if (!document.isArray()) {
+        return steps;
+    }
+
+    for (const QJsonValue &value : document.array()) {
+        if (!value.isObject()) {
+            continue;
+        }
+        const QJsonObject object = value.toObject();
+        AgentStepRecord step;
+        step.stepNumber = object.value(QStringLiteral("stepNumber")).toInt();
+        step.reasoning = object.value(QStringLiteral("reasoning")).toString();
+        step.toolName = object.value(QStringLiteral("toolName")).toString();
+        step.toolArguments = object.value(QStringLiteral("toolArguments")).toString();
+        step.toolResult = object.value(QStringLiteral("toolResult")).toString();
+        step.status = object.value(QStringLiteral("status")).toString();
+        step.timestamp = fromIsoUtc(object.value(QStringLiteral("timestamp")).toString());
+        steps.append(step);
+    }
+    return steps;
+}
+
+QString branchesToJson(const QVector<MessageBranch> &branches)
+{
+    QJsonArray array;
+    for (const MessageBranch &branch : branches) {
+        QJsonObject object;
+        object.insert(QStringLiteral("branchId"), branch.branchId);
+        object.insert(QStringLiteral("parentMessageId"), branch.parentMessageId);
+        QJsonArray messages;
+        for (const ChatMessage &message : branch.messages) {
+            messages.append(chatMessageToJson(message));
+        }
+        object.insert(QStringLiteral("messages"), messages);
+        array.append(object);
+    }
+    return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
+}
+
+QVector<MessageBranch> branchesFromJson(const QString &json)
+{
+    QVector<MessageBranch> branches;
+    const QJsonDocument document = QJsonDocument::fromJson(json.toUtf8());
+    if (!document.isArray()) {
+        return branches;
+    }
+
+    for (const QJsonValue &value : document.array()) {
+        if (!value.isObject()) {
+            continue;
+        }
+        const QJsonObject object = value.toObject();
+        MessageBranch branch;
+        branch.branchId = object.value(QStringLiteral("branchId")).toString();
+        branch.parentMessageId = object.value(QStringLiteral("parentMessageId")).toString();
+        const QJsonArray messages = object.value(QStringLiteral("messages")).toArray();
+        for (const QJsonValue &messageValue : messages) {
+            if (messageValue.isObject()) {
+                branch.messages.append(chatMessageFromJson(messageValue.toObject()));
+            }
+        }
+        branches.append(branch);
+    }
+    return branches;
+}
+
 } // namespace
 
 ChatHistoryStorage::ChatHistoryStorage(const QString &databasePath)
@@ -91,7 +203,10 @@ bool ChatHistoryStorage::initialize(QString *errorMessage)
             "created_at TEXT NOT NULL,"
             "updated_at TEXT NOT NULL,"
             "is_favorite INTEGER NOT NULL DEFAULT 0,"
-            "is_archived INTEGER NOT NULL DEFAULT 0"
+            "is_archived INTEGER NOT NULL DEFAULT 0,"
+            "agent_steps_json TEXT NOT NULL DEFAULT '[]',"
+            "branches_json TEXT NOT NULL DEFAULT '[]',"
+            "current_branch_index INTEGER NOT NULL DEFAULT -1"
             ")"))) {
         setError(errorMessage, query.lastError().text());
         return false;
@@ -105,6 +220,24 @@ bool ChatHistoryStorage::initialize(QString *errorMessage)
 
     if (!ensureSessionColumn(QStringLiteral("is_archived"),
                              QStringLiteral("is_archived INTEGER NOT NULL DEFAULT 0"),
+                             errorMessage)) {
+        return false;
+    }
+
+    if (!ensureSessionColumn(QStringLiteral("agent_steps_json"),
+                             QStringLiteral("agent_steps_json TEXT NOT NULL DEFAULT '[]'"),
+                             errorMessage)) {
+        return false;
+    }
+
+    if (!ensureSessionColumn(QStringLiteral("branches_json"),
+                             QStringLiteral("branches_json TEXT NOT NULL DEFAULT '[]'"),
+                             errorMessage)) {
+        return false;
+    }
+
+    if (!ensureSessionColumn(QStringLiteral("current_branch_index"),
+                             QStringLiteral("current_branch_index INTEGER NOT NULL DEFAULT -1"),
                              errorMessage)) {
         return false;
     }
@@ -133,14 +266,17 @@ bool ChatHistoryStorage::saveSession(const ChatSession &session, QString *errorM
 
     QSqlQuery query(QSqlDatabase::database(m_connectionName));
     query.prepare(QStringLiteral(
-        "INSERT INTO sessions (id, title, system_prompt, created_at, updated_at, is_favorite, is_archived) "
-        "VALUES (:id, :title, :system_prompt, :created_at, :updated_at, :is_favorite, :is_archived) "
+        "INSERT INTO sessions (id, title, system_prompt, created_at, updated_at, is_favorite, is_archived, agent_steps_json, branches_json, current_branch_index) "
+        "VALUES (:id, :title, :system_prompt, :created_at, :updated_at, :is_favorite, :is_archived, :agent_steps_json, :branches_json, :current_branch_index) "
         "ON CONFLICT(id) DO UPDATE SET "
         "title = excluded.title, "
         "system_prompt = excluded.system_prompt, "
         "updated_at = excluded.updated_at, "
         "is_favorite = excluded.is_favorite, "
-        "is_archived = excluded.is_archived"));
+        "is_archived = excluded.is_archived, "
+        "agent_steps_json = excluded.agent_steps_json, "
+        "branches_json = excluded.branches_json, "
+        "current_branch_index = excluded.current_branch_index"));
     query.bindValue(QStringLiteral(":id"), session.id);
     query.bindValue(QStringLiteral(":title"), nonNullString(session.title));
     query.bindValue(QStringLiteral(":system_prompt"), nonNullString(session.systemPrompt));
@@ -148,6 +284,9 @@ bool ChatHistoryStorage::saveSession(const ChatSession &session, QString *errorM
     query.bindValue(QStringLiteral(":updated_at"), toIsoUtc(session.updatedAt));
     query.bindValue(QStringLiteral(":is_favorite"), session.isFavorite ? 1 : 0);
     query.bindValue(QStringLiteral(":is_archived"), session.isArchived ? 1 : 0);
+    query.bindValue(QStringLiteral(":agent_steps_json"), agentStepsToJson(session.agentSteps));
+    query.bindValue(QStringLiteral(":branches_json"), branchesToJson(session.branches));
+    query.bindValue(QStringLiteral(":current_branch_index"), session.currentBranchIndex);
 
     if (!query.exec()) {
         setError(errorMessage, query.lastError().text());
@@ -364,7 +503,7 @@ std::optional<ChatSession> ChatHistoryStorage::loadSession(const QString &sessio
 
     QSqlQuery query(QSqlDatabase::database(m_connectionName));
     query.prepare(QStringLiteral(
-        "SELECT id, title, system_prompt, created_at, updated_at, is_favorite, is_archived "
+        "SELECT id, title, system_prompt, created_at, updated_at, is_favorite, is_archived, agent_steps_json, branches_json, current_branch_index "
         "FROM sessions WHERE id = :id"));
     query.bindValue(QStringLiteral(":id"), sessionId);
 
@@ -385,6 +524,9 @@ std::optional<ChatSession> ChatHistoryStorage::loadSession(const QString &sessio
     session.updatedAt = fromIsoUtc(query.value(4).toString());
     session.isFavorite = query.value(5).toInt() != 0;
     session.isArchived = query.value(6).toInt() != 0;
+    session.agentSteps = agentStepsFromJson(query.value(7).toString());
+    session.branches = branchesFromJson(query.value(8).toString());
+    session.currentBranchIndex = query.value(9).isNull() ? -1 : query.value(9).toInt();
 
     if (!loadMessages(&session, errorMessage)) {
         return std::nullopt;

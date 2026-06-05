@@ -1,4 +1,5 @@
 #include "ui/ChatView.h"
+#include "ui/AgentStepGroupWidget.h"
 #include "ui/AgentStepWidget.h"
 #include "ui/MessageWidget.h"
 #include "ui/TokenBar.h"
@@ -194,6 +195,32 @@ int main(int argc, char *argv[])
         assert(view.messageCount() == 0);
         view.addAgentStepWidget(step);
         assert(view.messageCount() == 1); // step widget 是布局子条目
+    });
+
+    test("agent step group routes same-iteration results by tool id", [] {
+        AgentStepGroupWidget group;
+        auto *first = new AgentStepWidget(1, QStringLiteral("first"),
+                                          QStringLiteral("tool.first"),
+                                          QStringLiteral("First"),
+                                          &group);
+        auto *second = new AgentStepWidget(1, QStringLiteral("second"),
+                                           QStringLiteral("tool.second"),
+                                           QStringLiteral("Second"),
+                                           &group);
+        group.addStep(first);
+        group.addStep(second);
+
+        group.setStepResult(1, QStringLiteral("tool.second"), false, QStringLiteral("second failed"));
+
+        auto *firstResult = first->findChild<QLabel *>(QStringLiteral("agentStepResult"));
+        auto *secondResult = second->findChild<QLabel *>(QStringLiteral("agentStepResult"));
+        assert(firstResult != nullptr);
+        assert(secondResult != nullptr);
+        assert(firstResult->text().isEmpty());
+        assert(secondResult->text().contains(QStringLiteral("second failed")));
+
+        group.setStepResult(1, QStringLiteral("tool.first"), true, QStringLiteral("first ok"));
+        assert(firstResult->text().contains(QStringLiteral("first ok")));
     });
 
     // ── 12. 混合添加后 messageCount 统计所有布局条目 ───────────────────

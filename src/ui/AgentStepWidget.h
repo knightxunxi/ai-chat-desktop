@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QFrame>
+#include <QString>
 
 class QLabel;
 class QMouseEvent;
@@ -17,6 +18,8 @@ public:
 
     // 功能：返回当前轮次；使用模块：MainWindow 查找对应步骤设置结果。
     int iteration() const;
+    QString toolId() const;
+    bool hasResult() const;
 
     // 功能：设置工具执行结果；使用模块：agentLoopToolFinished 信号。
     void setResult(bool ok, const QString &outputPreview);
@@ -36,8 +39,10 @@ private:
     void applyCollapsedState();
 
     int m_iteration = 0;
+    QString m_toolId;
     QLabel *m_headerLabel = nullptr;
     QLabel *m_reasoningLabel = nullptr;
     QLabel *m_resultLabel = nullptr;
     bool m_collapsed = true;
+    bool m_hasResult = false;
 };

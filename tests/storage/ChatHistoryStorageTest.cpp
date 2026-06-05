@@ -86,6 +86,19 @@ int main(int argc, char *argv[])
 
     ChatMessage userMessage = session.addMessage(MessageRole::User, QStringLiteral("Hello"));
     ChatMessage assistantMessage = session.addMessage(MessageRole::Assistant, QStringLiteral("Hi"));
+    session.agentSteps.append(AgentStepRecord::create(
+        1,
+        QStringLiteral("Need to format JSON."),
+        QStringLiteral("json.format"),
+        QStringLiteral("{\"input\":\"{}\"}"),
+        QStringLiteral("{}"),
+        QStringLiteral("success")));
+    MessageBranch branch;
+    branch.branchId = QStringLiteral("branch-1");
+    branch.parentMessageId = userMessage.id;
+    branch.messages.append(ChatMessage::create(session.id, MessageRole::Assistant, QStringLiteral("Alternative reply")));
+    session.branches.append(branch);
+    session.currentBranchIndex = 0;
 
     assert(storage.saveSession(session, &error));
     assert(storage.saveMessage(userMessage, &error));
@@ -131,6 +144,14 @@ int main(int argc, char *argv[])
     assert(loadedById->title == QStringLiteral("Renamed Storage Test"));
     assert(loadedById->messages.size() == 2);
     assert(loadedById->messages[0].content == QStringLiteral("Hello"));
+    assert(loadedById->agentSteps.size() == 1);
+    assert(loadedById->agentSteps[0].toolName == QStringLiteral("json.format"));
+    assert(loadedById->agentSteps[0].status == QStringLiteral("success"));
+    assert(loadedById->branches.size() == 1);
+    assert(loadedById->branches[0].branchId == QStringLiteral("branch-1"));
+    assert(loadedById->branches[0].messages.size() == 1);
+    assert(loadedById->branches[0].messages[0].content == QStringLiteral("Alternative reply"));
+    assert(loadedById->currentBranchIndex == 0);
 
     session.messages.removeLast();
     assertStorageResult(storage.saveSession(session, &error), error);
@@ -140,6 +161,8 @@ int main(int argc, char *argv[])
     assert(loadedById.has_value());
     assert(loadedById->messages.size() == 1);
     assert(loadedById->messages[0].content == QStringLiteral("Hello"));
+    assert(loadedById->agentSteps.size() == 1);
+    assert(loadedById->branches.size() == 1);
 
     std::optional<ChatSession> loaded = storage.loadLatestSession(&error);
     assert(loaded.has_value());

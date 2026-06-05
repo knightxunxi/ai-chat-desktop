@@ -17,7 +17,7 @@ int main()
         assert(!descriptor.englishName.isEmpty());
         assert(!descriptor.chineseName.isEmpty());
         assert(!descriptor.inputPolicy.isEmpty());
-        assert(descriptor.requiresUserConfirmation);
+        assert(!descriptor.requiresUserConfirmation);
         assert(descriptor.enabledForAgent);
     }
 

@@ -393,6 +393,18 @@ ToolResult deleteFile(const QString &workspaceDirectory, const QString &requeste
         return failedWithLog(WorkspaceOperation::Delete, workspaceDirectory, requestedPath, QStringLiteral("Path is not a file."));
     }
 
+    // V18: 优先使用 Windows Recycle Bin / macOS Trash (Qt6.0+)
+    QFile file(decision.normalizedPath);
+    if (file.moveToTrash()) {
+        const QString relativePath = relativeWorkspacePath(workspaceDirectory, decision.normalizedPath);
+        return succeededWithLog(
+            WorkspaceOperation::Delete,
+            workspaceDirectory,
+            decision.normalizedPath,
+            QStringLiteral("Moved %1 to Recycle Bin.").arg(relativePath));
+    }
+
+    // moveToTrash 失败 → 回退到项目内 .trash 目录
     const QString trashPath = trashPathFor(workspaceDirectory, decision.normalizedPath);
     QString error;
     if (!ensureParentDirectory(trashPath, &error)) {
@@ -401,7 +413,7 @@ ToolResult deleteFile(const QString &workspaceDirectory, const QString &requeste
 
     if (!QFile::rename(decision.normalizedPath, trashPath)) {
         if (!QFile::copy(decision.normalizedPath, trashPath)) {
-            return failedWithLog(WorkspaceOperation::Delete, workspaceDirectory, requestedPath, QStringLiteral("Failed to move file to trash."));
+            return failedWithLog(WorkspaceOperation::Delete, workspaceDirectory, requestedPath, QStringLiteral("Failed to move file to trash: both moveToTrash and rename/copy failed."));
         }
 
         if (!QFile::remove(decision.normalizedPath)) {
@@ -416,7 +428,7 @@ ToolResult deleteFile(const QString &workspaceDirectory, const QString &requeste
         WorkspaceOperation::Delete,
         workspaceDirectory,
         decision.normalizedPath,
-        QStringLiteral("Moved %1 to %2.").arg(relativePath, relativeTrashPath));
+        QStringLiteral("Moved %1 to %2 (internal trash).").arg(relativePath, relativeTrashPath));
 }
 
 } // namespace WorkspaceFileService

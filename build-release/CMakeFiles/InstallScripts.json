@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"D:/C1/Codex/build-release/cmake_install.cmake",
+		"D:/C1/Codex/build-release/tests/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -7,10 +7,12 @@
 #include "mcp/McpRegistry.h"
 #include "services/ToolCall.h"
 #include "skills/SkillManager.h"
+#include "tools/AgentToolRegistry.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
+#include <QSet>
 #include <QStringList>
 #include <QVector>
 
@@ -67,6 +69,7 @@ public:
     SkillManager *skillManager();
     HookManager *hookManager();
     McpRegistry *mcpRegistry();
+    AgentToolRegistry toolRegistry() const;
     ContextWindowManager *contextWindowManager();
     SummaryAPIClient *summaryClient();
 
@@ -79,6 +82,8 @@ public:
     QString buildNextLoopPrompt() const;
     // 功能：追加 Agent 循环观察记录；使用模块：handleRequestFinished 路径。
     void appendLoopObservation(const QString &observation);
+    // V17.6 P2-1: 获取 observations 的可变引用，用于 Reactive 压缩。
+    QStringList &loopObservationsRef();
 
     // ── 流式工具结果 ──
     void addPendingToolResult(const QString &toolName, const QJsonObject &arguments,
@@ -141,10 +146,20 @@ private:
     // ── V17.2 Agent 状态快照 ──
     AgentLoopState m_agentLoopState;
 
+    // ── V17.6 P0-2: 重复动作检测 ──
+    QSet<QString> m_actionFingerprints;
+    static constexpr int kMaxRepeatedActions = 3;
+
+    // V18.5: 自动修复闭环
+    bool m_autoFixEnabled = true;
+
     // ── 外部依赖指针 ──
     AIClient *m_aiClient = nullptr;
     ConfigCoordinator *m_configCoordinator = nullptr;
     SessionCoordinator *m_sessionCoordinator = nullptr;
+
+    // V17.6 P1-3: 轻量子代理工具
+    AgentToolDefinition createSubAgentTool() const;
 
     // V12.4: 测试友元
     friend struct ChatToolExecutionTestAccessor;

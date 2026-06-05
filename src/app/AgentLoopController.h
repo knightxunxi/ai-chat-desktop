@@ -43,7 +43,7 @@ struct AgentLoopOptions {
     int maxSteps = 10;             // 功能：最大连续动作数；使用模块：Agentic Loop 运行时。
     qint64 maxRuntimeMs = 120000;  // 功能：总运行耗时上限；使用模块：防止长时间占用 UI。
     qint64 maxStepMs = 30000;     // 功能：单步耗时上限；使用模块：后续命令执行安全边界。
-    std::function<bool()> shouldStop; // 功能：停止请求回调；使用模块：计划窗口停止按钮。
+    std::function<bool()> shouldStop; // 功能：停止请求回调；使用模块：兼容 Agent 循环和测试。
 };
 
 // 功能：统一的循环终止检查策略；使用模块：executeLoop 每轮迭代前后的终止判断。
@@ -94,7 +94,7 @@ namespace AgentLoopController {
 // 功能：返回运行状态稳定字符串；使用模块：日志和测试。
 QString runStatusToString(AgentLoopRunStatus status);
 
-// 功能：按观察、选择下一步、执行、评估的循环运行计划；使用模块：AgentPlanDialog 连续执行。
+// 功能：按观察、选择下一步、执行、评估的循环运行计划；使用模块：兼容测试路径。
 AgentLoopRunResult runPlan(
     AgentPlan *plan,
     const AgentToolRegistry &registry,
@@ -102,8 +102,8 @@ AgentLoopRunResult runPlan(
     const AgentLoopOptions &options = AgentLoopOptions(),
     const AgentLoopCallbacks &callbacks = AgentLoopCallbacks());
 
-// 功能：每步调 AI → 解析 → 执行工具 → 收集观测 → 继续的无限循环；使用模块：V12 Agentic Loop 核心运行时。
-// V13.3: 新增 hooks/skills 参数（默认 nullptr），向后兼容 runPlan()。
+// 功能：每步调 AI → 解析 → 执行工具 → 收集观测 → 继续的同步循环；使用模块：兼容测试路径。
+// 主 UI Agent 入口应使用 ApplicationController + AgentOrchestrator 的异步流程。
 AgentLoopRunResult executeLoop(
     AIClient *aiClient,
     const AppConfig &config,

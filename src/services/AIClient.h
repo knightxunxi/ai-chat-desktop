@@ -41,4 +41,5 @@ signals:
     void toolCallsReceived(const ToolCallList &toolCalls); // 功能：流式工具调用完成通知；使用模块：ApplicationController 生成 Agent 计划。
     void requestFinished(); // 功能：请求正常完成；使用模块：ApplicationController 保存最终会话。
     void requestFailed(const QString &message, RequestErrorCategory category); // 功能：请求失败通知；使用模块：错误展示和重试状态。
+    void responseTruncated(); // V17.6 P2-2: 输出被截断（finish_reason=length）；使用模块：Agent 循环自动续接。
 };

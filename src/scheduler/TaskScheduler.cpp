@@ -109,6 +109,56 @@ QDateTime utcDateOnly(QDate date, int hour, int minute)
     return QDateTime(date, QTime(hour, minute, 0), QTimeZone::UTC);
 }
 
+QDateTime minuteStart(const QDateTime &dateTime)
+{
+    return QDateTime(dateTime.date(),
+        QTime(dateTime.time().hour(), dateTime.time().minute(), 0),
+        QTimeZone::UTC);
+}
+
+bool sameMinute(const QDateTime &left, const QDateTime &right)
+{
+    return left.isValid() && right.isValid() && minuteStart(left) == minuteStart(right);
+}
+
+bool cronMatchesDateTime(const QString &cron, const QDateTime &dateTime)
+{
+    if (!dateTime.isValid())
+        return false;
+
+    const QStringList parts = cron.trimmed().split(QChar(' '));
+    if (parts.size() != 5)
+        return false;
+
+    const QString &minField = parts[0];
+    const QString &hourField = parts[1];
+    const QString &dayField = parts[2];
+    const QString &monthField = parts[3];
+    const QString &weekField = parts[4];
+
+    const int minute = dateTime.time().minute();
+    const int hour = dateTime.time().hour();
+    const int day = dateTime.date().day();
+    const int month = dateTime.date().month();
+    const int year = dateTime.date().year();
+    const int dayOfWeek = dateTime.date().dayOfWeek() % 7;
+
+    if (!fieldMatches(minField, minute, 0, 59))
+        return false;
+    if (!fieldMatches(hourField, hour, 0, 23))
+        return false;
+    if (!fieldMatches(monthField, month, 1, 12))
+        return false;
+
+    const bool dayOk = fieldMatches(dayField, day, 1, maxDaysInMonth(month, year));
+    const bool weekOk = fieldMatches(weekField, dayOfWeek, 0, 6);
+
+    if (dayField != QStringLiteral("*") && weekField != QStringLiteral("*"))
+        return dayOk || weekOk;
+
+    return dayOk && weekOk;
+}
+
 } // namespace
 
 // ---------- TaskScheduler ----------
@@ -184,30 +234,21 @@ void TaskScheduler::tick()
         if (!task.isValid())
             continue;
 
-        // 计算下次运行时间
-        const QDateTime next = nextRunTime(task.cronExpression, task.lastRun.isValid() ? task.lastRun : now);
+        // UI 展示下一次未来运行时间；触发判断单独基于当前分钟匹配。
+        const QDateTime next = nextRunTime(task.cronExpression, now);
         if (!next.isValid())
             continue;
 
         task.nextRun = next;
 
-        // 已到触发时间且未在上一分钟内触发过
-        if (now >= next) {
-            // 避免同一分钟重复触发：检查 lastRun 是否在同一分钟
-            if (task.lastRun.isValid()) {
-                QDateTime lastMinute(task.lastRun.date(),
-                    QTime(task.lastRun.time().hour(), task.lastRun.time().minute(), 0),
-                    QTimeZone::UTC);
-                QDateTime currentMinute(now.date(),
-                    QTime(now.time().hour(), now.time().minute(), 0),
-                    QTimeZone::UTC);
-                if (lastMinute == currentMinute)
-                    continue;
-            }
+        if (!cronMatchesDateTime(task.cronExpression, now))
+            continue;
 
-            task.lastRun = now;
-            emit taskTriggered(task);
-        }
+        if (sameMinute(task.lastRun, now))
+            continue;
+
+        task.lastRun = now;
+        emit taskTriggered(task);
     }
 }
 
@@ -256,7 +297,8 @@ QDateTime TaskScheduler::nextRunTime(const QString &cron, const QDateTime &from)
             continue;
         }
         if (!fieldMatches(monthField, month, 1, 12)) {
-            cursor = utcDate(year, month + 1, 1, 0, 0);
+            const QDate nextMonth = QDate(year, month, 1).addMonths(1);
+            cursor = utcDate(nextMonth.year(), nextMonth.month(), 1, 0, 0);
             continue;
         }
 

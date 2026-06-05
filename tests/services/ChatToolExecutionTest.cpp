@@ -8,6 +8,7 @@
 #include "support/AppLogger.h"
 
 #include <QDir>
+#include <QFile>
 #include <QJsonObject>
 #include <QMetaObject>
 #include <QTemporaryDir>
@@ -20,6 +21,7 @@ struct ChatToolExecutionTestAccessor {
     using RequestKind = ApplicationController::ActiveRequestKind;
 
     static auto &pendingToolResults(ApplicationController &c) { return c.m_agentOrchestrator.m_pendingToolResults; }
+    static auto &agentToolCalls(ApplicationController &c) { return c.m_agentToolCalls; }
     static auto activeRequestKind(const ApplicationController &c) { return c.m_activeRequestKind; }
     static void setActiveRequestKind(ApplicationController &c, RequestKind k) { c.m_activeRequestKind = k; }
     static void setGenerating(ApplicationController &c, bool v) { c.m_isGenerating = v; }
@@ -148,7 +150,7 @@ int main()
 
     // ================================================================
     // Test 4: tool-executed-without-confirmation
-    // V16.3: 即使 requiresUserConfirmation=true 也直接执行（无弹窗）
+    // V16.3: 默认高权限自动执行（无弹窗）
     // ================================================================
     {
         ApplicationController controller;
@@ -162,7 +164,7 @@ int main()
         A::setActiveRequestKind(controller, A::RequestKind::AgentPlan);
         assert(A::pendingToolResults(controller).isEmpty());
 
-        // 调用 handleToolUseBlockComplete with json_format (requiresUserConfirmation=true)
+        // 调用 handleToolUseBlockComplete with json_format (requiresUserConfirmation=false)
         A::callHandleToolUseBlockComplete(
             controller,
             QStringLiteral("json_format"),
@@ -241,7 +243,90 @@ int main()
     }
 
     // ================================================================
-    // Test 7: cancelCurrentRequest-still-works
+    // Test 7: streaming-tool-call-not-executed-twice
+    // toolCallsReceived + toolUseBlockComplete + requestFinished
+    // → 使用已执行的 streaming result，不再转换成 plan 重复执行
+    // ================================================================
+    {
+        ApplicationController controller;
+        AppConfig cfg;
+        cfg.apiKey = QStringLiteral("test-key");
+        cfg.baseUrl = QStringLiteral("http://localhost:8080/v1");
+        cfg.modelName = QStringLiteral("test-model");
+        A::config(controller) = cfg;
+
+        A::setActiveRequestKind(controller, A::RequestKind::UnifiedAgent);
+        A::session(controller).addMessage(MessageRole::Assistant, QString());
+
+        ToolCallList calls;
+        ToolCall tc;
+        tc.functionName = QStringLiteral("json_format");
+        tc.id = QStringLiteral("call_1");
+        tc.arguments = QStringLiteral("{\"input\":\"{}\"}");
+        calls.append(tc);
+
+        A::callHandleToolCallsReceived(controller, calls);
+        assert(!A::agentToolCalls(controller).isEmpty());
+
+        A::callHandleToolUseBlockComplete(
+            controller,
+            QStringLiteral("json_format"),
+            QJsonObject{{QStringLiteral("input"), QStringLiteral("{}")}});
+        assert(!A::pendingToolResults(controller).isEmpty());
+
+        A::callHandleRequestFinished(controller);
+
+        assert(A::pendingToolResults(controller).isEmpty());
+        assert(A::agentToolCalls(controller).isEmpty());
+        assert(A::activeRequestKind(controller) == A::RequestKind::None);
+        assert(A::currentContent(controller).contains(QStringLiteral("[Tool results]")));
+        assert(A::currentContent(controller).contains(QStringLiteral("json_format")));
+        assert(!A::currentContent(controller).contains(QStringLiteral("Executing plan")));
+    }
+
+    // ================================================================
+    // Test 8: final-tool-call-executes-on-request-finished
+    // 只有最终 tool_calls、没有 toolUseBlockComplete 时，也必须执行工具
+    // ================================================================
+    {
+        ApplicationController controller;
+        AppConfig cfg;
+        cfg.apiKey = QStringLiteral("test-key");
+        cfg.baseUrl = QStringLiteral("http://localhost:8080/v1");
+        cfg.modelName = QStringLiteral("test-model");
+        cfg.agentProjectDirectory = temporaryDirectory.filePath(QStringLiteral("native-tool-workspace"));
+        assert(QDir().mkpath(cfg.agentProjectDirectory));
+        A::config(controller) = cfg;
+
+        A::setActiveRequestKind(controller, A::RequestKind::UnifiedAgent);
+        A::session(controller).addMessage(MessageRole::Assistant, QString());
+
+        ToolCallList calls;
+        ToolCall tc;
+        tc.functionName = QStringLiteral("workspace_write_text");
+        tc.id = QStringLiteral("call_write_1");
+        tc.arguments = QStringLiteral("{\"path\":\"loop-created.txt\",\"content\":\"created\"}");
+        calls.append(tc);
+
+        A::callHandleToolCallsReceived(controller, calls);
+        assert(!A::agentToolCalls(controller).isEmpty());
+
+        A::callHandleRequestFinished(controller);
+
+        QFile outputFile(QDir(cfg.agentProjectDirectory).filePath(QStringLiteral("loop-created.txt")));
+        assert(outputFile.open(QFile::ReadOnly | QFile::Text));
+        assert(QString::fromUtf8(outputFile.readAll()) == QStringLiteral("created"));
+        assert(A::pendingToolResults(controller).isEmpty());
+        assert(A::agentToolCalls(controller).isEmpty());
+        assert(A::activeRequestKind(controller) == A::RequestKind::None);
+        assert(A::currentContent(controller).contains(QStringLiteral("[Tool results]")));
+        assert(A::currentContent(controller).contains(QStringLiteral("workspace_write_text")));
+        assert(!A::currentContent(controller).contains(QStringLiteral("Agent plan generated")));
+        assert(!A::currentContent(controller).contains(QStringLiteral("Task completed")));
+    }
+
+    // ================================================================
+    // Test 9: cancelCurrentRequest-still-works
     // cancelCurrentRequest 在 Chat 模式下仍然正常工作
     // ================================================================
     {

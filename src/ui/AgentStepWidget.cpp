@@ -10,6 +10,7 @@ AgentStepWidget::AgentStepWidget(int iteration, const QString &reasoning,
                                  QWidget *parent)
     : QFrame(parent)
     , m_iteration(iteration)
+    , m_toolId(toolId)
     , m_collapsed(true)
 {
     setObjectName(QStringLiteral("agentStepWidget"));
@@ -39,6 +40,16 @@ int AgentStepWidget::iteration() const
     return m_iteration;
 }
 
+QString AgentStepWidget::toolId() const
+{
+    return m_toolId;
+}
+
+bool AgentStepWidget::hasResult() const
+{
+    return m_hasResult;
+}
+
 void AgentStepWidget::setResult(bool ok, const QString &outputPreview)
 {
     const QString symbol = ok ? QStringLiteral("\u2705") : QStringLiteral("\u274C");
@@ -47,6 +58,7 @@ void AgentStepWidget::setResult(bool ok, const QString &outputPreview)
     QString resultText = QStringLiteral("%1 %2: %3").arg(symbol, label, outputPreview);
     m_resultLabel->setText(resultText);
     m_resultLabel->setVisible(!m_collapsed);
+    m_hasResult = true;
 }
 
 void AgentStepWidget::markAsThinking()

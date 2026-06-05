@@ -78,9 +78,14 @@ int main()
 
     result = WorkspaceFileService::deleteFile(workspace, QStringLiteral("generated/hello.txt"));
     assert(result.ok);
-    assert(result.output.contains(QStringLiteral(".trash/generated/hello.txt")));
     assert(!QFileInfo::exists(generatedPath));
-    assert(QFileInfo::exists(QDir(workspace).filePath(QStringLiteral(".trash/generated/hello.txt"))));
+    // V18: moveToTrash 优先 → Recycle Bin；回退到 .trash
+    const bool movedToRecycleBin = result.output.contains(QStringLiteral("Recycle Bin"));
+    const bool movedToProjectTrash = result.output.contains(QStringLiteral(".trash/generated/hello.txt"));
+    assert(movedToRecycleBin || movedToProjectTrash);
+    if (movedToProjectTrash) {
+        assert(QFileInfo::exists(QDir(workspace).filePath(QStringLiteral(".trash/generated/hello.txt"))));
+    }
 
     // V17.4: 沙箱限制已移除 — 路径穿越和绝对路径现在允许
     result = WorkspaceFileService::writeText(

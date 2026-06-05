@@ -9,6 +9,11 @@ HookManager::HookManager(QObject *parent)
 {
 }
 
+HookManager::~HookManager()
+{
+    clear();
+}
+
 void HookManager::registerHook(HookBase *hook)
 {
     if (hook == nullptr) {

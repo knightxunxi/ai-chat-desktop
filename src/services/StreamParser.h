@@ -28,6 +28,7 @@ struct StreamParseResult {
     ToolCallList toolCalls;                    // 功能：解析出的完整工具调用；使用模块：V9.2 Function Calling。
     bool done = false;                         // 功能：是否收到 [DONE]；使用模块：判断流式响应是否结束。
     QVector<ContentBlockEvent> blockEvents;    // V12.3: 流式内容块事件；使用模块：流式工具执行。
+    bool truncated = false;                    // V17.6 P2-2: finish_reason=="length" 表示输出被截断。
 };
 
 // 学习注释：解析 OpenAI-compatible 的 server-sent events 响应。

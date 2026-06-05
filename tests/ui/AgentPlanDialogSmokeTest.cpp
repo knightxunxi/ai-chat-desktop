@@ -71,6 +71,7 @@ int main(int argc, char *argv[])
     auto *executeButton = dialog.findChild<QPushButton *>(QStringLiteral("executeAgentPlanStepButton"));
     auto *runAllButton = dialog.findChild<QPushButton *>(QStringLiteral("runAgentPlanStepsButton"));
     auto *stopButton = dialog.findChild<QPushButton *>(QStringLiteral("stopAgentPlanStepsButton"));
+    auto *loopButton = dialog.findChild<QPushButton *>(QStringLiteral("agentLoopButton"));
     auto *skipButton = dialog.findChild<QPushButton *>(QStringLiteral("skipAgentPlanStepButton"));
     auto *copyButton = dialog.findChild<QPushButton *>(QStringLiteral("copyAgentPlanOutputButton"));
     auto *insertButton = dialog.findChild<QPushButton *>(QStringLiteral("insertAgentPlanOutputButton"));
@@ -85,6 +86,7 @@ int main(int argc, char *argv[])
     assert(executeButton != nullptr);
     assert(runAllButton != nullptr);
     assert(stopButton != nullptr);
+    assert(loopButton == nullptr);
     assert(skipButton != nullptr);
     assert(copyButton != nullptr);
     assert(insertButton != nullptr);

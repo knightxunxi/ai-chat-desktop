@@ -85,7 +85,14 @@ void StreamParser::parseLine(const QByteArray &line, StreamParseResult &result)
         return;
     }
 
-    const QJsonObject delta = choices.first().toObject().value(QStringLiteral("delta")).toObject();
+    // V17.6 P2-2: 检测 finish_reason=="length" 表示输出被截断
+    const QJsonObject firstChoice = choices.first().toObject();
+    const QString finishReason = firstChoice.value(QStringLiteral("finish_reason")).toString();
+    if (finishReason == QStringLiteral("length")) {
+        result.truncated = true;
+    }
+
+    const QJsonObject delta = firstChoice.value(QStringLiteral("delta")).toObject();
     const QString content = delta.value(QStringLiteral("content")).toString();
     if (!content.isEmpty()) {
         result.textDeltas.append(content);

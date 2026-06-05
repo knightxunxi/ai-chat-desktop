@@ -19,6 +19,7 @@ class HookManager : public QObject {
 
 public:
     explicit HookManager(QObject *parent = nullptr);
+    ~HookManager() override;
 
     // 功能：注册 Hook（转移所有权）；使用模块：ApplicationController::initialize。
     void registerHook(HookBase *hook);

@@ -2,6 +2,8 @@
 add_library(codexx_ui STATIC
     AgentStepWidget.h
     AgentStepWidget.cpp
+    AgentStepGroupWidget.h
+    AgentStepGroupWidget.cpp
     AgentPlanDialog.h
     AgentPlanDialog.cpp
     ChatView.h

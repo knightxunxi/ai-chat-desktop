@@ -1,0 +1,3 @@
+D:\Software\cpp_tool\cmake\bin\cmake.exe -E rm -f CMakeFiles\OpenAICompatibleClientTest.dir/objects.a
+D:\Software\cpp_tool\mingw64\bin\ar.exe qc CMakeFiles\OpenAICompatibleClientTest.dir/objects.a @CMakeFiles\OpenAICompatibleClientTest.dir\objects1.rsp
+D:\Software\cpp_tool\mingw64\bin\c++.exe -O3 -DNDEBUG -Wl,--whole-archive CMakeFiles\OpenAICompatibleClientTest.dir/objects.a -Wl,--no-whole-archive -o ..\OpenAICompatibleClientTest.exe -Wl,--out-implib,libOpenAICompatibleClientTest.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\OpenAICompatibleClientTest.dir\linkLibs.rsp

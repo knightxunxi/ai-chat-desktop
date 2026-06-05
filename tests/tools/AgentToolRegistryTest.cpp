@@ -1,13 +1,16 @@
 #include "tools/AgentToolRegistry.h"
 
+#include "mcp/McpConnector.h"
 #include "support/AppLogger.h"
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QSet>
 #include <QTemporaryDir>
+#include <QtGlobal>
 
 #include <cassert>
 
@@ -126,6 +129,35 @@ int main()
     assert(result.output.contains(QStringLiteral("command.list_project_files")));
     assert(result.output.contains(QStringLiteral("[FILE] README.md")));
 
+    QJsonObject commandParameters;
+    commandParameters.insert(QStringLiteral("command"), QStringLiteral("echo agent-command-ok"));
+    commandParameters.insert(QStringLiteral("timeout_ms"), 5000);
+    result = registry.execute(QStringLiteral("command.bash"), commandParameters, context);
+    assert(result.ok);
+    assert(result.output.contains(QStringLiteral("agent-command-ok")));
+
+    QJsonObject failingCommandParameters;
+#ifdef Q_OS_WIN
+    failingCommandParameters.insert(QStringLiteral("command"), QStringLiteral("exit /b 7"));
+#else
+    failingCommandParameters.insert(QStringLiteral("command"), QStringLiteral("exit 7"));
+#endif
+    failingCommandParameters.insert(QStringLiteral("timeout_ms"), 5000);
+    result = registry.execute(QStringLiteral("command.bash"), failingCommandParameters, context);
+    assert(!result.ok);
+    assert(result.error.contains(QStringLiteral("[exit=7]")));
+
+    QJsonObject deleteCommandParameters;
+#ifdef Q_OS_WIN
+    deleteCommandParameters.insert(QStringLiteral("command"), QStringLiteral("mkdir disposable && rmdir /s /q disposable"));
+#else
+    deleteCommandParameters.insert(QStringLiteral("command"), QStringLiteral("mkdir disposable && rm -rf disposable"));
+#endif
+    deleteCommandParameters.insert(QStringLiteral("timeout_ms"), 5000);
+    result = registry.execute(QStringLiteral("command.bash"), deleteCommandParameters, context);
+    assert(result.ok);
+    assert(!QFileInfo(QDir(context.projectDirectory).filePath(QStringLiteral("disposable"))).exists());
+
     QJsonObject memoryParameters;
     memoryParameters.insert(QStringLiteral("content"), QStringLiteral("Prefer ctest before commit."));
     result = registry.execute(QStringLiteral("memory.append_project_note"), memoryParameters, context);
@@ -146,6 +178,28 @@ int main()
     result = registry.execute(QStringLiteral("missing.tool"), QJsonObject(), context);
     assert(!result.ok);
     assert(result.error.contains(QStringLiteral("registered"), Qt::CaseInsensitive));
+
+    AgentToolRegistry registryWithMcp = AgentToolRegistryFactory::defaultRegistry();
+    McpToolDefinition mcpTool;
+    mcpTool.name = QStringLiteral("echo");
+    mcpTool.description = QStringLiteral("Echo input through MCP.");
+    QJsonObject mcpProperties;
+    mcpProperties.insert(QStringLiteral("input"), QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("string")},
+        {QStringLiteral("description"), QStringLiteral("Input text")}
+    });
+    mcpTool.inputSchema = QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("object")},
+        {QStringLiteral("properties"), mcpProperties}
+    };
+    registryWithMcp.registerExternalTools(QVector<McpToolDefinition>{mcpTool}, nullptr);
+
+    const AgentToolDefinition *mcpDefinition = registryWithMcp.findById(QStringLiteral("mcp.echo"));
+    assert(mcpDefinition != nullptr);
+    assert(mcpDefinition->functionName == QStringLiteral("mcp_echo"));
+    assert(mcpDefinition->descriptor.enabledForAgent);
+    assert(!mcpDefinition->descriptor.requiresUserConfirmation);
+    assert(registryWithMcp.canExecuteDirectly(QStringLiteral("mcp.echo")));
 
     return 0;
 }

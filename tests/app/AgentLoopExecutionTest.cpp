@@ -5,6 +5,7 @@
 #include "app/ApplicationController.h"
 #include "tools/AgentToolRegistry.h"
 #include "support/AppLogger.h"
+#include "skills/SkillDefinition.h"
 
 #include <QDir>
 #include <QJsonObject>
@@ -22,6 +23,7 @@ struct AgentLoopExecutionTestAccessor {
     static const QStringList &agentLoopObservations(const ApplicationController &c) { return c.m_agentOrchestrator.m_agentLoopObservations; }
     static int agentLoopIteration(const ApplicationController &c) { return c.m_agentOrchestrator.m_agentLoopIteration; }
     static int maxAgentLoopIterations() { return 50; }
+    static auto &matchedSkills(ApplicationController &c) { return c.m_agentOrchestrator.m_matchedSkills; }
     static auto &pendingToolResults(ApplicationController &c) { return c.m_agentOrchestrator.m_pendingToolResults; }
     static auto activeRequestKind(const ApplicationController &c) { return c.m_activeRequestKind; }
     static void setActiveRequestKind(ApplicationController &c, RequestKind k) { c.m_activeRequestKind = k; }
@@ -54,6 +56,10 @@ struct AgentLoopExecutionTestAccessor {
 
     static void initOrchestrator(ApplicationController &c) {
         c.m_agentOrchestrator.initialize(&c.m_aiClient, &c.m_configCoordinator, &c.m_sessionCoordinator);
+    }
+
+    static QString buildNextLoopPrompt(ApplicationController &c) {
+        return c.m_agentOrchestrator.buildNextLoopPrompt();
     }
 };
 
@@ -308,6 +314,32 @@ int main()
     }
 
     // ================================================================
+    // Test 9: matched-skills-injected-into-main-loop-prompt
+    // ================================================================
+    {
+        ApplicationController controller;
+        A::config(controller) = makeTestConfig();
+        A::initOrchestrator(controller);
+        A::setGenerating(controller, false);
+
+        controller.sendAgentLoopMessage(QStringLiteral("Build release package"));
+        SkillDefinition skill;
+        skill.metadata.name = QStringLiteral("release-build");
+        skill.metadata.description = QStringLiteral("Build and verify a release package.");
+        skill.metadata.triggers = QStringList{QStringLiteral("release")};
+        skill.metadata.version = QStringLiteral("1.0.0");
+        skill.instructions = QStringLiteral("Run cmake build first, then run ctest.");
+        A::matchedSkills(controller).append(skill);
+
+        const QString prompt = A::buildNextLoopPrompt(controller);
+        assert(prompt.contains(QStringLiteral("[Active Skills]")));
+        assert(prompt.contains(QStringLiteral("release-build")));
+        assert(prompt.contains(QStringLiteral("Run cmake build first")));
+
+        A::callCancelCurrentRequest(controller);
+    }
+
+    // ================================================================
     // Summary
     // ================================================================
     std::printf("\n");
@@ -321,6 +353,7 @@ int main()
     std::printf("  [PASS] loop-cancel-resets\n");
     std::printf("  [PASS] agent-mode-sends-loop\n");
     std::printf("  [PASS] loop-status-emitted\n");
+    std::printf("  [PASS] matched-skills-injected-into-main-loop-prompt\n");
     std::printf("========================================\n");
     return 0;
 }

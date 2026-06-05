@@ -1,6 +1,7 @@
 #include "app/AgentOrchestrator.h"
 
 #include "app/AgentCommandSkillFileService.h"
+#include "app/AgentLoopActionParser.h"
 #include "app/AgentLoopPromptBuilder.h"
 #include "app/AgentPlanExecutor.h"
 #include "app/AgentPlanParser.h"
@@ -8,6 +9,8 @@
 #include "app/ConfigCoordinator.h"
 #include "app/ContextWindowManager.h"
 #include "app/SessionCoordinator.h"
+#include "core/AppConfig.h"
+#include "services/AIClient.h"
 #include "app/TokenEstimator.h"
 #include "hooks/BuiltinHooks.h"
 #include "hooks/HookDefinition.h"
@@ -22,6 +25,9 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QEventLoop>
+#include <QJsonDocument>
+#include <QTimer>
 #include <QJsonDocument>
 #include <QStandardPaths>
 
@@ -121,6 +127,7 @@ void AgentOrchestrator::startAgentLoop(const QString &goal)
     m_agentLoopGoal = trimmedGoal;
     m_agentLoopIteration = 0;
     m_agentLoopObservations.clear();
+    m_actionFingerprints.clear();
 
     // V17.2: 初始化 Agent 循环状态快照
     m_agentLoopState = AgentLoopState{};
@@ -233,6 +240,31 @@ McpRegistry *AgentOrchestrator::mcpRegistry()
     return m_mcpRegistry.get();
 }
 
+AgentToolRegistry AgentOrchestrator::toolRegistry() const
+{
+    AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
+
+    // V17.6 P1-3: 注册轻量子代理探索工具
+    if (m_aiClient != nullptr) {
+        auto defs = registry.definitions();
+        defs.append(createSubAgentTool());
+        registry = AgentToolRegistry(defs);
+    }
+
+    if (!m_mcpRegistry) {
+        return registry;
+    }
+
+    for (McpConnector *connector : m_mcpRegistry->connectors()) {
+        if (connector == nullptr || !connector->isConnected()) {
+            continue;
+        }
+        registry.registerExternalTools(connector->listTools(), connector);
+    }
+
+    return registry;
+}
+
 ContextWindowManager *AgentOrchestrator::contextWindowManager()
 {
     return &m_contextWindowManager;
@@ -293,7 +325,7 @@ bool AgentOrchestrator::executeAgentLoopIteration()
 
 QString AgentOrchestrator::buildNextLoopPrompt() const
 {
-    const AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
+    const AgentToolRegistry registry = toolRegistry();
 
     const QString loopPrompt = AgentLoopPromptBuilder::buildNextActionPrompt(
         m_agentLoopGoal,
@@ -301,7 +333,8 @@ QString AgentOrchestrator::buildNextLoopPrompt() const
         registry.descriptors(),
         m_configCoordinator->config().language,
         m_agentLoopIteration,
-        kMaxAgentLoopIterations);
+        kMaxAgentLoopIterations,
+        m_matchedSkills);
 
     // V16.3: Agent 调试 — 暴露完整的循环提示词
     if (m_agentDebugMode) {
@@ -323,6 +356,11 @@ QString AgentOrchestrator::buildNextLoopPrompt() const
 void AgentOrchestrator::appendLoopObservation(const QString &observation)
 {
     m_agentLoopObservations.append(observation);
+}
+
+QStringList &AgentOrchestrator::loopObservationsRef()
+{
+    return m_agentLoopObservations;
 }
 
 // ─── 流式工具结果 ───────────────────────────────────────────────────
@@ -355,9 +393,12 @@ void AgentOrchestrator::clearPendingToolResults()
 bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
 {
     const QString &workspace = m_configCoordinator->config().agentProjectDirectory;
+    const AgentToolRegistry registry = toolRegistry();
+    const AgentToolExecutionContext context{workspace, workspace};
     QString execSummary;
     int successCount = 0;
     int failCount = 0;
+    const int displayIteration = m_agentLoopIteration + 1;
 
     execSummary += QStringLiteral("\n\n---\n");
     execSummary += m_configCoordinator->text(
@@ -367,15 +408,33 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
     for (int i = 0; i < plan.steps.size(); ++i) {
         const AgentPlanStep &step = plan.steps[i];
 
-        // V16.1: 发送思考信号
-        emit agentLoopThought(m_agentLoopIteration, step.reason, step.toolId, step.title);
+        // V17.6 P0-2: 重复动作检测
+        const QString argsCompact = QString::fromUtf8(
+            QJsonDocument(step.parameters).toJson(QJsonDocument::Compact));
+        const QString fp = QStringLiteral("%1|%2").arg(step.toolId, argsCompact);
+        if (m_actionFingerprints.contains(fp)) {
+            const QString warnMsg = m_configCoordinator->text(
+                QStringLiteral("WARNING: Repeated action detected — tool `%1` with the same parameters has already been executed. Consider a different approach."),
+                QStringLiteral("警告：检测到重复动作 — 工具 `%1` 以相同参数已执行过。请尝试不同方法。")).arg(step.toolId);
+            AppLogger::warning(QStringLiteral("AgentOrchestrator"), warnMsg);
+            // 注入为 observation，让 AI 下一轮自行调整
+            appendLoopObservation(QStringLiteral("[repeated-action-warning] ") + warnMsg);
+        }
+        m_actionFingerprints.insert(fp);
 
-        const ToolResult result = AgentPlanExecutor::executeStep(
-            step, workspace, workspace);
+        // V16.1: 发送思考信号
+        emit agentLoopThought(displayIteration, step.reason, step.toolId, step.title);
+
+        const ToolResult result = registry.execute(
+            step.toolId,
+            step.parameters,
+            context,
+            m_hookManager.get());
 
         // V16.1: 发送工具执行完成信号
-        emit agentLoopToolFinished(m_agentLoopIteration, step.toolId, result.ok,
-            result.output.left(80));
+        const QString resultText = result.ok ? result.output : result.error;
+        emit agentLoopToolFinished(displayIteration, step.toolId, result.ok,
+            resultText.left(80));
 
         // AG-4: 记录 Agent 执行步骤
         QString argsStr;
@@ -388,7 +447,7 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
             step.reason,
             step.toolId,
             argsStr,
-            result.output.left(500),
+            resultText.left(500),
             result.ok ? QStringLiteral("success") : QStringLiteral("error")));
 
         const QString status = result.ok
@@ -399,7 +458,7 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
             ? step.toolId
             : step.title;
 
-        QString resultPreview = result.output;
+        QString resultPreview = resultText;
         if (resultPreview.length() > 300) {
             resultPreview = resultPreview.left(300) + QStringLiteral("...");
         }
@@ -455,9 +514,195 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
         QString logEntry = QStringLiteral("执行计划: %1/%2 步成功")
             .arg(successCount).arg(plan.steps.size());
         memoryMgr.appendDailyLog(QStringLiteral("log"), logEntry);
+
+        // V18.6: 记录成功的工具序列 → 供下次类似任务参考
+        if (successCount > 0) {
+            QStringList toolIds;
+            for (const auto &step : plan.steps)
+                toolIds.append(step.toolId);
+            AgentLoopPromptBuilder::recordToolSequence(
+                m_configCoordinator->config().agentProjectDirectory,
+                m_agentLoopGoal.left(80),
+                toolIds);
+        }
+    }
+
+    // V18.5: 自动修复闭环 — 编辑文件后自动运行构建+测试
+    if (m_autoFixEnabled && successCount > 0) {
+        bool didEdit = false;
+        for (const auto &step : plan.steps) {
+            if (step.toolId == QStringLiteral("file.edit_text")
+                || step.toolId == QStringLiteral("file.save_text")
+                || step.toolId == QStringLiteral("workspace.write_text")
+                || step.toolId == QStringLiteral("workspace.overwrite_text")) {
+                didEdit = true; break;
+            }
+        }
+        if (didEdit && !m_configCoordinator->config().agentProjectDirectory.isEmpty()) {
+            const QString projectDir = m_configCoordinator->config().agentProjectDirectory;
+            QString autoFixReport;
+
+            // 自动构建
+            QProcess buildProc;
+            buildProc.setWorkingDirectory(projectDir);
+            buildProc.setProgram(QStringLiteral("cmake"));
+            buildProc.setArguments({QStringLiteral("--build"), QStringLiteral("build")});
+            buildProc.start();
+            if (buildProc.waitForFinished(60000)) {
+                QString buildOut = QString::fromLocal8Bit(buildProc.readAll());
+                if (buildProc.exitCode() == 0) {
+                    autoFixReport += QStringLiteral("[AutoFix] Build passed.\n");
+                } else {
+                    autoFixReport += QStringLiteral("[AutoFix] Build FAILED:\n%1\n").arg(buildOut.left(2000));
+                }
+            } else {
+                autoFixReport += QStringLiteral("[AutoFix] Build timed out.\n");
+            }
+
+            // 自动测试
+            QProcess testProc;
+            testProc.setWorkingDirectory(projectDir);
+            testProc.setProgram(QStringLiteral("ctest"));
+            testProc.setArguments({QStringLiteral("--test-dir"), QStringLiteral("build"), QStringLiteral("--output-on-failure")});
+            testProc.start();
+            if (testProc.waitForFinished(60000)) {
+                QString testOut = QString::fromLocal8Bit(testProc.readAll());
+                if (testProc.exitCode() == 0) {
+                    autoFixReport += QStringLiteral("[AutoFix] All tests passed.");
+                } else {
+                    autoFixReport += QStringLiteral("[AutoFix] Tests FAILED:\n%1").arg(testOut.left(2000));
+                }
+            } else {
+                autoFixReport += QStringLiteral("[AutoFix] Tests timed out.");
+            }
+
+            appendLoopObservation(autoFixReport);
+            AppLogger::info(QStringLiteral("AgentOrchestrator"), QStringLiteral("AutoFix check completed."));
+        }
     }
 
     return (failCount == 0);
+}
+
+// V17.6 P1-3: 轻量子代理 — agent.explore 工具，使用只读工具异步探索
+AgentToolDefinition AgentOrchestrator::createSubAgentTool() const
+{
+    const bool isChinese = (m_configCoordinator->config().language == AppLanguage::Chinese);
+
+    AgentToolDescriptor desc;
+    desc.id = QStringLiteral("agent.explore");
+    desc.englishName = QStringLiteral("Explore Project");
+    desc.chineseName = QStringLiteral("项目探索");
+    desc.englishDescription = QStringLiteral(
+        "Research a question by reading/searching project files. "
+        "Use this to understand code structure, find definitions, or locate files "
+        "without modifying anything. Returns findings as text.");
+    desc.chineseDescription = QStringLiteral(
+        "通过读取/搜索项目文件来研究问题。"
+        "用于理解代码结构、查找定义或定位文件，不修改任何内容。返回文本格式的发现。");
+    desc.risk = AgentToolRisk::Low;
+    desc.enabledForAgent = true;
+    desc.resultMayContainSensitiveContent = false;
+    desc.inputPolicy = QStringLiteral("{\"type\":\"object\",\"properties\":{\"question\":{\"type\":\"string\",\"description\":\"What to search for\"}},\"required\":[\"question\"]}");
+
+    QJsonObject paramSchema;
+    paramSchema[QStringLiteral("type")] = QStringLiteral("object");
+    QJsonObject props;
+    props[QStringLiteral("question")] = QJsonObject{
+        {QStringLiteral("type"), QStringLiteral("string")},
+        {QStringLiteral("description"), isChinese
+            ? QStringLiteral("要在项目中搜索研究的问题")
+            : QStringLiteral("The question to research in the project")}
+    };
+    paramSchema[QStringLiteral("properties")] = props;
+    QJsonArray required;
+    required.append(QStringLiteral("question"));
+    paramSchema[QStringLiteral("required")] = required;
+
+    AIClient *client = m_aiClient;
+    AppConfig subConfig = m_configCoordinator->config();
+
+    return AgentToolDefinition{
+        desc,
+        paramSchema,
+        AgentToolRegistryFactory::functionNameForToolId(QStringLiteral("agent.explore")),
+        true,
+        [client, subConfig, isChinese](const QJsonObject &params, const AgentToolExecutionContext &) -> ToolResult {
+            const QString question = params.value(QStringLiteral("question")).toString().trimmed();
+            if (question.isEmpty()) {
+                return {false, QString(), QStringLiteral("question is required")};
+            }
+
+            if (!client) {
+                return {false, QString(), QStringLiteral("AIClient is not available")};
+            }
+
+            // 只给只读工具：file.read_text, file.list_directory, project.find_files
+            QVector<AgentToolDefinition> readOnlyTools;
+            const auto allDefs = AgentToolRegistryFactory::defaultRegistry().definitions();
+            for (const auto &def : allDefs) {
+                if (def.descriptor.id == QStringLiteral("file.read_text")
+                    || def.descriptor.id == QStringLiteral("file.list_directory")
+                    || def.descriptor.id == QStringLiteral("project.find_files")
+                    || def.descriptor.id == QStringLiteral("command.git_status")) {
+                    readOnlyTools.append(def);
+                }
+            }
+
+            const AgentToolRegistry subRegistry(readOnlyTools);
+            const QString prompt = isChinese
+                ? QStringLiteral("研究以下问题（只读，不要修改任何文件）：\n%1\n\n"
+                                 "输出你的发现。要简短，只包含关键信息。")
+                      .arg(question)
+                : QStringLiteral("Research this question (read-only, do NOT modify any files):\n%1\n\n"
+                                 "Output your findings. Be brief, only include key information.")
+                      .arg(question);
+
+            ChatSession session = ChatSession::createDefault();
+            session.addMessage(MessageRole::User, prompt);
+
+            QEventLoop loop;
+            QString resultText;
+            bool finished = false;
+            QString errorMsg;
+
+            QMetaObject::Connection c1 = QObject::connect(
+                client, &AIClient::textDeltaReceived,
+                [&resultText](const QString &delta) { resultText += delta; });
+
+            QMetaObject::Connection c2 = QObject::connect(
+                client, &AIClient::requestFinished,
+                [&loop, &finished]() { finished = true; loop.quit(); });
+
+            QMetaObject::Connection c3 = QObject::connect(
+                client, &AIClient::requestFailed,
+                [&loop, &errorMsg](const QString &msg, RequestErrorCategory) {
+                    errorMsg = msg;
+                    loop.quit();
+                });
+
+            QTimer timeoutTimer;
+            timeoutTimer.setSingleShot(true);
+            QObject::connect(&timeoutTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
+            timeoutTimer.start(30000); // 30s sub-agent timeout
+
+            client->sendChat(subConfig, session);
+
+            loop.exec();
+
+            QObject::disconnect(c1);
+            QObject::disconnect(c2);
+            QObject::disconnect(c3);
+
+            if (!errorMsg.isEmpty()) {
+                return {false, QString(), QStringLiteral("Sub-agent failed: %1").arg(errorMsg)};
+            }
+            if (!finished) {
+                return {false, QString(), QStringLiteral("Sub-agent timed out")};
+            }
+
+            return {true, resultText.trimmed(), QString()};
+        }};
 }
 
 // ─── Agent 状态持久化 ───────────────────────────────────────────────

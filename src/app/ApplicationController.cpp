@@ -1,11 +1,10 @@
 #include "app/ApplicationController.h"
 
 #include "app/AgentCommandSkillFileService.h"
+#include "app/AgentLoopActionParser.h"
 #include "app/AgentLoopPromptBuilder.h"
-#include "app/AgentPlanExecutor.h"
 #include "app/AgentPlanParser.h"
 #include "app/AgentPlanPromptBuilder.h"
-#include "app/AgentToolCallPlanBuilder.h"
 #include "app/ProjectInstructionService.h"
 #include "app/TokenEstimator.h"
 #include "hooks/HookDefinition.h"
@@ -24,6 +23,8 @@
 #include <QDateTime>
 #include <QDir>
 #include <QJsonDocument>
+#include <QJsonParseError>
+#include <QSet>
 #include <QStandardPaths>
 #include <QStringList>
 
@@ -69,6 +70,60 @@ QString commandSkillSectionForProject(const QString &projectDirectory, AppLangua
     }
 
     return AgentCommandSkillCatalog::promptSection(skills, language);
+}
+
+QString toolArgumentsToString(const QJsonObject &arguments)
+{
+    return QString::fromUtf8(QJsonDocument(arguments).toJson(QJsonDocument::Compact));
+}
+
+QString streamingResultsDisplayText(
+    const QVector<PendingToolResult> &results,
+    const QString &heading)
+{
+    if (results.isEmpty()) {
+        return QString();
+    }
+
+    QString text = QStringLiteral("\n\n%1").arg(heading);
+    for (const PendingToolResult &pending : results) {
+        text += QStringLiteral("\n[%1] %2: %3")
+            .arg(pending.success ? QStringLiteral("ok") : QStringLiteral("failed"),
+                 pending.toolName,
+                 pending.result);
+    }
+    return text;
+}
+
+QString streamingResultsObservation(const QVector<PendingToolResult> &results)
+{
+    if (results.isEmpty()) {
+        return QString();
+    }
+
+    QString observation = QStringLiteral("Streaming tool results:\n");
+    for (const PendingToolResult &pending : results) {
+        observation += QStringLiteral("[%1] tool=%2 args=%3\noutput=%4\n")
+            .arg(pending.success ? QStringLiteral("ok") : QStringLiteral("failed"),
+                 pending.toolName,
+                 toolArgumentsToString(pending.arguments),
+                 pending.result);
+    }
+    return observation.trimmed();
+}
+
+QString toolResultText(const ToolResult &result)
+{
+    return result.ok ? result.output : result.error;
+}
+
+QString compactPreview(QString text, int maxLength)
+{
+    text = text.trimmed();
+    if (text.length() <= maxLength) {
+        return text;
+    }
+    return text.left(maxLength) + QStringLiteral("...");
 }
 
 } // namespace
@@ -123,6 +178,7 @@ ApplicationController::ApplicationController(QObject *parent)
     connect(&m_aiClient, &OpenAICompatibleClient::toolCallsReceived, this, &ApplicationController::handleToolCallsReceived);
     connect(&m_aiClient, &OpenAICompatibleClient::toolUseBlockComplete, this, &ApplicationController::handleToolUseBlockComplete);
     connect(&m_aiClient, &OpenAICompatibleClient::requestFinished, this, &ApplicationController::handleRequestFinished);
+    connect(&m_aiClient, &OpenAICompatibleClient::responseTruncated, this, &ApplicationController::handleResponseTruncated);
     connect(&m_aiClient, &OpenAICompatibleClient::requestFailed, this, &ApplicationController::handleRequestFailed);
 }
 
@@ -442,7 +498,7 @@ void ApplicationController::generateAgentPlan(const QString &goal, int continuat
     m_agentToolCalls.clear();
     m_pendingAgentPlanContinuationDepth = continuationDepth;
 
-    const AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
+    const AgentToolRegistry registry = m_agentOrchestrator.toolRegistry();
     const QVector<AgentToolDescriptor> catalog = registry.descriptors();
     const ProjectInstructions projectInstructions = ProjectInstructionService::loadFromProjectDirectory(m_configCoordinator.config().agentProjectDirectory);
     const QString projectInstructionSection = ProjectInstructionService::promptSection(projectInstructions, m_configCoordinator.config().language);
@@ -514,7 +570,7 @@ void ApplicationController::sendUnifiedMessage(const QString &content)
     m_sessionCoordinator.currentSession().addMessage(MessageRole::User, trimmedContent);
     emit userMessageAdded(trimmedContent);
 
-    const AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
+    const AgentToolRegistry registry = m_agentOrchestrator.toolRegistry();
     const QVector<AgentToolDescriptor> catalog = registry.descriptors();
     const ProjectInstructions projectInstructions = ProjectInstructionService::loadFromProjectDirectory(m_configCoordinator.config().agentProjectDirectory);
     const QString projectInstructionSection = ProjectInstructionService::promptSection(projectInstructions, m_configCoordinator.config().language);
@@ -582,7 +638,7 @@ void ApplicationController::sendAgentLoopMessage(const QString &content)
         m_agentOrchestrator.resumeAgentLoop();
         // 继续循环：构建下一步提示词并发送
         const QString loopPrompt = m_agentOrchestrator.buildNextLoopPrompt();
-        const AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
+        const AgentToolRegistry registry = m_agentOrchestrator.toolRegistry();
 
         ChatSession loopSession = m_sessionCoordinator.currentSession();
         loopSession.systemPrompt = loopPrompt;
@@ -610,6 +666,7 @@ void ApplicationController::sendAgentLoopMessage(const QString &content)
             loopSession.messages = cwResult.processedMessages;
         }
 
+        m_pendingAgentRequestSession = loopSession;
         setGenerating(true);
         m_aiClient.sendChatWithTools(m_configCoordinator.config(), loopSession,
             registry.functionToolSchemas(m_configCoordinator.config().language));
@@ -625,10 +682,29 @@ void ApplicationController::sendAgentLoopMessage(const QString &content)
     }
 
     // 委托给 AgentOrchestrator 初始化循环状态
-    m_agentOrchestrator.startAgentLoop(trimmedContent);
+    setRetryAvailable(false);
+    if (!m_configCoordinator.config().isComplete()) {
+        emit configurationMissing();
+        return;
+    }
 
-    // 第一轮复用 sendUnifiedMessage 的逻辑
-    sendUnifiedMessage(content);
+    if (m_sessionCoordinator.currentSession().messages.isEmpty()) {
+        m_sessionCoordinator.currentSession().title = trimmedContent.left(36);
+        emit currentChatCleared();
+        m_sessionCoordinator.upsertCurrentSessionSummary(true);
+        emit sessionListChanged();
+    }
+
+    m_sessionCoordinator.currentSession().addMessage(MessageRole::User, trimmedContent);
+    emit userMessageAdded(trimmedContent);
+    m_lastRequestUserContent = trimmedContent;
+
+    m_agentOrchestrator.startAgentLoop(trimmedContent);
+    m_retryAfterCompressionCount = 0;  // V17.6 P2-1: 新任务重置压缩重试计数
+    m_truncationResumeCount = 0;       // V17.6 P2-2: 新任务重置截断续接计数
+    m_pendingTruncationResume = false;
+
+    continueAgentLoop();
 }
 
 // V16.3: Agent 调试模式开关
@@ -650,7 +726,7 @@ void ApplicationController::continueAgentLoop()
     ChatSession loopSession = m_sessionCoordinator.currentSession();
     loopSession.systemPrompt = loopPrompt;
 
-    const AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
+    const AgentToolRegistry registry = m_agentOrchestrator.toolRegistry();
 
     emit statusMessage(
         QStringLiteral("Agent loop iteration %1/%2").arg(m_agentOrchestrator.agentLoopIteration()).arg(m_agentOrchestrator.maxAgentLoopIterations()),
@@ -676,6 +752,7 @@ void ApplicationController::continueAgentLoop()
     m_activeRequestKind = ActiveRequestKind::UnifiedAgent;
     m_nativeToolRequestActive = true;
     m_nativeToolFallbackAttempted = false;
+    m_pendingAgentRequestSession = loopSession;
 
     setGenerating(true);
     m_aiClient.sendChatWithTools(m_configCoordinator.config(), loopSession,
@@ -707,6 +784,7 @@ void ApplicationController::cancelCurrentRequest()
         m_nativeToolRequestActive = false;
         m_nativeToolFallbackAttempted = false;
         m_pendingAgentPlanContinuationDepth = 0;
+        m_pendingTruncationResume = false;
         m_activeRequestKind = ActiveRequestKind::None;
         m_sessionCoordinator.saveCurrentSession();
         emit statusMessage(QStringLiteral("Agent generation stopped."),
@@ -786,6 +864,282 @@ void ApplicationController::handleToolCallsReceived(const ToolCallList &toolCall
                         .arg(toolCalls.size()));
 }
 
+PendingToolResult ApplicationController::executeAgentToolDefinition(
+    const AgentToolDefinition &definition,
+    const QString &toolName,
+    const QJsonObject &arguments,
+    const QString &reasoning,
+    const QString &title)
+{
+    const QString workspace = m_configCoordinator.config().agentProjectDirectory;
+    const AgentToolExecutionContext context{workspace, workspace};
+    const int displayIteration = m_agentOrchestrator.agentLoopIteration() + 1;
+    const QString resolvedTitle = title.trimmed().isEmpty()
+                                      ? agentToolDisplayName(definition.descriptor, m_configCoordinator.config().language)
+                                      : title.trimmed();
+    const QString resolvedReasoning = reasoning.trimmed().isEmpty()
+                                          ? m_configCoordinator.text(
+                                                QStringLiteral("The model requested this tool call."),
+                                                QStringLiteral("模型请求执行该工具调用。"))
+                                          : reasoning.trimmed();
+
+    emit agentLoopThought(displayIteration, resolvedReasoning, definition.descriptor.id, resolvedTitle);
+
+    const ToolResult result = m_agentOrchestrator.toolRegistry().execute(
+        definition.descriptor.id,
+        arguments,
+        context,
+        m_agentOrchestrator.hookManager());
+    const QString resultText = toolResultText(result);
+
+    emit agentLoopToolFinished(
+        displayIteration,
+        definition.descriptor.id,
+        result.ok,
+        compactPreview(resultText, 80));
+
+    m_sessionCoordinator.currentSession().agentSteps.append(AgentStepRecord::create(
+        m_sessionCoordinator.currentSession().agentSteps.size() + 1,
+        resolvedReasoning,
+        definition.descriptor.id,
+        toolArgumentsToString(arguments),
+        compactPreview(resultText, 500),
+        result.ok ? QStringLiteral("success") : QStringLiteral("error")));
+
+    PendingToolResult pending;
+    pending.toolName = toolName.trimmed().isEmpty() ? definition.descriptor.id : toolName.trimmed();
+    pending.arguments = arguments;
+    pending.result = resultText;
+    pending.success = result.ok;
+
+    AppLogger::info(QStringLiteral("AgentTool"),
+                    QStringLiteral("Tool executed. toolId=%1 functionName=%2 ok=%3")
+                        .arg(definition.descriptor.id,
+                             pending.toolName,
+                             result.ok ? QStringLiteral("true") : QStringLiteral("false")));
+    return pending;
+}
+
+PendingToolResult ApplicationController::executeAgentToolCall(
+    const QString &toolName,
+    const QJsonObject &arguments)
+{
+    const AgentToolRegistry registry = m_agentOrchestrator.toolRegistry();
+    const AgentToolDefinition *definition = registry.findByFunctionName(toolName);
+    if (definition != nullptr) {
+        return executeAgentToolDefinition(
+            *definition,
+            toolName,
+            arguments,
+            QString(),
+            QString());
+    }
+
+    PendingToolResult pending;
+    pending.toolName = toolName.trimmed();
+    pending.arguments = arguments;
+    pending.result = QStringLiteral("Tool not found: %1").arg(toolName);
+    pending.success = false;
+    AppLogger::warning(QStringLiteral("AgentTool"),
+                       QStringLiteral("Native tool call could not be mapped. functionName=%1").arg(toolName));
+    return pending;
+}
+
+QVector<PendingToolResult> ApplicationController::executeAgentToolCalls(const ToolCallList &toolCalls)
+{
+    QVector<PendingToolResult> results;
+    QSet<QString> seenCalls;
+    results.reserve(toolCalls.size());
+
+    for (const ToolCall &toolCall : toolCalls) {
+        const QString dedupeKey = !toolCall.id.trimmed().isEmpty()
+                                      ? toolCall.id.trimmed()
+                                      : QStringLiteral("%1:%2").arg(toolCall.functionName, toolCall.arguments);
+        if (seenCalls.contains(dedupeKey)) {
+            continue;
+        }
+        seenCalls.insert(dedupeKey);
+
+        QJsonParseError parseError;
+        const QJsonDocument argumentsDocument = QJsonDocument::fromJson(
+            toolCall.arguments.toUtf8(),
+            &parseError);
+        if (parseError.error != QJsonParseError::NoError || !argumentsDocument.isObject()) {
+            PendingToolResult pending;
+            pending.toolName = toolCall.functionName.trimmed();
+            pending.result = QStringLiteral("Tool arguments JSON parse error at offset %1: %2")
+                                 .arg(parseError.offset)
+                                 .arg(parseError.errorString());
+            pending.success = false;
+            results.append(pending);
+            continue;
+        }
+
+        results.append(executeAgentToolCall(toolCall.functionName, argumentsDocument.object()));
+    }
+
+    return results;
+}
+
+void ApplicationController::publishAgentToolResults(
+    const QVector<PendingToolResult> &results,
+    const QString &heading)
+{
+    if (results.isEmpty()) {
+        return;
+    }
+
+    if (m_sessionCoordinator.currentSession().messages.isEmpty()
+        || m_sessionCoordinator.currentSession().messages.last().role != MessageRole::Assistant) {
+        m_sessionCoordinator.currentSession().addMessage(MessageRole::Assistant, QString());
+        emit assistantMessageStarted();
+    }
+
+    if (m_currentAssistantContent.trimmed().isEmpty()) {
+        m_currentAssistantContent = m_configCoordinator.text(
+            QStringLiteral("Tool calls executed."),
+            QStringLiteral("工具调用已执行。"));
+    }
+    m_currentAssistantContent += streamingResultsDisplayText(results, heading);
+
+    m_sessionCoordinator.currentSession().messages.last().content = m_currentAssistantContent;
+    emit assistantMessageUpdated(m_currentAssistantContent);
+    m_sessionCoordinator.saveCurrentSession();
+}
+
+void ApplicationController::continueAgentLoopWithToolResults(const QVector<PendingToolResult> &results)
+{
+    if (!m_agentOrchestrator.isAgentLoopActive() || results.isEmpty()) {
+        return;
+    }
+
+    m_agentOrchestrator.appendLoopObservation(streamingResultsObservation(results));
+    if (m_agentOrchestrator.executeAgentLoopIteration()) {
+        continueAgentLoop();
+    }
+}
+
+void ApplicationController::completeAgentLoopWithMessage(
+    const QString &message,
+    const QString &extraDisplayText)
+{
+    m_agentOrchestrator.cancelAgentLoop();
+    m_agentOrchestrator.clearAgentLoopState();
+
+    auto skills = m_agentOrchestrator.matchedSkills();
+    if (m_agentOrchestrator.skillManager() && !skills.isEmpty()) {
+        const QString summary = m_agentOrchestrator.skillManager()->skillSummary(skills);
+        emit agentLoopSkillSummary(summary);
+        emit statusMessage(summary, summary, 5000);
+    }
+
+    const QString finalMessage = message.trimmed().isEmpty()
+                                     ? m_configCoordinator.text(QStringLiteral("Done."), QStringLiteral("已完成。"))
+                                     : message.trimmed();
+    m_currentAssistantContent = finalMessage + extraDisplayText
+        + QStringLiteral("\n\n---\n")
+        + m_configCoordinator.text(QStringLiteral("Task completed."), QStringLiteral("任务完成。"));
+
+    if (m_sessionCoordinator.currentSession().messages.isEmpty()
+        || m_sessionCoordinator.currentSession().messages.last().role != MessageRole::Assistant) {
+        m_sessionCoordinator.currentSession().addMessage(MessageRole::Assistant, QString());
+        emit assistantMessageStarted();
+    }
+    m_sessionCoordinator.currentSession().messages.last().content = m_currentAssistantContent;
+    emit assistantMessageUpdated(m_currentAssistantContent);
+    m_sessionCoordinator.saveCurrentSession();
+    emit statusMessage(QStringLiteral("Agent loop finished"), QStringLiteral("Agent 循环完成"), 3000);
+    emit agentLoopCompleted();
+}
+
+bool ApplicationController::resumeAgentLoopAfterTruncation(const QString &partialResponse)
+{
+    if (!m_pendingTruncationResume) {
+        return false;
+    }
+    m_pendingTruncationResume = false;
+
+    if (!m_agentOrchestrator.isAgentLoopActive()) {
+        return false;
+    }
+
+    if (m_truncationResumeCount >= kMaxTruncationResume) {
+        AppLogger::warning(QStringLiteral("TruncationResume"),
+                           QStringLiteral("Reached max truncation resume count (%1).")
+                               .arg(kMaxTruncationResume));
+        emit statusMessage(QStringLiteral("Response was truncated; maximum auto-resume count reached."),
+                           QStringLiteral("响应被截断；已达到自动续接上限。"),
+                           5000);
+        return false;
+    }
+
+    ++m_truncationResumeCount;
+    AppLogger::info(QStringLiteral("TruncationResume"),
+                    QStringLiteral("Response truncated, scheduling resume after request finish (%1/%2)")
+                        .arg(m_truncationResumeCount)
+                        .arg(kMaxTruncationResume));
+
+    QString observation = QStringLiteral("[truncation-auto-resume] finish_reason=length. Continue from the partial response without repeating completed content.");
+    const QString trimmedPartial = partialResponse.trimmed();
+    if (!trimmedPartial.isEmpty()) {
+        observation += QStringLiteral("\nPartial response before truncation:\n%1")
+                           .arg(trimmedPartial.left(2000));
+    }
+    m_agentOrchestrator.appendLoopObservation(observation);
+
+    if (m_agentOrchestrator.executeAgentLoopIteration()) {
+        continueAgentLoop();
+    }
+    return true;
+}
+
+bool ApplicationController::handleAgentLoopActionResponse(
+    const QString &responseText,
+    const QString &extraDisplayText)
+{
+    if (!m_agentOrchestrator.isAgentLoopActive()) {
+        return false;
+    }
+
+    const AgentToolRegistry registry = m_agentOrchestrator.toolRegistry();
+    const AgentLoopActionParseResult parseResult = AgentLoopActionParser::parseJsonAction(
+        responseText,
+        registry.descriptors());
+    if (!parseResult.ok) {
+        return false;
+    }
+
+    const AgentLoopAction &action = parseResult.action;
+    if (action.done) {
+        completeAgentLoopWithMessage(action.message, extraDisplayText);
+        return true;
+    }
+
+    const AgentPlanStep &step = action.step;
+    QVector<PendingToolResult> results;
+    const AgentToolDefinition *definition = registry.findById(step.toolId);
+    if (definition == nullptr) {
+        PendingToolResult pending;
+        pending.toolName = step.toolId;
+        pending.arguments = step.parameters;
+        pending.result = QStringLiteral("Tool is not registered.");
+        pending.success = false;
+        results.append(pending);
+    } else {
+        results.append(executeAgentToolDefinition(
+            *definition,
+            definition->functionName,
+            step.parameters,
+            step.reason,
+            step.title));
+    }
+
+    m_currentAssistantContent = action.message.trimmed();
+    publishAgentToolResults(results, QStringLiteral("[Agent step result]"));
+    continueAgentLoopWithToolResults(results);
+    return true;
+}
+
 void ApplicationController::handleToolUseBlockComplete(
     const QString &toolName, const QJsonObject &arguments)
 {
@@ -794,52 +1148,69 @@ void ApplicationController::handleToolUseBlockComplete(
         return;
     }
 
-    const AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
-    const AgentToolExecutionContext context{
-        m_configCoordinator.config().agentProjectDirectory,
-        m_configCoordinator.config().agentProjectDirectory};
-
-    const AgentToolDefinition *def = registry.findByFunctionName(toolName);
-    QString result;
-    bool success = false;
-    if (def != nullptr) {
-        const ToolResult toolResult = registry.execute(
-            def->descriptor.id, arguments, context);
-        result = toolResult.output;
-        success = toolResult.ok;
-    } else {
-        result = QStringLiteral("Tool not found: %1").arg(toolName);
-        success = false;
-    }
-
-    m_agentOrchestrator.addPendingToolResult(toolName, arguments, result, success);
+    const PendingToolResult pending = executeAgentToolCall(toolName, arguments);
+    m_agentOrchestrator.addPendingToolResult(
+        pending.toolName,
+        pending.arguments,
+        pending.result,
+        pending.success);
 
     AppLogger::info(QStringLiteral("StreamingTool"),
                     QStringLiteral("Tool executed during streaming: %1 (ok=%2)")
                         .arg(toolName)
-                        .arg(success ? QStringLiteral("true") : QStringLiteral("false")));
+                        .arg(pending.success ? QStringLiteral("true") : QStringLiteral("false")));
 }
 
 void ApplicationController::handleRequestFinished()
 {
     if (m_activeRequestKind == ActiveRequestKind::AgentPlan) {
         setGenerating(false);
-        const AgentToolRegistry registry = AgentToolRegistryFactory::defaultRegistry();
-        const AgentPlanParseResult parseResult = !m_agentToolCalls.isEmpty()
-            ? AgentToolCallPlanBuilder::buildPlanFromToolCalls(
-                  m_agentToolCalls,
-                  registry,
-                  m_configCoordinator.config().language,
-                  AgentPlanParser::DefaultMaxPlanSteps)
-            : AgentPlanParser::parseJsonPlan(
-                  m_agentPlanResponseBuffer,
-                  registry.descriptors());
+        QVector<PendingToolResult> toolResults = m_agentOrchestrator.takePendingToolResults();
+        if (toolResults.isEmpty() && !m_agentToolCalls.isEmpty()) {
+            toolResults = executeAgentToolCalls(m_agentToolCalls);
+        }
+        if (!toolResults.isEmpty()) {
+            m_agentPlanResponseBuffer.clear();
+            m_agentToolCalls.clear();
+            m_pendingAgentRequestSession = ChatSession();
+            m_nativeToolRequestActive = false;
+            m_nativeToolFallbackAttempted = false;
+            m_pendingAgentPlanContinuationDepth = 0;
+            m_pendingTruncationResume = false;
+            m_activeRequestKind = ActiveRequestKind::None;
+
+            AppLogger::info(QStringLiteral("AgentPlan"),
+                            QStringLiteral("Native tool calls executed. count=%1")
+                                .arg(toolResults.size()));
+
+            publishAgentToolResults(toolResults, QStringLiteral("[Tool results]"));
+
+            if (m_agentOrchestrator.isAgentLoopActive()) {
+                continueAgentLoopWithToolResults(toolResults);
+            } else {
+                emit statusMessage(QStringLiteral("Tool calls executed."),
+                                   QStringLiteral("工具调用已执行。"),
+                                   3000);
+            }
+            return;
+        }
+
+        const QString responseText = m_agentPlanResponseBuffer;
         m_agentPlanResponseBuffer.clear();
         m_agentToolCalls.clear();
         m_pendingAgentRequestSession = ChatSession();
         m_nativeToolRequestActive = false;
         m_nativeToolFallbackAttempted = false;
         m_activeRequestKind = ActiveRequestKind::None;
+
+        if (resumeAgentLoopAfterTruncation(responseText)) {
+            return;
+        }
+
+        const AgentToolRegistry registry = m_agentOrchestrator.toolRegistry();
+        const AgentPlanParseResult parseResult = AgentPlanParser::parseJsonPlan(
+            responseText,
+            registry.descriptors());
 
         if (!parseResult.ok) {
             m_pendingAgentPlanContinuationDepth = 0;
@@ -863,105 +1234,53 @@ void ApplicationController::handleRequestFinished()
         // 委托给 AgentOrchestrator 执行计划
         const bool planAllSuccess = m_agentOrchestrator.executePlanAndReportToChat(plan);
 
-        // V12.6: 循环继续 — 仅当计划有失败步骤时才进入 OODA 循环
-        if (planAllSuccess) {
-            // 全部成功 → 直接结束循环
-            m_agentOrchestrator.cancelAgentLoop();
-            emit statusMessage("Agent plan completed", "Agent 计划执行完成", 3000);
-            return;
-        }
         if (m_agentOrchestrator.isAgentLoopActive()) {
             QString observation;
             for (const AgentPlanStep &step : plan.steps) {
                 observation += QStringLiteral("[%1] %2\n").arg(step.toolId, step.title);
             }
+            observation += QStringLiteral("planSuccess=%1").arg(planAllSuccess ? QStringLiteral("true") : QStringLiteral("false"));
             m_agentOrchestrator.appendLoopObservation(observation);
             if (m_agentOrchestrator.executeAgentLoopIteration()) {
                 continueAgentLoop();
             }
+            return;
+        }
+
+        if (planAllSuccess) {
+            emit statusMessage("Agent plan completed", "Agent 计划执行完成", 3000);
         }
         return;
     }
 
     if (m_activeRequestKind == ActiveRequestKind::UnifiedAgent) {
         setGenerating(false);
-        if (!m_agentToolCalls.isEmpty()) {
-            const AgentPlanParseResult parseResult = AgentToolCallPlanBuilder::buildPlanFromToolCalls(
-                m_agentToolCalls,
-                AgentToolRegistryFactory::defaultRegistry(),
-                m_configCoordinator.config().language,
-                AgentPlanParser::DefaultMaxPlanSteps);
+        QVector<PendingToolResult> toolResults = m_agentOrchestrator.takePendingToolResults();
+        if (toolResults.isEmpty() && !m_agentToolCalls.isEmpty()) {
+            toolResults = executeAgentToolCalls(m_agentToolCalls);
+        }
+        if (!toolResults.isEmpty()) {
             m_agentPlanResponseBuffer.clear();
             m_agentToolCalls.clear();
             m_pendingAgentRequestSession = ChatSession();
             m_nativeToolRequestActive = false;
             m_nativeToolFallbackAttempted = false;
+            m_pendingTruncationResume = false;
             m_activeRequestKind = ActiveRequestKind::None;
 
-            // V12.3: 组合流式工具执行结果
-            QVector<PendingToolResult> streamResults = m_agentOrchestrator.takePendingToolResults();
-            QString streamingResultsSummary;
-            if (!streamResults.isEmpty()) {
-                streamingResultsSummary = QStringLiteral("\n\n[Streaming results (executed early)]");
-                for (const PendingToolResult &pending : streamResults) {
-                    streamingResultsSummary += QStringLiteral("\ntool=%1: %2")
-                        .arg(pending.toolName, pending.result);
-                }
-            }
+            AppLogger::info(QStringLiteral("UnifiedAgent"),
+                            QStringLiteral("Native tool calls executed. count=%1")
+                                .arg(toolResults.size()));
 
-            if (!parseResult.ok) {
-                m_currentAssistantContent = m_configCoordinator.text(
-                    QStringLiteral("Tool call parsing failed: %1").arg(parseResult.error),
-                    QStringLiteral("工具调用解析失败：%1").arg(parseResult.error))
-                    + streamingResultsSummary;
-                if (!m_sessionCoordinator.currentSession().messages.isEmpty()) {
-                    m_sessionCoordinator.currentSession().messages.last().content = m_currentAssistantContent;
-                }
-                emit assistantMessageUpdated(m_currentAssistantContent);
-                m_sessionCoordinator.saveCurrentSession();
-                return;
-            }
-
-            m_currentAssistantContent = m_configCoordinator.text(
-                QStringLiteral("Agent plan generated. Review before executing steps."),
-                QStringLiteral("Agent 计划已生成。请先检查再执行步骤。"))
-                + streamingResultsSummary;
-            if (!m_sessionCoordinator.currentSession().messages.isEmpty()) {
-                m_sessionCoordinator.currentSession().messages.last().content = m_currentAssistantContent;
-            }
-            emit assistantMessageUpdated(m_currentAssistantContent);
-            m_sessionCoordinator.saveCurrentSession();
-
-            // 委托给 AgentOrchestrator 执行计划
-            const bool planAllSuccess = m_agentOrchestrator.executePlanAndReportToChat(parseResult.plan);
-
-            // V12.6: 循环继续 — 仅当计划步骤有失败时才进入 OODA 循环尝试恢复
-            if (m_agentOrchestrator.isAgentLoopActive() && !planAllSuccess) {
-                QString observation;
-                for (const AgentPlanStep &step : parseResult.plan.steps) {
-                    observation += QStringLiteral("[%1] %2\n").arg(step.toolId, step.title);
-                }
-                m_agentOrchestrator.appendLoopObservation(observation);
-                if (m_agentOrchestrator.executeAgentLoopIteration()) {
-                    continueAgentLoop();
-                }
-            } else if (m_agentOrchestrator.isAgentLoopActive()) {
-                // 全部成功 → 直接结束循环
-                m_agentOrchestrator.cancelAgentLoop();
-                m_currentAssistantContent += 
-                    QStringLiteral("\n\n---\n")
-                    + m_configCoordinator.text("Task completed.", "任务完成。");
-                if (!m_sessionCoordinator.currentSession().messages.isEmpty()) {
-                    m_sessionCoordinator.currentSession().messages.last().content = m_currentAssistantContent;
-                }
-                emit assistantMessageUpdated(m_currentAssistantContent);
-                m_sessionCoordinator.saveCurrentSession();
-                emit statusMessage("Agent plan completed", "Agent 计划执行完成", 3000);
+            publishAgentToolResults(toolResults, QStringLiteral("[Tool results]"));
+            if (m_agentOrchestrator.isAgentLoopActive()) {
+                continueAgentLoopWithToolResults(toolResults);
             }
             return;
         }
 
-        const auto response = UnifiedResponseParser::parse(m_agentPlanResponseBuffer, m_configCoordinator.config().language);
+        const QString responseText = m_agentPlanResponseBuffer;
+        const auto response = UnifiedResponseParser::parse(responseText, m_configCoordinator.config().language);
         m_agentPlanResponseBuffer.clear();
         m_agentToolCalls.clear();
         m_pendingAgentRequestSession = ChatSession();
@@ -969,40 +1288,21 @@ void ApplicationController::handleRequestFinished()
         m_nativeToolFallbackAttempted = false;
         m_activeRequestKind = ActiveRequestKind::None;
 
-        // V12.3: 组合流式工具执行结果
-        QVector<PendingToolResult> streamResults = m_agentOrchestrator.takePendingToolResults();
-        QString streamingResultsSummary;
-        if (!streamResults.isEmpty()) {
-            streamingResultsSummary = QStringLiteral("\n\n[Streaming results (executed early)]");
-            for (const PendingToolResult &pending : streamResults) {
-                streamingResultsSummary += QStringLiteral("\ntool=%1: %2")
-                    .arg(pending.toolName, pending.result);
-            }
+        const QString streamingResultsSummary;
+
+        if (resumeAgentLoopAfterTruncation(responseText)) {
+            return;
+        }
+
+        if (m_agentOrchestrator.isAgentLoopActive()
+            && handleAgentLoopActionResponse(responseText, streamingResultsSummary)) {
+            return;
         }
 
         if (response.kind == UnifiedResponseKind::Chat) {
             // Chat 响应 = AI 判断任务完成
             if (m_agentOrchestrator.isAgentLoopActive()) {
-                // Agent 循环完成
-                m_agentOrchestrator.cancelAgentLoop(); // 清空循环状态
-
-                // V13.3: 发送技能摘要
-                auto skills = m_agentOrchestrator.matchedSkills();
-                if (m_agentOrchestrator.skillManager() && !skills.isEmpty()) {
-                    const QString summary = m_agentOrchestrator.skillManager()->skillSummary(skills);
-                    emit agentLoopSkillSummary(summary);
-                    emit statusMessage(summary, summary, 5000);
-                }
-
-                m_currentAssistantContent = response.chatMessage + streamingResultsSummary
-                    + QStringLiteral("\n\n---\n")
-                    + m_configCoordinator.text("Task completed.", "任务完成。");
-                if (!m_sessionCoordinator.currentSession().messages.isEmpty()) {
-                    m_sessionCoordinator.currentSession().messages.last().content = m_currentAssistantContent;
-                }
-                emit assistantMessageUpdated(m_currentAssistantContent);
-                m_sessionCoordinator.saveCurrentSession();
-                emit statusMessage("Agent loop finished", "Agent 循环完成", 3000);
+                completeAgentLoopWithMessage(response.chatMessage, streamingResultsSummary);
                 return;
             }
 
@@ -1019,8 +1319,9 @@ void ApplicationController::handleRequestFinished()
         }
 
         if (response.kind == UnifiedResponseKind::Plan) {
+            const AgentToolRegistry registry = m_agentOrchestrator.toolRegistry();
             const AgentPlanParseResult parseResult = AgentPlanParser::parseJsonPlan(
-                response.planJson, defaultAgentToolCatalog());
+                response.planJson, registry.descriptors());
 
             if (!parseResult.ok) {
                 m_currentAssistantContent = m_configCoordinator.text(
@@ -1051,35 +1352,31 @@ void ApplicationController::handleRequestFinished()
             // 委托给 AgentOrchestrator 执行计划
             const bool planAllSuccess = m_agentOrchestrator.executePlanAndReportToChat(parseResult.plan);
 
-            // V12.6: 循环继续 — 仅当计划有失败步骤时才进入 OODA 循环
-            if (planAllSuccess) {
-                // 全部成功 → 直接结束循环
-                m_agentOrchestrator.cancelAgentLoop();
-                m_currentAssistantContent += 
-                    QStringLiteral("\n\n---\n")
-                    + m_configCoordinator.text("Task completed.", "任务完成。");
-                if (!m_sessionCoordinator.currentSession().messages.isEmpty()) {
-                    m_sessionCoordinator.currentSession().messages.last().content = m_currentAssistantContent;
-                }
-                emit assistantMessageUpdated(m_currentAssistantContent);
-                m_sessionCoordinator.saveCurrentSession();
-                emit statusMessage("Agent plan completed", "Agent 计划执行完成", 3000);
-                return;
-            }
             if (m_agentOrchestrator.isAgentLoopActive()) {
                 QString observation;
                 for (const AgentPlanStep &step : parseResult.plan.steps) {
                     observation += QStringLiteral("[%1] %2\n").arg(step.toolId, step.title);
                 }
+                observation += QStringLiteral("planSuccess=%1").arg(planAllSuccess ? QStringLiteral("true") : QStringLiteral("false"));
                 m_agentOrchestrator.appendLoopObservation(observation);
                 if (m_agentOrchestrator.executeAgentLoopIteration()) {
                     continueAgentLoop();
                 }
+                return;
+            }
+
+            if (planAllSuccess) {
+                emit statusMessage("Agent plan completed", "Agent 计划执行完成", 3000);
             }
             return;
         }
 
         // 解析失败 → 当作聊天回复兜底
+        if (m_agentOrchestrator.isAgentLoopActive()) {
+            completeAgentLoopWithMessage(response.rawResponse, streamingResultsSummary);
+            return;
+        }
+
         m_currentAssistantContent = response.rawResponse + streamingResultsSummary;
         if (!m_sessionCoordinator.currentSession().messages.isEmpty()) {
             m_sessionCoordinator.currentSession().messages.last().content = m_currentAssistantContent;
@@ -1100,11 +1397,48 @@ void ApplicationController::handleRequestFinished()
     }
 
     m_sessionCoordinator.saveCurrentSession();
+    m_pendingTruncationResume = false;
     m_activeRequestKind = ActiveRequestKind::None;
 }
 
 void ApplicationController::handleRequestFailed(const QString &message, RequestErrorCategory category)
 {
+    // V17.6 P2-1: Reactive 压缩 — context_length_exceeded 时紧急压缩重试
+    const bool isContextOverflow = message.contains(QStringLiteral("context_length"), Qt::CaseInsensitive)
+                                || message.contains(QStringLiteral("maximum context"), Qt::CaseInsensitive)
+                                || message.contains(QStringLiteral("too long"), Qt::CaseInsensitive);
+
+    if (isContextOverflow && m_agentOrchestrator.isAgentLoopActive()
+        && m_retryAfterCompressionCount < kMaxRetryAfterCompression) {
+        m_retryAfterCompressionCount++;
+        AppLogger::warning(QStringLiteral("ReactiveCompress"),
+                           QStringLiteral("Context overflow detected, compressing observations and retrying (%1/%2)")
+                               .arg(m_retryAfterCompressionCount).arg(kMaxRetryAfterCompression));
+
+        // 压缩一半 observations 为摘要
+        QStringList &obs = m_agentOrchestrator.loopObservationsRef();
+        if (obs.size() > 2) {
+            const int keepCount = qMax(1, obs.size() / 2);
+            QStringList compressed;
+            compressed.append(QStringLiteral("[context-compressed] %1 older observations condensed").arg(obs.size() - keepCount));
+            for (int i = obs.size() - keepCount; i < obs.size(); ++i) {
+                compressed.append(obs[i]);
+            }
+            obs = compressed;
+        }
+
+        // 重置请求状态并重试
+        m_agentPlanResponseBuffer.clear();
+        m_agentToolCalls.clear();
+        m_pendingAgentRequestSession = ChatSession();
+        m_nativeToolRequestActive = false;
+        m_nativeToolFallbackAttempted = false;
+        m_pendingTruncationResume = false;
+        setGenerating(false);
+        continueAgentLoop();
+        return;
+    }
+
     if (m_activeRequestKind == ActiveRequestKind::AgentPlan) {
         if (retryAgentRequestWithoutNativeTools(category)) {
             return;
@@ -1117,6 +1451,7 @@ void ApplicationController::handleRequestFailed(const QString &message, RequestE
         m_nativeToolRequestActive = false;
         m_nativeToolFallbackAttempted = false;
         m_pendingAgentPlanContinuationDepth = 0;
+        m_pendingTruncationResume = false;
         m_activeRequestKind = ActiveRequestKind::None;
         setRetryAvailable(false);
         emit statusMessage(QStringLiteral("Agent plan request failed: %1").arg(message),
@@ -1136,6 +1471,7 @@ void ApplicationController::handleRequestFailed(const QString &message, RequestE
         m_pendingAgentRequestSession = ChatSession();
         m_nativeToolRequestActive = false;
         m_nativeToolFallbackAttempted = false;
+        m_pendingTruncationResume = false;
         m_activeRequestKind = ActiveRequestKind::None;
         setRetryAvailable(false);
         m_currentAssistantContent = m_configCoordinator.text(
@@ -1172,6 +1508,7 @@ void ApplicationController::handleRequestFailed(const QString &message, RequestE
     m_pendingAgentRequestSession = ChatSession();
     m_nativeToolRequestActive = false;
     m_nativeToolFallbackAttempted = false;
+    m_pendingTruncationResume = false;
     m_activeRequestKind = ActiveRequestKind::None;
 }
 
@@ -1188,6 +1525,7 @@ bool ApplicationController::retryAgentRequestWithoutNativeTools(RequestErrorCate
     m_nativeToolRequestActive = false;
     m_agentPlanResponseBuffer.clear();
     m_agentToolCalls.clear();
+    m_pendingTruncationResume = false;
 
     AppLogger::warning(QStringLiteral("AgentPlan"),
                        QStringLiteral("Native tool request failed; retrying with JSON plan fallback."));
@@ -1333,7 +1671,16 @@ QVector<ScheduledTask> ApplicationController::scheduledTasks() const
 void ApplicationController::onScheduledTaskTriggered(const ScheduledTask &task)
 {
     AppLogger::info("Scheduler", "Task triggered: " + task.name);
-    sendAgentLoopMessage(task.agentPrompt);
+    if (m_isGenerating) {
+        AppLogger::warning(QStringLiteral("Scheduler"),
+                           QStringLiteral("Task skipped because another request is active. taskId=%1 name=%2")
+                               .arg(task.id, task.name));
+        emit statusMessage(QStringLiteral("Scheduled task skipped: another request is active."),
+                           QStringLiteral("定时任务已跳过：当前请求仍在进行。"),
+                           4000);
+    } else {
+        sendAgentLoopMessage(task.agentPrompt);
+    }
     if (m_taskStorage)
         m_taskStorage->save(m_taskScheduler->allTasks());
 }
@@ -1348,4 +1695,18 @@ bool ApplicationController::editCurrentMessage(const QString &messageId, const Q
 void ApplicationController::truncateCurrentSessionFrom(const QString &messageId)
 {
     m_sessionCoordinator.truncateCurrentSessionFrom(messageId);
+}
+
+// V17.6 P2-2: 输出截断自动续接 — 发送续接指令让 AI 从断点继续
+void ApplicationController::handleResponseTruncated()
+{
+    if ((m_activeRequestKind != ActiveRequestKind::AgentPlan
+         && m_activeRequestKind != ActiveRequestKind::UnifiedAgent)
+        || !m_agentOrchestrator.isAgentLoopActive()) {
+        return;
+    }
+
+    m_pendingTruncationResume = true;
+    AppLogger::info(QStringLiteral("TruncationResume"),
+                    QStringLiteral("Response truncation detected; resume deferred until requestFinished."));
 }

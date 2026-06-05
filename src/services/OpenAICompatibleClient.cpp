@@ -71,6 +71,7 @@ void OpenAICompatibleClient::sendChatWithTools(const AppConfig &config, const Ch
     m_streamParser.reset();
     m_errorBody.clear();
     m_doneReceived = false;
+    m_streamWasTruncated = false;
 
     const QUrl requestUrl = chatCompletionsUrl(config.baseUrl);
     AppLogger::info(QStringLiteral("AIClient"),
@@ -97,6 +98,7 @@ void OpenAICompatibleClient::sendChatWithImages(const AppConfig &config, const C
     m_streamParser.reset();
     m_errorBody.clear();
     m_doneReceived = false;
+    m_streamWasTruncated = false;
 
     const QUrl requestUrl = chatCompletionsUrl(config.baseUrl);
     AppLogger::info(QStringLiteral("AIClient"),
@@ -117,6 +119,7 @@ void OpenAICompatibleClient::sendChatWithImages(const AppConfig &config, const C
 
 void OpenAICompatibleClient::cancel()
 {
+    m_streamWasTruncated = false;
     if (m_currentReply == nullptr) {
         return;
     }
@@ -131,6 +134,7 @@ void OpenAICompatibleClient::cancel()
     m_streamParser.reset();
     m_errorBody.clear();
     m_doneReceived = false;
+    m_streamWasTruncated = false;
 }
 
 RequestErrorCategory OpenAICompatibleClient::classifyHttpStatus(int statusCode)
@@ -337,6 +341,10 @@ void OpenAICompatibleClient::handleReadyRead()
     }
 
     const StreamParseResult result = m_streamParser.consume(data);
+    // V17.6 P2-2: 追踪截断标记
+    if (result.truncated) {
+        m_streamWasTruncated = true;
+    }
     for (const QString &delta : result.textDeltas) {
         emit textDeltaReceived(delta);
     }
@@ -387,6 +395,9 @@ void OpenAICompatibleClient::handleFinished()
     } else {
         if (!remainingBody.isEmpty()) {
             const StreamParseResult result = m_streamParser.consume(remainingBody);
+            if (result.truncated) {
+                m_streamWasTruncated = true;
+            }
             for (const QString &delta : result.textDeltas) {
                 emit textDeltaReceived(delta);
             }
@@ -405,6 +416,9 @@ void OpenAICompatibleClient::handleFinished()
         }
 
         const StreamParseResult finalResult = m_streamParser.finish();
+        if (finalResult.truncated) {
+            m_streamWasTruncated = true;
+        }
         for (const QString &delta : finalResult.textDeltas) {
             emit textDeltaReceived(delta);
         }
@@ -422,6 +436,7 @@ void OpenAICompatibleClient::handleFinished()
         }
 
         if (!m_doneReceived) {
+            m_streamWasTruncated = false;
             const QString errorMessage = QStringLiteral("Streaming response ended before the completion marker.");
             AppLogger::warning(QStringLiteral("AIClient"),
                                QStringLiteral("Chat request stream ended unexpectedly. url=%1 status=%2")
@@ -431,6 +446,13 @@ void OpenAICompatibleClient::handleFinished()
             AppLogger::info(QStringLiteral("AIClient"),
                             QStringLiteral("Chat request finished. url=%1 status=%2")
                                 .arg(reply->url().toString(), QString::number(statusCode)));
+            const bool wasTruncated = m_streamWasTruncated;
+            m_streamWasTruncated = false;
+            // V17.6 P2-2: 先通知控制层记录截断，再由 requestFinished 统一收尾。
+            if (wasTruncated) {
+                AppLogger::warning(QStringLiteral("AIClient"), QStringLiteral("Response was truncated (finish_reason=length)"));
+                emit responseTruncated();
+            }
             emit requestFinished();
         }
     }
@@ -439,4 +461,5 @@ void OpenAICompatibleClient::handleFinished()
     m_streamParser.reset();
     m_errorBody.clear();
     m_doneReceived = false;
+    m_streamWasTruncated = false;
 }

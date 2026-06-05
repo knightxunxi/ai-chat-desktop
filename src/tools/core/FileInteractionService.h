@@ -25,4 +25,26 @@ ToolResult validateOpenPath(const QString &path);
 // 功能：生成不含完整目录的路径摘要；使用模块：日志记录，避免直接暴露完整路径。
 QString pathSummary(const QString &path);
 
+// V18: 精确编辑 — 在文件中查找 old_str 并替换为 new_str，仅支持单次匹配。
+ToolResult editTextFile(const QString &filePath, const QString &oldStr, const QString &newStr);
+
+// V18: 内容搜索 — 在目录或文件中使用正则表达式搜索文本内容。
+ToolResult grep(const QString &searchPath, const QString &pattern, const QString &fileGlob,
+                bool ignoreCase, int maxResults);
+
+// V18: 递归删除目录 — 删除目录及其所有内容。
+ToolResult deleteDirectory(const QString &directoryPath);
+
+// V18.3: 文件复制 — 复制文件或目录到目标位置。
+ToolResult copyFile(const QString &sourcePath, const QString &targetPath);
+
+// V18.3: 文件移动 — 移动/重命名文件或目录。
+ToolResult moveFile(const QString &sourcePath, const QString &targetPath);
+
+// V18.3: 追加文本 — 在文件末尾追加内容（不覆盖）。
+ToolResult appendTextFile(const QString &filePath, const QString &content);
+
+// V18.3: 文件信息 — 获取文件元信息（大小/时间/权限）。
+ToolResult getFileInfo(const QString &filePath);
+
 } // namespace FileInteractionService

@@ -25,7 +25,7 @@ ProjectMemory loadFromProjectDirectory(
     const QString &projectDirectory,
     qint64 maxBytes = DefaultMaxMemoryBytes);
 
-// 功能：追加一条用户确认后的项目记忆；使用模块：memory.append_project_note 工具。
+// 功能：追加一条项目记忆；使用模块：memory.append_project_note 工具。
 ToolResult appendProjectNote(
     const QString &projectDirectory,
     const QString &content,

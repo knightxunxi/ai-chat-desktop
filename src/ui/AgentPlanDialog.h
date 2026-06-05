@@ -1,14 +1,12 @@
 #pragma once
 
 #include "app/AgentPlan.h"
-#include "core/AppConfig.h"
 #include "core/AppLanguage.h"
 #include "tools/AgentToolCatalog.h"
 
 #include <QDialog>
 #include <QVector>
 
-class AIClient;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
@@ -28,9 +26,7 @@ public:
         AppLanguage language,
         QWidget *parent = nullptr,
         const QString &workspaceDirectory = QString(),
-        const QString &projectDirectory = QString(),
-        AIClient *aiClient = nullptr,
-        const AppConfig &appConfig = AppConfig());
+        const QString &projectDirectory = QString());
 
 signals:
     // 功能：请求把当前步骤输出插入聊天输入框；使用模块：MainWindow。
@@ -51,8 +47,6 @@ private:
     void executeSelectedStep();
     // 功能：连续执行可直接执行的待处理步骤；使用模块：V8 Agent 连续执行按钮。
     void executeRemainingSteps();
-    // 功能：启动无限 Agentic 循环（AI 自主决定每步）；使用模块：V12.2 无限循环模式按钮。
-    void executeInfiniteLoop();
     // 功能：请求停止连续执行；使用模块：停止按钮。
     void requestStopExecution();
     // 功能：跳过当前选中步骤；使用模块：跳过按钮。
@@ -85,8 +79,6 @@ private:
     AppLanguage m_language = AppLanguage::Chinese; // 功能：窗口语言；使用模块：文案选择。
     QString m_workspaceDirectory;                  // 功能：Agent 工作目录；使用模块：workspace.* 步骤执行。
     QString m_projectDirectory;                    // 功能：项目命令工作目录；使用模块：command.* 步骤执行。
-    AIClient *m_aiClient = nullptr;                // 功能：AI 客户端；使用模块：executeInfiniteLoop AI 调用。
-    AppConfig m_appConfig;                         // 功能：AI 配置（模型参数等）；使用模块：executeInfiniteLoop 配置。
     QLabel *m_summaryLabel = nullptr;              // 功能：计划摘要；使用模块：顶部展示。
     QLabel *m_statusLabel = nullptr;               // 功能：执行状态提示；使用模块：执行/跳过。
     QListWidget *m_stepList = nullptr;             // 功能：计划步骤列表；使用模块：用户选择步骤。
@@ -95,7 +87,6 @@ private:
     QPushButton *m_executeButton = nullptr;        // 功能：执行选中步骤；使用模块：用户确认。
     QPushButton *m_runAllButton = nullptr;         // 功能：连续执行待处理步骤；使用模块：V8 连续执行 MVP。
     QPushButton *m_stopButton = nullptr;           // 功能：请求停止连续执行；使用模块：V8 连续执行 MVP。
-    QPushButton *m_loopButton = nullptr;           // 功能：启动无限 Agentic 循环；使用模块：V12.2 无限循环模式。
     QPushButton *m_skipButton = nullptr;           // 功能：跳过选中步骤；使用模块：用户跳过。
     QPushButton *m_copyButton = nullptr;           // 功能：复制输出；使用模块：输出处理。
     QPushButton *m_insertButton = nullptr;         // 功能：插入输出；使用模块：输出处理。

@@ -4,9 +4,11 @@
 #include "core/ChatSession.h"
 #include "core/SessionListFilter.h"
 #include "ui/AgentStepWidget.h"
+#include "ui/AgentStepGroupWidget.h"
 
 #include <QMainWindow>
 #include <QHash>
+#include <QPointer>
 #include <QVector>
 
 class ChatView;
@@ -157,6 +159,7 @@ private:
     QLabel *m_modelLabel = nullptr;          // 功能：当前模型展示；使用模块：顶部标题区。
     QLabel *m_personaLabel = nullptr;        // 功能：当前角色展示；使用模块：顶部标题区。
     QVector<AgentStepWidget *> m_agentSteps;   // V16.1: Agent 思考步骤卡片列表
+    QPointer<AgentStepGroupWidget> m_currentStepGroup; // V18.4: 当前步骤分组卡片
     QHash<QString, MessageWidget *> m_messageWidgets; // CH-8: 消息 ID 到 MessageWidget 的映射
     QPushButton *m_themeToggleButton = nullptr;  // V16.3: 主题切换按钮
 

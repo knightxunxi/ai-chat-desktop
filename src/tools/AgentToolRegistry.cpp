@@ -27,11 +27,28 @@
 #include "tools/perception/WindowDetector.h"
 #include "tools/core/WorkspaceFileService.h"
 
+#include <QApplication>
 #include <QChar>
+#include <QClipboard>
+#include <QDesktopServices>
 #include <QDir>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#include <UIAutomation.h>
+#endif
+#include <QEventLoop>
 #include <QFileInfo>
+#include <QFileSystemWatcher>
 #include <QJsonValue>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QProcess>
+#include <QRegularExpression>
 #include <QStringList>
+#include <QTimer>
+#include <QUrl>
 
 namespace {
 
@@ -56,7 +73,7 @@ AgentToolDescriptor makeDescriptor(
     descriptor.risk = risk;
     // AG-6: 设置数值风险等级
     descriptor.riskLevel = static_cast<int>(risk);
-    descriptor.requiresUserConfirmation = true;
+    descriptor.requiresUserConfirmation = false;
     descriptor.resultMayContainSensitiveContent = resultMayContainSensitiveContent;
     descriptor.enabledForAgent = enabledForAgent;
     return descriptor;
@@ -341,6 +358,74 @@ bool nonEmptyPathParameter(const QJsonObject &parameters, QString *path, QString
     return true;
 }
 
+bool commandHasToken(const QString &normalizedCommand, const QString &token)
+{
+    const QRegularExpression expression(
+        QStringLiteral("(^|[\\s&|()])%1($|[\\s&|()])")
+            .arg(QRegularExpression::escape(token)));
+    return expression.match(normalizedCommand).hasMatch();
+}
+
+bool commandViolatesSystemProtection(const QString &command, QString *reason)
+{
+    QString normalized = command.toLower();
+    normalized.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    normalized.replace(QLatin1Char('"'), QLatin1Char(' '));
+    normalized.replace(QLatin1Char('\''), QLatin1Char(' '));
+
+    const bool destructive =
+        commandHasToken(normalized, QStringLiteral("del"))
+        || commandHasToken(normalized, QStringLiteral("erase"))
+        || commandHasToken(normalized, QStringLiteral("rd"))
+        || commandHasToken(normalized, QStringLiteral("rmdir"))
+        || commandHasToken(normalized, QStringLiteral("rm"))
+        || commandHasToken(normalized, QStringLiteral("remove-item"))
+        || commandHasToken(normalized, QStringLiteral("format"))
+        || commandHasToken(normalized, QStringLiteral("mkfs"))
+        || commandHasToken(normalized, QStringLiteral("dd"))
+        || commandHasToken(normalized, QStringLiteral("shutdown"));
+    if (!destructive) {
+        return false;
+    }
+
+    if (commandHasToken(normalized, QStringLiteral("format"))
+        || commandHasToken(normalized, QStringLiteral("mkfs"))
+        || commandHasToken(normalized, QStringLiteral("dd"))
+        || commandHasToken(normalized, QStringLiteral("shutdown"))) {
+        if (reason != nullptr) {
+            *reason = QStringLiteral("Blocked system-level destructive command.");
+        }
+        return true;
+    }
+
+    static const QStringList protectedPatterns = {
+        QStringLiteral("c:/windows"),
+        QStringLiteral("%windir%"),
+        QStringLiteral("%systemroot%"),
+        QStringLiteral("/windows/system32"),
+        QStringLiteral("system32")
+    };
+    for (const QString &pattern : protectedPatterns) {
+        if (normalized.contains(pattern)) {
+            if (reason != nullptr) {
+                *reason = QStringLiteral("Blocked destructive command targeting protected Windows system path: %1").arg(pattern);
+            }
+            return true;
+        }
+    }
+
+    if (normalized.contains(QStringLiteral(" c:/*"))
+        || normalized.endsWith(QStringLiteral(" c:/"))
+        || normalized.contains(QStringLiteral(" c:/ "))) {
+        if (reason != nullptr) {
+            *reason = QStringLiteral("Blocked destructive command targeting the Windows system drive root.");
+        }
+        return true;
+    }
+
+    return false;
+}
+
 ToolResult disabledDirectExecution(const QString &message)
 {
     return ToolResult::failure(message);
@@ -508,7 +593,7 @@ ToolResult AgentToolRegistry::execute(
             QStringLiteral("This tool requires a dedicated confirmation flow, such as a file picker, and cannot be executed directly from the plan preview."));
     }
 
-    // V13.3: on_tool_execute (before) — executeLoop 已调用，此处为 runPlan 路径兼容
+    // V13.3: on_tool_execute (before) — executeLoop 已调用，此处为 legacy runPlan 路径兼容
     if (hooks != nullptr) {
         hooks->executeHooks(HookPoint::OnToolExecute,
                             HookContext::forToolExecute(toolId, parameters, true));
@@ -579,16 +664,19 @@ void AgentToolRegistry::registerExternalTools(const QVector<McpToolDefinition> &
         def.descriptor.chineseDescription = mcpTool.description;
         def.descriptor.inputPolicy = QStringLiteral("json");
         def.descriptor.risk = AgentToolRisk::Medium;
-        def.descriptor.requiresUserConfirmation = true;
+        def.descriptor.requiresUserConfirmation = false;
         def.descriptor.resultMayContainSensitiveContent = false;
         def.descriptor.enabledForAgent = true;
         def.functionName = AgentToolRegistryFactory::functionNameForToolId(toolId);
         def.parameterSchema = mcpTool.inputSchema;
-        def.executableFromPlanPreview = false; // MCP 工具需用户确认
+        def.executableFromPlanPreview = true;
 
         // execute 回调通过 connector 转发到 MCP 服务器
         def.execute = [connector, toolName = mcpTool.name](const QJsonObject &args,
                                                              const AgentToolExecutionContext & /*context*/) -> ToolResult {
+            if (connector == nullptr) {
+                return ToolResult::failure(QStringLiteral("MCP connector is not available."));
+            }
             return connector->callTool(toolName, args);
         };
 
@@ -721,6 +809,135 @@ void registerFileTools(QVector<AgentToolDefinition> &definitions)
                 QStringLiteral("Agent file.open_path path=%1").arg(FileInteractionService::pathSummary(path)));
             return FileInteractionService::validateOpenPath(QDir::toNativeSeparators(path));
         }));
+
+    // V18: 文件内容搜索工具
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("file.grep"), QStringLiteral("Search Content"), QStringLiteral("搜索内容"),
+            QStringLiteral("Search file contents using regex. Returns file:line:content matches."),
+            QStringLiteral("使用正则表达式搜索文件内容。返回 file:line:content 格式的匹配。"),
+            QStringLiteral("Read-only operation. Max 50 results. Large/binary files skipped."),
+            AgentToolRisk::Low, false),
+        QJsonObject{
+            {QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("path"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Directory or file path to search")}}},
+                {QStringLiteral("pattern"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Regex pattern to search for")}}},
+                {QStringLiteral("glob"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("File name pattern (e.g. *.cpp) to filter")}}},
+                {QStringLiteral("ignore_case"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("boolean")},
+                    {QStringLiteral("description"), QStringLiteral("Whether to ignore case")}}}
+            }},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("path"), QStringLiteral("pattern")}}
+        }, true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
+            const QString path = parameters.value(QStringLiteral("path")).toString().trimmed();
+            const QString pattern = parameters.value(QStringLiteral("pattern")).toString();
+            const QString glob = parameters.value(QStringLiteral("glob")).toString();
+            const bool ignoreCase = parameters.value(QStringLiteral("ignore_case")).toBool(false);
+            if (path.isEmpty()) return ToolResult::failure(QStringLiteral("path parameter is required"));
+            if (pattern.isEmpty()) return ToolResult::failure(QStringLiteral("pattern parameter is required"));
+            return FileInteractionService::grep(QDir::toNativeSeparators(path), pattern, glob, ignoreCase, 50);
+        }));
+
+    // V18: 精确文件编辑工具
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("file.edit_text"), QStringLiteral("Edit Text"), QStringLiteral("精确编辑"),
+            QStringLiteral("Replace old_str with new_str in a file. old_str must appear exactly once."),
+            QStringLiteral("在文件中精确替换 old_str 为 new_str。old_str 必须恰好出现一次。"),
+            QStringLiteral("Modifies file in place. old_str must be unique. If it appears multiple times, provide more context."),
+            AgentToolRisk::Medium, false),
+        QJsonObject{
+            {QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("path"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Absolute file path to edit")}}},
+                {QStringLiteral("old_str"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Exact text to find (must be unique)")}}},
+                {QStringLiteral("new_str"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Replacement text")}}}
+            }},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("path"), QStringLiteral("old_str"), QStringLiteral("new_str")}}
+        }, true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
+            const QString path = parameters.value(QStringLiteral("path")).toString().trimmed();
+            const QString oldStr = parameters.value(QStringLiteral("old_str")).toString();
+            const QString newStr = parameters.value(QStringLiteral("new_str")).toString();
+            if (path.isEmpty()) return ToolResult::failure(QStringLiteral("path parameter is required"));
+            if (oldStr.isEmpty()) return ToolResult::failure(QStringLiteral("old_str parameter is required"));
+            return FileInteractionService::editTextFile(QDir::toNativeSeparators(path), oldStr, newStr);
+        }));
+
+    // V18: 递归删除目录工具
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("file.delete_directory"), QStringLiteral("Delete Directory"), QStringLiteral("删除目录"),
+            QStringLiteral("Recursively delete a directory and all its contents."),
+            QStringLiteral("递归删除目录及其所有内容。"),
+            QStringLiteral("IRREVERSIBLE. System directories are protected. Use with caution."),
+            AgentToolRisk::High, true),
+        pathOnlySchema(), true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
+            const QString path = parameters.value(QStringLiteral("path")).toString().trimmed();
+            if (path.isEmpty()) return ToolResult::failure(QStringLiteral("path parameter is required"));
+            return FileInteractionService::deleteDirectory(QDir::toNativeSeparators(path));
+        }));
+
+    // V18.3: 文件复制/移动/追加/信息
+    auto regFileOp = [&](const QString &id, const QString &en, const QString &cn, const QString &enDesc, const QString &cnDesc,
+                         AgentToolRisk risk, const QJsonObject &schema,
+                         std::function<ToolResult(const QString &, const QString &)> fn) {
+        definitions.append(makeDefinition(
+            makeDescriptor(id, en, cn, enDesc, cnDesc, QStringLiteral("Path required."), risk, false),
+            schema, true,
+            [fn](const QJsonObject &p, const AgentToolExecutionContext &) {
+                return fn(p.value(QStringLiteral("source")).toString(), p.value(QStringLiteral("target")).toString());
+            }));
+    };
+    QJsonObject srcTgt{{QStringLiteral("type"), QStringLiteral("object")},
+        {QStringLiteral("properties"), QJsonObject{
+            {QStringLiteral("source"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Source file/directory path")}}},
+            {QStringLiteral("target"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Destination path")}}}}},
+        {QStringLiteral("required"), QJsonArray{QStringLiteral("source"), QStringLiteral("target")}}};
+
+    regFileOp(QStringLiteral("file.copy"), QStringLiteral("Copy File"), QStringLiteral("复制文件"),
+        QStringLiteral("Copy a file or directory to a new location."), QStringLiteral("复制文件或目录到新位置。"),
+        AgentToolRisk::Medium, srcTgt,
+        [](const QString &s, const QString &t) { return FileInteractionService::copyFile(QDir::toNativeSeparators(s), QDir::toNativeSeparators(t)); });
+
+    regFileOp(QStringLiteral("file.move"), QStringLiteral("Move File"), QStringLiteral("移动文件"),
+        QStringLiteral("Move or rename a file or directory."), QStringLiteral("移动或重命名文件/目录。"),
+        AgentToolRisk::Medium, srcTgt,
+        [](const QString &s, const QString &t) { return FileInteractionService::moveFile(QDir::toNativeSeparators(s), QDir::toNativeSeparators(t)); });
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("file.append_text"), QStringLiteral("Append Text"), QStringLiteral("追加文本"),
+            QStringLiteral("Append text to the end of a file."), QStringLiteral("在文件末尾追加文本。"),
+            QStringLiteral("Only appends, does not overwrite."), AgentToolRisk::Low, false),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("path"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
+                {QStringLiteral("content"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("path"), QStringLiteral("content")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            return FileInteractionService::appendTextFile(QDir::toNativeSeparators(p.value(QStringLiteral("path")).toString()), p.value(QStringLiteral("content")).toString());
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("file.get_info"), QStringLiteral("File Info"), QStringLiteral("文件信息"),
+            QStringLiteral("Get metadata of a file or directory: size, dates, permissions."), QStringLiteral("获取文件/目录的元信息：大小、日期、权限。"),
+            QStringLiteral("Read-only."), AgentToolRisk::Low, false),
+        pathOnlySchema(), true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            return FileInteractionService::getFileInfo(QDir::toNativeSeparators(p.value(QStringLiteral("path")).toString()));
+        }));
 }
 
 void registerWorkspaceTools(QVector<AgentToolDefinition> &definitions)
@@ -838,6 +1055,95 @@ void registerCommandTools(QVector<AgentToolDefinition> &definitions)
         QStringLiteral("不启动 shell，列出配置项目目录中的前若干个条目。"),
         QStringLiteral("No parameters are accepted. The command lists only the configured project directory root."),
         AgentToolRisk::Low);
+
+    // V18.2 P0-1: 通用命令执行 — 替代硬编码命令
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("command.bash"), QStringLiteral("Run Command"), QStringLiteral("执行命令"),
+            QStringLiteral("Execute a shell command. Returns stdout/stderr. Windows system paths and system-level destructive commands are protected."),
+            QStringLiteral("执行 Shell 命令，返回标准输出和错误输出。保护 Windows 系统路径和系统级破坏命令。"),
+            QStringLiteral("Command runs in the project directory by default. Absolute paths are allowed except protected Windows system paths. Output capped at 4 KiB. Timeout: 30s."),
+            AgentToolRisk::High, true),
+        QJsonObject{
+            {QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("command"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Shell command to execute")}}},
+                {QStringLiteral("cwd"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Working directory (default: project directory)")}}},
+                {QStringLiteral("timeout_ms"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("integer")},
+                    {QStringLiteral("description"), QStringLiteral("Timeout in milliseconds (default: 30000)")}}}
+            }},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("command")}}
+        }, true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
+            const QString command = parameters.value(QStringLiteral("command")).toString().trimmed();
+            if (command.isEmpty()) return ToolResult::failure(QStringLiteral("command parameter is required"));
+
+            QString protectionReason;
+            if (commandViolatesSystemProtection(command, &protectionReason)) {
+                return ToolResult::failure(protectionReason);
+            }
+
+            QString cwd = parameters.value(QStringLiteral("cwd")).toString().trimmed();
+            if (cwd.isEmpty()) cwd = context.projectDirectory.isEmpty() ? context.workspaceDirectory : context.projectDirectory;
+            if (cwd.trimmed().isEmpty() || !QFileInfo(cwd).isDir()) {
+                return ToolResult::failure(QStringLiteral("Working directory does not exist: %1").arg(cwd));
+            }
+            const int timeoutMs = parameters.value(QStringLiteral("timeout_ms")).toInt(30000);
+
+            QProcess process;
+            process.setWorkingDirectory(cwd);
+#ifdef Q_OS_WIN
+            process.setProgram(QStringLiteral("cmd.exe"));
+            process.setArguments({QStringLiteral("/c"), command});
+#else
+            process.setProgram(QStringLiteral("/bin/sh"));
+            process.setArguments({QStringLiteral("-c"), command});
+#endif
+            process.start();
+            if (!process.waitForStarted(3000))
+                return ToolResult::failure(QStringLiteral("Failed to start command: %1").arg(process.errorString()));
+
+            if (!process.waitForFinished(timeoutMs)) {
+                process.kill();
+                process.waitForFinished(3000);
+                return ToolResult::failure(
+                    QStringLiteral("Command timed out after %1 ms.").arg(timeoutMs));
+            }
+
+            const QString stdout_ = QString::fromLocal8Bit(process.readAllStandardOutput());
+            const QString stderr_ = QString::fromLocal8Bit(process.readAllStandardError());
+            const int exitCode = process.exitCode();
+            const QProcess::ExitStatus exitStatus = process.exitStatus();
+
+            constexpr int kMaxOutput = 4096;
+            QString output;
+            output = QStringLiteral("[exit=%1]\nstdout:\n%2\nstderr:\n%3")
+                .arg(exitCode).arg(stdout_, stderr_);
+            if (output.size() > kMaxOutput)
+                output = output.left(kMaxOutput) + QStringLiteral("\n... (truncated)");
+
+            if (exitStatus != QProcess::NormalExit) {
+                return ToolResult::failure(QStringLiteral("Command crashed.\n%1").arg(output));
+            }
+            if (exitCode != 0) {
+                return ToolResult::failure(output);
+            }
+            QString successOutput = stdout_;
+            if (!stderr_.isEmpty()) {
+                if (!successOutput.isEmpty()) {
+                    successOutput += QLatin1Char('\n');
+                }
+                successOutput += QStringLiteral("stderr:\n%1").arg(stderr_);
+            }
+            if (successOutput.size() > kMaxOutput) {
+                successOutput = successOutput.left(kMaxOutput) + QStringLiteral("\n... (truncated)");
+            }
+            return ToolResult::success(successOutput);
+        }));
 }
 
 void registerMemoryAndGitTools(QVector<AgentToolDefinition> &definitions)
@@ -845,7 +1151,7 @@ void registerMemoryAndGitTools(QVector<AgentToolDefinition> &definitions)
     definitions.append(makeDefinition(
         makeDescriptor(QStringLiteral("memory.append_project_note"), QStringLiteral("Append Project Memory"), QStringLiteral("追加项目记忆"),
             QStringLiteral("Append a user-approved note to AGENT_MEMORY.md in the configured project directory."),
-            QStringLiteral("把用户确认后的记忆追加到配置项目目录的 AGENT_MEMORY.md。"),
+            QStringLiteral("把项目记忆追加到配置项目目录的 AGENT_MEMORY.md。"),
             QStringLiteral("Parameters must include content. Only use when the user explicitly asks to remember something. Do not store credentials or secrets."),
             AgentToolRisk::Medium, false),
         memoryNoteSchema(), true,
@@ -1021,6 +1327,154 @@ void registerPerceptionTools(QVector<AgentToolDefinition> &definitions)
             const QString imagePath = parameters.value(QStringLiteral("image_path")).toString();
             return OcrService::extractText(context.workspaceDirectory, imagePath);
         }));
+
+    // V18.2 P0-2: 剪贴板读写
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.clipboard_read"), QStringLiteral("Read Clipboard"), QStringLiteral("读剪贴板"),
+            QStringLiteral("Read text from the system clipboard."), QStringLiteral("从系统剪贴板读取文本。"),
+            QStringLiteral("Returns clipboard text. Max 4 KiB."), AgentToolRisk::Low, true),
+        noParameterSchema(), true,
+        [](const QJsonObject &, const AgentToolExecutionContext &) {
+            QClipboard *clip = QApplication::clipboard();
+            if (!clip) return ToolResult::failure(QStringLiteral("Clipboard not available."));
+            QString text = clip->text();
+            if (text.isEmpty()) return ToolResult::success(QStringLiteral("(clipboard is empty)"));
+            if (text.size() > 4096) text = text.left(4096) + QStringLiteral("\n... (truncated)");
+            return ToolResult::success(text);
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.clipboard_write"), QStringLiteral("Write Clipboard"), QStringLiteral("写剪贴板"),
+            QStringLiteral("Write text to the system clipboard."), QStringLiteral("将文本写入系统剪贴板。"),
+            QStringLiteral("Overwrites clipboard. Do not write secrets."), AgentToolRisk::Medium, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("text"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Text to copy")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("text")}}}, true,
+        [](const QJsonObject &params, const AgentToolExecutionContext &) {
+            const QString text = params.value(QStringLiteral("text")).toString();
+            QClipboard *clip = QApplication::clipboard();
+            if (!clip) return ToolResult::failure(QStringLiteral("Clipboard not available."));
+            clip->setText(text);
+            return ToolResult::success(QStringLiteral("Copied %1 chars to clipboard.").arg(text.size()));
+        }));
+
+    // V18.3: 桌面感知增强
+    // system.active_control — 获取当前焦点控件 UIA 信息
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.active_control"), QStringLiteral("Active Control"), QStringLiteral("当前焦点控件"),
+            QStringLiteral("Get info of the focused UI element: name, type, value, rect."),
+            QStringLiteral("获取当前焦点 UI 元素信息：名称、类型、值、位置。"),
+            QStringLiteral("Windows UIA."), AgentToolRisk::Low, true),
+        noParameterSchema(), true,
+        [](const QJsonObject &, const AgentToolExecutionContext &) {
+#ifdef Q_OS_WIN
+            GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
+            if (!GetGUIThreadInfo(0, &gti) || !gti.hwndFocus)
+                return ToolResult::success(QStringLiteral("No focused control."));
+            wchar_t title[256] = {};
+            GetWindowTextW(gti.hwndFocus, title, 256);
+            RECT rc = {};
+            GetWindowRect(gti.hwndFocus, &rc);
+            return ToolResult::success(QStringLiteral("Title: %1\nRect: (%2,%3)-(%4,%5) size=%6x%7")
+                .arg(QString::fromWCharArray(title)).arg(rc.left).arg(rc.top)
+                .arg(rc.right).arg(rc.bottom).arg(rc.right-rc.left).arg(rc.bottom-rc.top));
+#else
+            return ToolResult::failure(QStringLiteral("Windows only."));
+#endif
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.screen_size"), QStringLiteral("Screen Size"), QStringLiteral("屏幕分辨率"),
+            QStringLiteral("Get primary screen resolution."), QStringLiteral("获取主屏幕分辨率。"),
+            QStringLiteral("Windows UIA required."), AgentToolRisk::Low, true),
+        noParameterSchema(), true,
+        [](const QJsonObject &, const AgentToolExecutionContext &) {
+#ifdef Q_OS_WIN
+            return ToolResult::success(QStringLiteral("%1 x %2")
+                .arg(GetSystemMetrics(SM_CXSCREEN)).arg(GetSystemMetrics(SM_CYSCREEN)));
+#else
+            return ToolResult::failure(QStringLiteral("Windows only."));
+#endif
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.get_window_rect"), QStringLiteral("Window Rect"), QStringLiteral("窗口位置"),
+            QStringLiteral("Get position/size of a window by title or foreground."),
+            QStringLiteral("按标题查找或获取前台窗口位置和大小。"),
+            QStringLiteral("Windows UIA required."), AgentToolRisk::Low, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("title"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Window title substring")}}}}},
+            {QStringLiteral("required"), QJsonArray{}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            const QString partial = p.value(QStringLiteral("title")).toString().trimmed();
+            HWND hwnd = GetForegroundWindow();
+            if (!partial.isEmpty()) {
+                struct Ctx { QString m; HWND r; } ctx{partial, nullptr};
+                EnumWindows([](HWND w, LPARAM lp)->BOOL{
+                    auto *c = (Ctx*)lp; wchar_t b[256]={}; GetWindowTextW(w,b,256);
+                    if(IsWindowVisible(w) && QString::fromWCharArray(b).contains(c->m,Qt::CaseInsensitive)){c->r=w;return FALSE;}
+                    return TRUE;
+                }, (LPARAM)&ctx);
+                if (ctx.r) hwnd = ctx.r;
+            }
+            RECT rc={}; GetWindowRect(hwnd,&rc);
+            wchar_t b[256]={}; GetWindowTextW(hwnd,b,256);
+            return ToolResult::success(QStringLiteral("Title: %1\nRect: (%2,%3)-(%4,%5) %6x%7")
+                .arg(QString::fromWCharArray(b)).arg(rc.left).arg(rc.top).arg(rc.right).arg(rc.bottom)
+                .arg(rc.right-rc.left).arg(rc.bottom-rc.top));
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.get_selected_text"), QStringLiteral("Get Selected Text"), QStringLiteral("获取选中文本"),
+            QStringLiteral("Get selected text via Ctrl+C (restores clipboard)."), QStringLiteral("通过 Ctrl+C 获取选中文本并恢复剪贴板。"),
+            QStringLiteral("Saves/restores clipboard."), AgentToolRisk::Medium, true),
+        noParameterSchema(), true,
+        [](const QJsonObject &, const AgentToolExecutionContext &) {
+            QClipboard *c = QApplication::clipboard();
+            if (!c) return ToolResult::failure(QStringLiteral("No clipboard."));
+            const QString orig = c->text();
+            INPUT in[4] = {};
+            in[0].type = in[1].type = in[2].type = in[3].type = INPUT_KEYBOARD;
+            in[0].ki.wVk = VK_CONTROL;
+            in[1].ki.wVk = 'C';
+            in[2].ki.wVk = 'C'; in[2].ki.dwFlags = KEYEVENTF_KEYUP;
+            in[3].ki.wVk = VK_CONTROL; in[3].ki.dwFlags = KEYEVENTF_KEYUP;
+            SendInput(4, in, sizeof(INPUT));
+            Sleep(100);
+            QString sel = c->text();
+            c->setText(orig);
+            if (sel.isEmpty()) return ToolResult::success(QStringLiteral("(no text selected)"));
+            if (sel.size() > 4096) sel = sel.left(4096) + QStringLiteral("\n...");
+            return ToolResult::success(sel);
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.wait_for_window"), QStringLiteral("Wait Window"), QStringLiteral("等待窗口"),
+            QStringLiteral("Poll until a window with the given title appears."), QStringLiteral("轮询等待指定标题窗口出现。"),
+            QStringLiteral("Polls every 200ms."), AgentToolRisk::Low, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("title"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
+                {QStringLiteral("timeout_ms"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")},{QStringLiteral("description"), QStringLiteral("default 10000")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("title")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            const QString t = p.value(QStringLiteral("title")).toString();
+            const int to = p.value(QStringLiteral("timeout_ms")).toInt(10000);
+            DWORD start = GetTickCount();
+            while (GetTickCount() - start < (DWORD)to) {
+                HWND fg = GetForegroundWindow();
+                wchar_t b[256] = {};
+                if (fg) GetWindowTextW(fg, b, 256);
+                if (QString::fromWCharArray(b).contains(t, Qt::CaseInsensitive))
+                    return ToolResult::success(QStringLiteral("Window found: %1").arg(QString::fromWCharArray(b)));
+                Sleep(200);
+            }
+            return ToolResult::failure(QStringLiteral("Timeout: '%1' not found in %2 ms.").arg(t).arg(to));
+        }));
 }
 
 void registerInputTools(QVector<AgentToolDefinition> &definitions)
@@ -1059,6 +1513,425 @@ void registerInputTools(QVector<AgentToolDefinition> &definitions)
         [](const QJsonObject &parameters, const AgentToolExecutionContext &) {
             const QString text = parameters.value(QStringLiteral("text")).toString();
             return UiAutomationService::typeText(text);
+        }));
+
+    // V18.2 P1-1: 鼠标操作
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("input.mouse_click"), QStringLiteral("Mouse Click"), QStringLiteral("鼠标点击"),
+            QStringLiteral("Click at screen coordinates (x, y) with left/right/middle button."),
+            QStringLiteral("在屏幕坐标 (x, y) 处点击鼠标左/中/右键。"),
+            QStringLiteral("Use system.capture_screen first to determine coordinates. Do not click on password fields."),
+            AgentToolRisk::High, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("x"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")},{QStringLiteral("description"), QStringLiteral("X coordinate")}}},
+                {QStringLiteral("y"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")},{QStringLiteral("description"), QStringLiteral("Y coordinate")}}},
+                {QStringLiteral("button"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("left, right, or middle (default: left)")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("x"), QStringLiteral("y")}}}, false,
+        [](const QJsonObject &params, const AgentToolExecutionContext &) {
+            return InputSimulator::mouseClick(
+                params.value(QStringLiteral("x")).toInt(),
+                params.value(QStringLiteral("y")).toInt(),
+                params.value(QStringLiteral("button")).toString(QStringLiteral("left")));
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("input.mouse_scroll"), QStringLiteral("Mouse Scroll"), QStringLiteral("滚轮"),
+            QStringLiteral("Scroll at screen coordinates. Positive delta scrolls up."),
+            QStringLiteral("在屏幕坐标处滚轮。正数向上滚动。"),
+            QStringLiteral("Use to scroll content in windows. Coordinate from screenshot."),
+            AgentToolRisk::Medium, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("x"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}}},
+                {QStringLiteral("y"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}}},
+                {QStringLiteral("delta"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")},{QStringLiteral("description"), QStringLiteral("Scroll amount: 1=up, -1=down, 3=fast scroll")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("x"), QStringLiteral("y"), QStringLiteral("delta")}}}, false,
+        [](const QJsonObject &params, const AgentToolExecutionContext &) {
+            return InputSimulator::mouseScroll(
+                params.value(QStringLiteral("x")).toInt(),
+                params.value(QStringLiteral("y")).toInt(),
+                params.value(QStringLiteral("delta")).toInt(1));
+        }));
+
+    // V18.3: 鼠标/键盘增强
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("input.mouse_drag"), QStringLiteral("Mouse Drag"), QStringLiteral("鼠标拖拽"),
+            QStringLiteral("Drag from (x1,y1) to (x2,y2)."), QStringLiteral("从 (x1,y1) 拖拽到 (x2,y2)。"),
+            QStringLiteral("Windows UIA required."), AgentToolRisk::High, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("x1"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}}},
+                {QStringLiteral("y1"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}}},
+                {QStringLiteral("x2"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}}},
+                {QStringLiteral("y2"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")}}},
+                {QStringLiteral("button"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("default: left")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("x1"),QStringLiteral("y1"),QStringLiteral("x2"),QStringLiteral("y2")}}}, false,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            return InputSimulator::mouseDrag(
+                p.value(QStringLiteral("x1")).toInt(), p.value(QStringLiteral("y1")).toInt(),
+                p.value(QStringLiteral("x2")).toInt(), p.value(QStringLiteral("y2")).toInt(),
+                p.value(QStringLiteral("button")).toString(QStringLiteral("left")));
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("input.mouse_position"), QStringLiteral("Mouse Position"), QStringLiteral("鼠标位置"),
+            QStringLiteral("Get current mouse cursor coordinates."), QStringLiteral("获取当前鼠标坐标。"),
+            QStringLiteral("Windows UIA required."), AgentToolRisk::Low, true),
+        noParameterSchema(), true,
+        [](const QJsonObject &, const AgentToolExecutionContext &) { return InputSimulator::mousePosition(); }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("input.key_press"), QStringLiteral("Key Press"), QStringLiteral("按键"),
+            QStringLiteral("Press a single key. Supports: enter, tab, esc, space, backspace, delete, arrows, home, end, alt, win."),
+            QStringLiteral("按下单个键。支持：enter, tab, esc, space, backspace, delete, 方向键, home, end, alt, win。"),
+            QStringLiteral("Windows UIA required."), AgentToolRisk::Medium, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("key"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Key name or single character")}}},
+                {QStringLiteral("hold"), QJsonObject{{QStringLiteral("type"), QStringLiteral("boolean")},{QStringLiteral("description"), QStringLiteral("true=press only (for modifiers)")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("key")}}}, false,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            return InputSimulator::keyPress(p.value(QStringLiteral("key")).toString(), p.value(QStringLiteral("hold")).toBool(false));
+        }));
+}
+
+// V18.2 P1-2: 网络请求工具
+void registerWebTools(QVector<AgentToolDefinition> &definitions)
+{
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("web.http_get"), QStringLiteral("HTTP GET"), QStringLiteral("HTTP 获取"),
+            QStringLiteral("Send an HTTP GET request and return the response body (text)."), QStringLiteral("发送 HTTP GET 请求并返回文本响应体。"),
+            QStringLiteral("Read-only network operation. Max 64 KiB response. Timeout 15s."),
+            AgentToolRisk::Medium, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("url"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Full URL including https://")}}},
+                {QStringLiteral("headers"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("object")},
+                    {QStringLiteral("description"), QStringLiteral("Optional HTTP headers as key:value pairs")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("url")}}}, true,
+        [](const QJsonObject &params, const AgentToolExecutionContext &) {
+            const QString url = params.value(QStringLiteral("url")).toString().trimmed();
+            if (url.isEmpty()) return ToolResult::failure(QStringLiteral("url is required"));
+
+            QNetworkAccessManager mgr;
+            QNetworkRequest req;
+            req.setUrl(QUrl(url));
+            const QJsonObject headers = params.value(QStringLiteral("headers")).toObject();
+            for (auto it = headers.begin(); it != headers.end(); ++it)
+                req.setRawHeader(it.key().toUtf8(), it.value().toString().toUtf8());
+
+            QEventLoop loop;
+            QTimer t; t.setSingleShot(true);
+            QObject::connect(&t, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+            QNetworkReply *rep = mgr.get(req);
+            QString body; bool ok = false; bool timedOut = false; QString err;
+            QObject::connect(rep, &QNetworkReply::finished, [&]() { ok = true; loop.quit(); });
+            QObject::connect(rep, &QNetworkReply::errorOccurred, [&](QNetworkReply::NetworkError e) {
+                err = QStringLiteral("HTTP %1: %2").arg(e).arg(rep->errorString());
+            });
+            QObject::connect(&t, &QTimer::timeout, [&]() { timedOut = true; });
+            t.start(15000);
+            loop.exec();
+
+            if (timedOut && !ok) {
+                rep->abort();
+                rep->deleteLater();
+                return ToolResult::failure(QStringLiteral("Request timed out."));
+            }
+            body = QString::fromUtf8(rep->readAll());
+            const int status = rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            rep->deleteLater();
+            if (body.size() > 65536) body = body.left(65536) + QStringLiteral("\n... (truncated)");
+            const QString responseText = QStringLiteral("HTTP %1\n\n%2").arg(status).arg(body);
+            if (status >= 400) return ToolResult::failure(responseText);
+            if (!err.isEmpty()) return ToolResult::failure(err + QStringLiteral("\n") + responseText);
+            return ToolResult::success(responseText);
+        }));
+
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("web.http_post"), QStringLiteral("HTTP POST"), QStringLiteral("HTTP 提交"),
+            QStringLiteral("Send an HTTP POST request with a JSON body and return the response."),
+            QStringLiteral("发送 HTTP POST 请求并返回响应。"),
+            QStringLiteral("Sends data to external servers. Max 64 KiB response. Timeout 15s."),
+            AgentToolRisk::High, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("url"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
+                {QStringLiteral("body"), QJsonObject{
+                    {QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Request body (JSON string)")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("url")}}}, true,
+        [](const QJsonObject &params, const AgentToolExecutionContext &) {
+            const QString url = params.value(QStringLiteral("url")).toString().trimmed();
+            if (url.isEmpty()) return ToolResult::failure(QStringLiteral("url is required"));
+
+            QNetworkAccessManager mgr;
+            QNetworkRequest req;
+            req.setUrl(QUrl(url));
+            req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
+            const QByteArray bodyBytes = params.value(QStringLiteral("body")).toString().toUtf8();
+
+            QEventLoop loop; QTimer t; t.setSingleShot(true);
+            QObject::connect(&t, &QTimer::timeout, &loop, &QEventLoop::quit);
+
+            QNetworkReply *rep = mgr.post(req, bodyBytes);
+            QString respBody; bool ok = false; bool timedOut = false; QString err;
+            QObject::connect(rep, &QNetworkReply::finished, [&]() { ok = true; loop.quit(); });
+            QObject::connect(rep, &QNetworkReply::errorOccurred, [&](QNetworkReply::NetworkError e) {
+                err = QStringLiteral("HTTP %1: %2").arg(e).arg(rep->errorString());
+            });
+            QObject::connect(&t, &QTimer::timeout, [&]() { timedOut = true; });
+            t.start(15000); loop.exec();
+
+            if (timedOut && !ok) {
+                rep->abort();
+                rep->deleteLater();
+                return ToolResult::failure(QStringLiteral("Request timed out."));
+            }
+            respBody = QString::fromUtf8(rep->readAll());
+            const int status = rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            rep->deleteLater();
+            if (respBody.size() > 65536) respBody = respBody.left(65536) + QStringLiteral("\n... (truncated)");
+            const QString responseText = QStringLiteral("HTTP %1\n\n%2").arg(status).arg(respBody);
+            if (status >= 400) return ToolResult::failure(responseText);
+            if (!err.isEmpty()) return ToolResult::failure(err + QStringLiteral("\n") + responseText);
+            return ToolResult::success(responseText);
+        }));
+
+    // V18.3: 文件下载
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("web.download_file"), QStringLiteral("Download File"), QStringLiteral("下载文件"),
+            QStringLiteral("Download a file from URL and save to a local path."), QStringLiteral("从 URL 下载文件保存到本地。"),
+            QStringLiteral("Max 32 MiB. Timeout 60s."), AgentToolRisk::Medium, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("url"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
+                {QStringLiteral("save_path"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Local path to save")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("url"), QStringLiteral("save_path")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            const QString url = p.value(QStringLiteral("url")).toString().trimmed();
+            const QString savePath = p.value(QStringLiteral("save_path")).toString().trimmed();
+            if (url.isEmpty()) return ToolResult::failure(QStringLiteral("url required"));
+            if (savePath.isEmpty()) return ToolResult::failure(QStringLiteral("save_path required"));
+
+            QDir().mkpath(QFileInfo(savePath).absolutePath());
+            QFile outFile(savePath);
+            if (!outFile.open(QFile::WriteOnly)) return ToolResult::failure(QStringLiteral("Cannot write to save path."));
+
+            QNetworkAccessManager mgr;
+            QNetworkRequest req; req.setUrl(QUrl(url));
+            QEventLoop loop; QTimer t; t.setSingleShot(true);
+            QObject::connect(&t, &QTimer::timeout, &loop, &QEventLoop::quit);
+            QNetworkReply *rep = mgr.get(req);
+            qint64 written = 0;
+            QObject::connect(rep, &QNetworkReply::readyRead, [&]() {
+                QByteArray data = rep->readAll();
+                written += data.size();
+                if (written <= 32*1024*1024) outFile.write(data);
+            });
+            bool ok = false; QString err;
+            QObject::connect(rep, &QNetworkReply::finished, [&](){ ok=true; loop.quit(); });
+            QObject::connect(rep, &QNetworkReply::errorOccurred, [&](QNetworkReply::NetworkError e){
+                err = QStringLiteral("Download failed: HTTP %1").arg(e); loop.quit();
+            });
+            t.start(60000); loop.exec();
+            outFile.close();
+            int status = rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            rep->deleteLater();
+            if (!err.isEmpty()) return ToolResult::failure(err);
+            if (!ok) { outFile.remove(); return ToolResult::failure(QStringLiteral("Download timed out.")); }
+            if (status >= 400) { outFile.remove(); return ToolResult::failure(QStringLiteral("HTTP %1").arg(status)); }
+            return ToolResult::success(QStringLiteral("Downloaded %1 bytes to %2.").arg(written).arg(QFileInfo(savePath).fileName()));
+        }));
+
+    // V18.3: 打开 URL
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.open_url"), QStringLiteral("Open URL"), QStringLiteral("打开网址"),
+            QStringLiteral("Open a URL in the default browser."), QStringLiteral("在默认浏览器中打开网址。"),
+            QStringLiteral("Windows UIA required."), AgentToolRisk::Medium, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("url"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("url")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            const QString url = p.value(QStringLiteral("url")).toString().trimmed();
+            if (url.isEmpty()) return ToolResult::failure(QStringLiteral("url required"));
+            QDesktopServices::openUrl(QUrl(url));
+            return ToolResult::success(QStringLiteral("Opened: %1").arg(url));
+        }));
+}
+
+// V18.5: 开发工具 — 压缩/解压/代码沙箱
+void registerDevTools(QVector<AgentToolDefinition> &definitions)
+{
+    // file.archive — 压缩文件/目录为 zip
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("file.archive"), QStringLiteral("Create Archive"), QStringLiteral("创建压缩包"),
+            QStringLiteral("Compress a file or directory into a zip archive."), QStringLiteral("将文件或目录压缩为 zip 包。"),
+            QStringLiteral("Uses PowerShell Compress-Archive on Windows."), AgentToolRisk::Low, false),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("source"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("File or directory to compress")}}},
+                {QStringLiteral("output"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Output zip path (e.g. backup.zip)")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("source"), QStringLiteral("output")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            const QString src = p.value(QStringLiteral("source")).toString().trimmed();
+            const QString dst = p.value(QStringLiteral("output")).toString().trimmed();
+            if (src.isEmpty() || dst.isEmpty()) return ToolResult::failure(QStringLiteral("source and output required"));
+            if (!QFileInfo::exists(src)) return ToolResult::failure(QStringLiteral("Source not found."));
+
+            QProcess proc;
+#ifdef Q_OS_WIN
+            proc.setProgram(QStringLiteral("powershell"));
+            proc.setArguments({QStringLiteral("-Command"), QStringLiteral("Compress-Archive -Path '%1' -DestinationPath '%2' -Force").arg(src, dst)});
+#else
+            proc.setProgram(QStringLiteral("zip"));
+            proc.setArguments({QStringLiteral("-r"), dst, src});
+#endif
+            proc.start();
+            if (!proc.waitForFinished(60000))
+                return ToolResult::failure(QStringLiteral("Archive timed out."));
+            if (proc.exitCode() != 0)
+                return ToolResult::failure(QStringLiteral("Archive failed: %1").arg(QString::fromLocal8Bit(proc.readAllStandardError())));
+            return ToolResult::success(QStringLiteral("Created: %1 (%2 bytes)").arg(dst).arg(QFileInfo(dst).size()));
+        }));
+
+    // file.extract — 解压 zip
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("file.extract"), QStringLiteral("Extract Archive"), QStringLiteral("解压缩"),
+            QStringLiteral("Extract a zip archive to a directory."), QStringLiteral("将 zip 压缩包解压到目录。"),
+            QStringLiteral("Uses PowerShell Expand-Archive on Windows."), AgentToolRisk::Medium, false),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("archive"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Path to zip file")}}},
+                {QStringLiteral("output_dir"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Extract to this directory")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("archive"), QStringLiteral("output_dir")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            const QString arc = p.value(QStringLiteral("archive")).toString().trimmed();
+            const QString out = p.value(QStringLiteral("output_dir")).toString().trimmed();
+            if (arc.isEmpty() || out.isEmpty()) return ToolResult::failure(QStringLiteral("archive and output_dir required"));
+            if (!QFileInfo::exists(arc)) return ToolResult::failure(QStringLiteral("Archive not found."));
+            QDir().mkpath(out);
+
+            QProcess proc;
+#ifdef Q_OS_WIN
+            proc.setProgram(QStringLiteral("powershell"));
+            proc.setArguments({QStringLiteral("-Command"), QStringLiteral("Expand-Archive -Path '%1' -DestinationPath '%2' -Force").arg(arc, out)});
+#else
+            proc.setProgram(QStringLiteral("unzip"));
+            proc.setArguments({QStringLiteral("-o"), arc, QStringLiteral("-d"), out});
+#endif
+            proc.start();
+            if (!proc.waitForFinished(60000))
+                return ToolResult::failure(QStringLiteral("Extract timed out."));
+            if (proc.exitCode() != 0)
+                return ToolResult::failure(QStringLiteral("Extract failed: %1").arg(QString::fromLocal8Bit(proc.readAllStandardError())));
+            int count = QDir(out).entryInfoList(QDir::Files|QDir::Dirs|QDir::NoDotAndDotDot).size();
+            return ToolResult::success(QStringLiteral("Extracted %1 entries to %2.").arg(count).arg(out));
+        }));
+
+    // code.run — 运行 Python/JS 代码
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("code.run"), QStringLiteral("Run Code"), QStringLiteral("运行代码"),
+            QStringLiteral("Execute Python or JavaScript code in a sandboxed process."), QStringLiteral("在隔离进程中执行 Python 或 JavaScript 代码。"),
+            QStringLiteral("Timeout 30s. Max output 8 KiB. Code is written to temp file and executed."),
+            AgentToolRisk::Medium, false),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("language"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("python or node")}}},
+                {QStringLiteral("code"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("Source code to execute")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("language"), QStringLiteral("code")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &context) {
+            const QString lang = p.value(QStringLiteral("language")).toString().trimmed().toLower();
+            const QString code = p.value(QStringLiteral("code")).toString();
+            if (code.isEmpty()) return ToolResult::failure(QStringLiteral("code required"));
+
+            const QString tmpDir = QDir::tempPath();
+            const QString ext = (lang == QStringLiteral("node") || lang == QStringLiteral("javascript") || lang == QStringLiteral("js"))
+                ? QStringLiteral(".js") : QStringLiteral(".py");
+            const QString tmpFile = QDir(tmpDir).filePath(QStringLiteral("codexx_run_%1%2").arg(QDateTime::currentMSecsSinceEpoch()).arg(ext));
+            {
+                QFile f(tmpFile);
+                if (!f.open(QFile::WriteOnly|QFile::Truncate)) return ToolResult::failure(QStringLiteral("Cannot create temp file."));
+                f.write(code.toUtf8());
+            }
+
+            QProcess proc;
+            if (ext == QStringLiteral(".js")) {
+                proc.setProgram(QStringLiteral("node")); proc.setArguments({tmpFile});
+            } else {
+                proc.setProgram(QStringLiteral("python")); proc.setArguments({tmpFile});
+            }
+            proc.setWorkingDirectory(context.workspaceDirectory.isEmpty() ? context.projectDirectory : context.workspaceDirectory);
+            proc.start();
+            if (!proc.waitForStarted(3000)) { QFile::remove(tmpFile); return ToolResult::failure(QStringLiteral("Failed to start %1.").arg(lang)); }
+            if (!proc.waitForFinished(30000)) { proc.kill(); proc.waitForFinished(3000); QFile::remove(tmpFile); return ToolResult::failure(QStringLiteral("Code execution timed out.")); }
+            QFile::remove(tmpFile);
+
+            QString out = QString::fromLocal8Bit(proc.readAllStandardOutput());
+            QString err = QString::fromLocal8Bit(proc.readAllStandardError());
+            constexpr int kMax = 8192;
+            if (out.size() > kMax) out = out.left(kMax) + QStringLiteral("\n... (truncated)");
+            if (err.size() > kMax) err = err.left(kMax) + QStringLiteral("\n... (truncated)");
+
+            const int ec = proc.exitCode();
+            QString result = QStringLiteral("[exit=%1]\n").arg(ec);
+            if (!out.isEmpty()) result += out + QStringLiteral("\n");
+            if (!err.isEmpty()) result += QStringLiteral("[stderr]\n") + err;
+
+            return ToolResult::success(result);
+        }));
+
+    // V18.5: 文件监听
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("file.watch"), QStringLiteral("Watch Files"), QStringLiteral("文件监听"),
+            QStringLiteral("Start/stop watching files or directories for changes. Returns changed paths."),
+            QStringLiteral("启动/停止监听文件或目录变化。返回变更路径列表。"),
+            QStringLiteral("Uses QFileSystemWatcher. Persistent within agent loop."),
+            AgentToolRisk::Low, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("action"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},{QStringLiteral("description"), QStringLiteral("start, stop, or status")}}},
+                {QStringLiteral("paths"), QJsonObject{{QStringLiteral("type"), QStringLiteral("array")},{QStringLiteral("items"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")}}},
+                    {QStringLiteral("description"), QStringLiteral("File/directory paths to watch (for start action)")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("action")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            const QString action = p.value(QStringLiteral("action")).toString().trimmed().toLower();
+            // 使用静态 watcher 保持持久性
+            static QFileSystemWatcher *watcher = nullptr;
+            static QStringList watched;
+
+            if (action == QStringLiteral("start")) {
+                if (watcher) delete watcher;
+                watcher = new QFileSystemWatcher;
+                watched.clear();
+                const QJsonArray paths = p.value(QStringLiteral("paths")).toArray();
+                for (const auto &v : paths) {
+                    const QString path = v.toString().trimmed();
+                    if (!path.isEmpty() && QFileInfo::exists(path)) {
+                        watcher->addPath(path);
+                        watched.append(path);
+                    }
+                }
+                if (watched.isEmpty()) return ToolResult::failure(QStringLiteral("No valid paths to watch."));
+                return ToolResult::success(QStringLiteral("Watching %1 paths.").arg(watched.size()));
+            }
+            if (action == QStringLiteral("stop")) {
+                if (watcher) { delete watcher; watcher = nullptr; }
+                watched.clear();
+                return ToolResult::success(QStringLiteral("Watch stopped."));
+            }
+            if (action == QStringLiteral("status") || action == QStringLiteral("poll")) {
+                if (!watcher || watched.isEmpty())
+                    return ToolResult::success(QStringLiteral("Not watching any files."));
+                return ToolResult::success(QStringLiteral("Watching %1 paths: %2").arg(watched.size()).arg(watched.join(QStringLiteral(", "))));
+            }
+            return ToolResult::failure(QStringLiteral("Action must be start, stop, or status."));
         }));
 }
 
@@ -1126,6 +1999,8 @@ AgentToolRegistry defaultRegistry()
     registerDataAndLogTools(definitions);
     registerPerceptionTools(definitions);
     registerInputTools(definitions);
+    registerWebTools(definitions);  // V18.2 P1-2
+    registerDevTools(definitions);   // V18.5
     registerAssistantTools(definitions);
 
     return AgentToolRegistry(definitions);

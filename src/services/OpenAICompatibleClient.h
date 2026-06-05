@@ -55,4 +55,5 @@ private:
     StreamParser m_streamParser;            // 功能：解析 SSE 文本流；使用模块：handleReadyRead。
     QByteArray m_errorBody;                 // 功能：缓存非 2xx 响应体；使用模块：handleFinished 提取错误信息。
     bool m_doneReceived = false;            // 功能：记录是否收到 [DONE]；使用模块：区分完整响应和中断响应。
+    bool m_streamWasTruncated = false;      // V17.6 P2-2: 是否检测到 finish_reason==length。
 };

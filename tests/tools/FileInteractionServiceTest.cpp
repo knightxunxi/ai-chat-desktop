@@ -1,6 +1,7 @@
 #include "support/AppLogger.h"
 #include "tools/FileInteractionService.h"
 
+#include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
 #include <QTextStream>
@@ -83,6 +84,24 @@ int main()
 
     result = FileInteractionService::validateOpenPath(directory.filePath(QStringLiteral("missing.txt")));
     assert(!result.ok);
+
+    const QString copySourceDir = directory.filePath(QStringLiteral("copy-source"));
+    const QString copyTargetDir = directory.filePath(QStringLiteral("copy-target"));
+    assert(QDir().mkpath(copySourceDir));
+    assert(QDir().mkpath(copyTargetDir));
+    writeFile(QDir(copySourceDir).filePath(QStringLiteral("same.txt")), QByteArray("source"));
+    writeFile(QDir(copyTargetDir).filePath(QStringLiteral("same.txt")), QByteArray("target"));
+    result = FileInteractionService::copyFile(copySourceDir, copyTargetDir);
+    assert(!result.ok);
+    assert(result.error.contains(QStringLiteral("already exists"), Qt::CaseInsensitive));
+    assert(readFile(QDir(copyTargetDir).filePath(QStringLiteral("same.txt"))) == QStringLiteral("target"));
+
+    const QString appendPath = directory.filePath(QStringLiteral("append.txt"));
+    result = FileInteractionService::appendTextFile(appendPath, QStringLiteral("a"));
+    assert(result.ok);
+    result = FileInteractionService::appendTextFile(appendPath, QStringLiteral("b"));
+    assert(result.ok);
+    assert(readFile(appendPath) == QStringLiteral("ab"));
 
     const QString summary = FileInteractionService::pathSummary(savedPath);
     assert(summary.contains(QStringLiteral("saved.txt")));

@@ -159,6 +159,41 @@ AgentLoopRunResult finishWith(
     return result;
 }
 
+// V17.6 P0-1: 工具结果裁剪 — observation 注入前截断过长的输出，避免上下文膨胀
+QString trimObservationOutput(const QString &output)
+{
+    constexpr int kMaxObservationLines = 50;
+    constexpr int kKeepHeadLines = 20;
+    constexpr int kKeepTailLines = 20;
+    constexpr int kMaxObservationChars = 3000;
+
+    const QStringList lines = output.split(QLatin1Char('\n'));
+    if (lines.size() <= kMaxObservationLines && output.size() <= kMaxObservationChars) {
+        return output; // 无需裁剪
+    }
+
+    if (lines.size() > kMaxObservationLines) {
+        QStringList trimmed;
+        trimmed.reserve(kKeepHeadLines + kKeepTailLines + 1);
+        for (int i = 0; i < kKeepHeadLines && i < lines.size(); ++i) {
+            trimmed.append(lines[i]);
+        }
+        const int skipped = lines.size() - kKeepHeadLines - kKeepTailLines;
+        trimmed.append(QStringLiteral("... [%1 lines trimmed] ...").arg(skipped));
+        const int tailStart = qMax(kKeepHeadLines, lines.size() - kKeepTailLines);
+        for (int i = tailStart; i < lines.size(); ++i) {
+            trimmed.append(lines[i]);
+        }
+        return trimmed.join(QLatin1Char('\n'));
+    }
+
+    // 行数未超但字符数超限：头尾截断
+    const int halfLimit = kMaxObservationChars / 2;
+    QString head = output.left(halfLimit);
+    QString tail = output.right(halfLimit);
+    return head + QStringLiteral("\n... [%1 chars trimmed] ...\n").arg(output.size() - kMaxObservationChars) + tail;
+}
+
 } // namespace
 
 // ============================================================================
@@ -410,6 +445,8 @@ AgentLoopRunResult executeLoop(
     runtimeTimer.start();
     QStringList observations;
     int completedSteps = 0;
+    QSet<QString> seenActions;  // V17.6 P0-2: 重复动作检测
+    constexpr int kMaxRepeatWarn = 3;
 
     // 3. 从 options 构造终止策略
     LoopTerminationPolicy policy = LoopTerminationPolicy::fromOptions(options);
@@ -565,6 +602,29 @@ AgentLoopRunResult executeLoop(
                  QStringLiteral("Think: done=false toolId=%1 reason=%2")
                      .arg(action.step.toolId, action.step.reason));
 
+        // V17.6 P0-2: 重复动作检测（同步路径）
+        const QString stepFp = QStringLiteral("%1|%2").arg(
+            action.step.toolId,
+            QString::fromUtf8(QJsonDocument(action.step.parameters).toJson(QJsonDocument::Compact)));
+        if (seenActions.contains(stepFp)) {
+            observations.append(QStringLiteral("[repeated-action-warning] tool `%1` with same params already executed").arg(action.step.toolId));
+            logAudit(&result.auditTrail, QStringLiteral("Think: repeated_action=%1").arg(action.step.toolId));
+            // V18: 重复超过阈值 → 终止循环
+            const int repeatCount = observations.filter(QStringLiteral("[repeated-action-warning]")).size();
+            if (repeatCount >= kMaxRepeatWarn) {
+                if (hooks != nullptr) {
+                    hooks->executeHooks(HookPoint::OnAgentStop,
+                                        HookContext::forAgentLifecycle(HookPoint::OnAgentStop, userGoal));
+                }
+                return finishWith(result, AgentLoopRunStatus::RepeatedAction,
+                    QStringLiteral("Repeated the same action %1 times.").arg(repeatCount));
+            }
+            // 未达阈值 → 注入警告，继续循环
+            completedSteps++;
+            continue;
+        }
+        seenActions.insert(stepFp);
+
         // g. 步骤开始回调
         if (callbacks.stepStarted) {
             callbacks.stepStarted(completedSteps);
@@ -623,7 +683,7 @@ AgentLoopRunResult executeLoop(
                      .arg(toolResult.output.size()));
 
         // k. 收集观测
-        observations.append(QStringLiteral("%1: %2").arg(action.step.toolId, toolResult.output));
+        observations.append(QStringLiteral("%1: %2").arg(action.step.toolId, trimObservationOutput(toolResult.output)));
         completedSteps++;
 
         // l. 单步超时检查

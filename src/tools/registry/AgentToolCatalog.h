@@ -25,7 +25,7 @@ struct AgentToolDescriptor {
     AgentToolRisk risk = AgentToolRisk::Low; // 功能：工具目录权威风险等级；使用模块：计划解析器。
     // AG-6: 数值风险等级（0=低, 1=中, 2=高）；使用模块：ConfirmToolDialog 风险颜色和阈值判断。
     int riskLevel = 0;
-    bool requiresUserConfirmation = true;    // 功能：是否必须确认；使用模块：后续 Agent UI。
+    bool requiresUserConfirmation = false;   // 功能：是否需要人工确认；默认高权限自动执行。
     bool resultMayContainSensitiveContent = false; // 功能：结果是否可能敏感；使用模块：回传确认提示。
     bool enabledForAgent = true;        // 功能：是否允许 AI 建议；使用模块：计划解析器。
 };

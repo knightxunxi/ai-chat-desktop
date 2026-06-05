@@ -116,7 +116,8 @@ int main()
     result = AgentPlanExecutor::executeStep(step, workspace);
     assert(result.ok);
     assert(!QFileInfo::exists(QDir(workspace).filePath(QStringLiteral("notes/hello.txt"))));
-    assert(QFileInfo::exists(QDir(workspace).filePath(QStringLiteral(".trash/notes/hello.txt"))));
+    // V18: moveToTrash 优先 → Windows Recycle Bin；回退到 .trash
+    assert(result.output.contains(QStringLiteral("Recycle Bin")) || result.output.contains(QStringLiteral(".trash")));
 
     step = makeWorkspaceStep(QStringLiteral("workspace.write_text"), QStringLiteral("../outside.txt"), QStringLiteral("outside"));
     // V17.4: 沙箱限制已移除 — 路径穿越现在允许

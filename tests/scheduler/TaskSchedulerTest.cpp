@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QSignalSpy>
 #include <QTimer>
+#include <QTimeZone>
 
 #include <cassert>
 
@@ -74,6 +75,8 @@ int main(int argc, char *argv[])
         QVector<ScheduledTask> input;
         auto t1 = ScheduledTask::create("Task One", "0 9 * * *", "morning");
         auto t2 = ScheduledTask::create("Task Two", "30 17 * * 5", "friday");
+        t1.lastRun = QDateTime(QDate(2026, 6, 5), QTime(8, 30, 0), QTimeZone::UTC);
+        t1.nextRun = QDateTime(QDate(2026, 6, 5), QTime(9, 0, 0), QTimeZone::UTC);
         input.append(t1);
         input.append(t2);
 
@@ -84,6 +87,10 @@ int main(int argc, char *argv[])
         if (loaded.size() == 2) {
             check(loaded[0].name == "Task One", "persist: name match 1");
             check(loaded[1].cronExpression == "30 17 * * 5", "persist: cron match 2");
+            check(loaded[0].lastRun.isValid() && loaded[0].lastRun.toUTC() == t1.lastRun.toUTC(),
+                  "persist: lastRun roundtrip");
+            check(loaded[0].nextRun.isValid() && loaded[0].nextRun.toUTC() == t1.nextRun.toUTC(),
+                  "persist: nextRun roundtrip");
         }
 
         QFile::remove(testFile);
@@ -115,7 +122,7 @@ int main(int argc, char *argv[])
         // 使用一个包含 TaskScheduler 的临时对象来测试
         // 由于 nextRunTime 是私有的，我们通过间接方式验证
         auto task = ScheduledTask::create("Daily", "0 9 * * *", "morning");
-        QDateTime now = QDateTime(QDate(2025, 6, 1), QTime(8, 0, 0), Qt::UTC);
+        QDateTime now = QDateTime(QDate(2025, 6, 1), QTime(8, 0, 0), QTimeZone::UTC);
 
         TaskScheduler scheduler;
         scheduler.addTask(task);
@@ -147,7 +154,23 @@ int main(int argc, char *argv[])
         check(!scheduler.isRunning(), "start-stop: not running after stop");
     }
 
-    // ---- 测试 8: update-task ----
+    // ---- 测试 8: enabled-task 立即按当前分钟触发 ----
+    {
+        TaskScheduler scheduler;
+        auto task = ScheduledTask::create("EveryMinute", "* * * * *", "run now");
+        scheduler.addTask(task);
+
+        QSignalSpy spy(&scheduler, &TaskScheduler::taskTriggered);
+        scheduler.start();
+        scheduler.stop();
+
+        check(spy.count() == 1, "enabled-task: current minute triggers once");
+        const auto tasks = scheduler.allTasks();
+        check(tasks.size() == 1 && tasks[0].lastRun.isValid(),
+              "enabled-task: lastRun set after trigger");
+    }
+
+    // ---- 测试 9: update-task ----
     {
         TaskScheduler scheduler;
         auto task = ScheduledTask::create("Original", "0 9 * * *", "orig");
