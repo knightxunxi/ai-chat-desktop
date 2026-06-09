@@ -301,6 +301,99 @@ ctest --test-dir build-qt --output-on-failure
 
 当前 V7 开发分支测试数量为 27 个。
 
+## 16. Windows API 与桌面自动化（V14+ / V18.2+）
+
+Agent 模式的核心能力来源：让程序像人一样操作 Windows GUI。
+
+### Win32 键盘模拟 — SendInput
+
+```cpp
+INPUT in = {};
+in.type = INPUT_KEYBOARD;
+in.ki.wScan = ch.unicode();
+in.ki.dwFlags = KEYEVENTF_UNICODE;  // 支持 Unicode 字符
+SendInput(1, &in, sizeof(INPUT));
+in.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;  // 释放键
+SendInput(1, &in, sizeof(INPUT));
+```
+
+v1.0 支持：文本输入（中英文）、组合键（Ctrl+C/Alt+F4）、单键（Enter/Tab/Esc/方向键）、鼠标点击拖拽滚轮。
+
+### Win32 鼠标模拟
+
+```cpp
+SetCursorPos(x, y);  // 移动到屏幕坐标
+INPUT down = {}; down.type = INPUT_MOUSE; down.mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+INPUT up = {}; up.type = INPUT_MOUSE; up.mi.dwFlags = MOUSEEVENTF_LEFTUP;
+SendInput(1, &down, sizeof(INPUT));  // 按下
+SendInput(1, &up, sizeof(INPUT));    // 释放
+```
+
+### Windows UI Automation (UIA)
+
+通过 COM 接口定位和操作 UI 控件：
+
+```cpp
+IUIAutomation *uia = nullptr;
+CoCreateInstance(__uuidof(CUIAutomation), nullptr, CLSCTX_INPROC_SERVER,
+    __uuidof(IUIAutomation), (void**)&uia);
+IUIAutomationElement *el = nullptr;
+uia->ElementFromHandle(hwnd, &el);
+el->get_CurrentName(&name);      // 控件名
+el->get_CurrentBoundingRectangle(&rc); // 控件位置
+```
+
+用于：click_button（按名称定位按钮）、active_control（获取焦点控件信息）。
+
+### 窗口管理
+
+- `EnumWindows` — 枚举所有可见窗口。
+- `GetForegroundWindow` — 获取前台窗口句柄。
+- `GetWindowRect` — 获取窗口位置和大小。
+- `GetWindowTextW` — 获取窗口标题。
+- 系统窗口黑名单保护（Task Manager / UAC / Ctrl+Alt+Del 屏幕）。
+
+## 17. Agent 工具注册表设计（V8.3+ / V15.4+）
+
+v1.0 的 51 个工具统一注册在 `AgentToolRegistry`。
+
+每个工具的元数据：工具 ID、中英文名称描述、风险等级、JSON Schema、执行函数（lambda 闭包）。
+
+```cpp
+definitions.append(makeDefinition(
+    makeDescriptor("file.edit_text", "Edit", "编辑",
+        "Replace old_str with new_str in file", "精确替换文本",
+        "...", AgentToolRisk::Medium, false),
+    paramsSchema, allowsDirectExecution,
+    [](const QJsonObject &params, const AgentToolExecutionContext &ctx) {
+        return FileInteractionService::editTextFile(...);
+    }));
+```
+
+设计价值：Prompt 和执行器共享同一个注册表，不存在两份工具定义。Function Calling schema 从同一份定义生成。新增工具只需在注册表中追加一个条目。7 个 CMake 子库独立编译。
+
+## 18. 三层记忆系统设计（V13+）
+
+```text
+L1 (~/.codex/MEMORY.md)           用户级跨项目偏好     手动写入
+L2 (.workbuddy/memory/MEMORY.md)  项目级技术决策       手动写入
+L3 (YYYY-MM-DD.md)                每日工作日志         Agent 自动追加
+```
+
+关键设计：敏感内容自动拒绝（正则匹配 api_key/token/password 等）。L3 14 天窗口 + 50 条上限 + 30K 字符硬上限。超期日志 ISO 周压缩（LLM 摘要 → compressed.md）。
+
+## 19. Skill 系统设计（V13.3+）
+
+Skill 是场景化工作流指令。YAML frontmatter + Markdown 体，双目录扫描，子串匹配触发词，优先级合并。当前 15 个 Skill（3 工作流 + 12 工具）。
+
+## 20. Agent 循环提示词设计（V18.6）
+
+v1.0 提示词结构：意图标签 + 工具使用提示 + 匹配 Skill + ⭐ 排序工具目录。匹配工具优先加 ⭐，非匹配软限制 30 个。完成后自动记录工具序列。
+
+## 21. v1.0 测试统计
+
+v1.0 全量 65 个测试，100% 通过。覆盖核心模型、服务、存储、工具、Agent、记忆、Skills、Hooks、UI、输入、桌面等 12 个层级。CI 双重构建（Debug/Release），GitHub Actions 自动触发。
+
 ## 14. windeployqt
 
 `windeployqt` 是 Qt 提供的 Windows 部署工具。
@@ -342,3 +435,168 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 这套流程适合写进简历：
 
 > 实践 Git/GitHub feature branch、Pull Request、代码提交、阶段验收和发布说明同步流程，保持 main 分支稳定。
+
+---
+
+## 设计决策与取舍
+
+> 这部分回答"为什么这么做而不是那样做"——面试时被追问架构决策的核心弹药。
+
+### 决策 1：为什么 ApplicationController 拆成 3 个 Coordinator，而不是全删掉？
+
+```
+替代方案：每个 Coordinator 各自独立，不需要 ApplicationController
+实际选择：保留 ApplicationController 作为门面，3 个 Coordinator 作为成员
+```
+
+**为什么**：ApplicationController 持有 `m_aiClient`（AI 客户端实例），Chat 消息流（sendMessage→handleTextDelta→handleRequestFinished）需要它。如果删掉 AC，Chat 模式和 Agent 模式会变成两个独立的控制器，信号槽连接会加倍复杂。保留 AC 做门面，Chat 路径直走 AC，Agent 路径通过 AgentOrchestrator——两种模式的代码不需要互相了解对方的存在。
+
+**面试表达**：这是 Facade 模式的应用——对外提供简单接口，内部委托给子系统。
+
+### 决策 2：为什么不直接用 QTest/GoogleTest 而是手写测试框架？
+
+```
+替代方案：QTest 框架（Qt 官方）、Google Test（业界标准）
+实际选择：自定义轻量级 assert + CTest
+```
+
+**为什么**：QTest 需要 Qt 事件循环，Google Test 需要额外编译依赖。手写框架的测试入口是 `int main() { assert(...); }`——不需要链接任何框架库。65 个测试都是纯逻辑测试，不依赖窗口和事件循环。另外，手写测试意味着你对每个断言的发生位置和失败信息有完全控制。
+
+**面试表达**：在不需要 mock/spy 的纯逻辑测试场景下，轻量方案往往比重框架更实用。
+
+### 决策 3：为什么 Skill 用 YAML frontmatter 而不是单独的 YAML/JSON 文件？
+
+```
+替代方案：skill.yaml + skill.md 双文件；纯 JSON 配置文件
+实际选择：SKILL.md 单文件，YAML frontmatter 嵌入在 Markdown 头部
+```
+
+**为什么**：(1) 单文件分发零碎依赖——复制一个 SKILL.md 就完成部署；(2) Markdown 是 AI 的原生输入格式——YAML 部分给解析器看，Markdown 体直接注入 prompt，不需要格式转换；(3) 手写 frontmatter 解析器 120 行代码搞定，省去引入 YAML 库的编译依赖。代价是语法容错性不如正式 YAML 库，但对 SKILL.md 这种人工编写的小文件完全够用。
+
+### 决策 4：为什么 HTTP 请求用 QEventLoop 同步等待，而不是 Qt 信号槽异步？
+
+```
+替代方案：全程信号槽异步（readyRead → textDeltaReceived → 下一个请求）
+实际选择：Agent 循环中 HTTP 请求用 QEventLoop + 超时定时器同步等待
+```
+
+**为什么**：Agent 循环是一个 OODA 循环——每轮必须等工具执行完才能进入下一轮。如果用信号槽异步，循环体会分裂成多个回调，代码变成回调地狱。QEventLoop::exec() 阻塞当前协程等待结果，让 Agent 循环的逻辑保持线性可读。代价是阻塞时 Qt 事件循环仍然运转（这是 QEventLoop 的设计），所以 UI 不会卡死。
+
+**面试表达**：这是"局部同步，全局异步"——Agent 循环内部等待单步结果，但 Qt 主事件循环仍然处理 UI 事件。
+
+### 决策 5：为什么工具不直接用 Function Calling 返回的参数，而要再走 AgentToolRegistry 校验？
+
+```
+替代方案：模型返回 tool_calls → 直接调用 QProcess/SendInput
+实际选择：tool_calls → AgentToolRegistry.find(functionName) → 校验参数 → lambda 执行
+```
+
+**为什么**：函数名必须映射到已注册工具——防止模型幻觉出不存在的工具。参数必须经过 JSON Schema 检查。执行函数是注册时绑定的 lambda 闭包，模型无法绕过——比如 command.bash 的危险命令黑名单在 lambda 内部检查，模型返回的任何参数都要经过它。
+
+**面试表达**：这是"模型负责建议，本地负责权限"的 Agent 安全原则。Function Calling 只是信道，不是信任。
+
+### 决策 6：为什么记忆用文件而不是 SQLite？
+
+```
+替代方案：SQLite 存记忆（结构化查询 + FTS 搜索）
+实际选择：纯 Markdown 文件（~/.codex/MEMORY.md、YYYY-MM-DD.md）
+```
+
+**为什么**：(1) AI 的输入是文本——Markdown 文件不需要格式转换就能注入 systemPrompt；(2) 文件可以直接 git 版本控制；(3) 记忆规模很小（30K 字符上限），不需要 SQL 查询。代价是搜索只能按文件名和内容正则匹配，不能模糊语义搜索——但对于项目规模的记忆量，这完全够用。
+
+### 决策 7：为什么选择 QProcess 而不是 std::system() 或 Win32 CreateProcess？
+
+```
+替代方案：std::system()、Win32 CreateProcessW()
+实际选择：QProcess（Qt 封装）
+```
+
+**为什么**：QProcess 提供统一的跨平台接口（Windows 用 cmd.exe / Linux 用 /bin/sh），自动管理 stdin/stdout/stderr 分离，自带超时和 waitForFinished。std::system() 无法超时控制，CreateProcessW() 需要手写管道重定向。唯一代价是依赖 QtCore，但项目本身就用 Qt，这个代价为零。
+
+### 决策 8：为什么桌面操作用 Win32 而不是 Qt 的跨平台 API？
+
+```
+替代方案：QCursor::setPos() + QTest::mouseClick() + QTest::keyClicks()
+实际选择：SetCursorPos + SendInput(INPUT_MOUSE/INPUT_KEYBOARD)
+```
+
+**为什么**：QTest 是测试框架的 API，不是为生产环境设计的——它只在窗口拥有焦点时可靠。SendInput 是 Windows 最底层的输入注入 API，绕过了窗口焦点限制，可以模拟全局键盘鼠标操作。代价是代码绑定 Windows 平台，但桌面 Agent 本身就是 Windows-only 的定位。
+
+---
+
+## 代码阅读指南
+
+> 按这个顺序看源码，从外到内、从简到繁。
+
+### 第一轮：建立地图（30 分钟）
+
+| 顺序 | 文件 | 看什么 | 预期理解 |
+|------|------|--------|---------|
+| 1 | `src/core/AppConfig.h` | 配置结构体 | 项目"输入参数"长什么样 |
+| 2 | `src/core/ChatMessage.h` + `MessageRole.h` | 消息模型 | 数据怎么在系统里流动 |
+| 3 | `src/app/ApplicationController.h` | 公开接口 | 控制层对外能做什么 |
+| 4 | `CMakeLists.txt`（根目录） | 子目录列表 | 项目有哪些模块 |
+
+### 第二轮：跟踪一条消息（1 小时）
+
+从用户点击发送到 AI 回复显示，跟踪调用链：
+
+```
+MainWindow::sendCurrentMessage()
+  → ApplicationController::sendMessage()
+    → SessionCoordinator::addUserMessage()
+    → OpenAIClient::sendChat()
+      → StreamParser::consume()       // SSE 解析
+    → ApplicationController::handleTextDelta()  // 流式更新
+    → MainWindow::assistantMessageUpdated()    // UI 刷新
+    → SessionCoordinator::saveCurrentSession() // 持久化
+```
+
+### 第三轮：理解 Agent（1.5 小时）
+
+从用户输入目标到自动执行完毕的完整路径：
+
+```
+ApplicationController::sendAgentLoopMessage()
+  → AgentOrchestrator::startAgentLoop()
+    → buildNextLoopPrompt()
+      → classifyGoal()                 // 意图检测
+      → reorderToolsByIntent()         // ⭐ 排序
+      → buildToolGuidance()            // 最佳实践
+    → OpenAICompatibleClient::sendChatWithTools()  // 带 tools schema
+    → StreamParser → tool_calls 聚合
+    → handleUnifiedAgentResponse()
+      → AgentPlanParser::parse()       // 解析计划
+      → AgentOrchestrator::executePlanAndReportToChat()
+        → AgentToolRegistry::execute() // lambda 执行工具
+        → AutoFix: cmake + ctest       // 自动验证
+```
+
+### 第四轮：深入一个子系统（1 小时）
+
+选一个感兴趣的深入：
+
+| 子系统 | 入口文件 | 关键逻辑 |
+|--------|---------|---------|
+| 工具注册 | `AgentToolRegistry.cpp` | `registerFileTools()`→`registerCommandTools()`→... 看一个工具是怎么注册的 |
+| 记忆系统 | `ProjectMemoryManager.cpp` | `buildMemorySection()` 看三层记忆怎么拼接 |
+| 桌面输入 | `InputSimulator.cpp` | `sendText()`→`mouseClick()`→`keyPress()` 看 SendInput 细节 |
+| 技能匹配 | `SkillManager.cpp` | `matchSkills()` 看触发词怎么命中 |
+| 上下文管理 | `ContextWindowManager.cpp` | 超 85% 阈值时怎么压缩 |
+
+### 关键入口速查表
+
+| 你想了解 | 从这里开始 |
+|---------|-----------|
+| 项目怎么启动 | `src/main.cpp` → `MainWindow` 构造 |
+| 控制层怎么初始化 | `ApplicationController::initialize()` |
+| 一次 Chat 请求怎么发 | `ApplicationController::sendMessage()` |
+| 一次 Agent 请求怎么发 | `ApplicationController::sendAgentLoopMessage()` |
+| 一个工具怎么注册 | `AgentToolRegistry::defaultRegistry()` |
+| Agent 循环怎么跑 | `AgentOrchestrator::buildNextLoopPrompt()` |
+| 记忆怎么注入 | `ProjectMemoryManager::buildMemorySection()` |
+| Skill 怎么匹配 | `SkillManager::matchSkills()` |
+| 文件怎么精确编辑 | `FileInteractionService::editTextFile()` |
+| 截图怎么工作 | `ScreenCaptureService::captureToFile()` |
+| 鼠标怎么点击 | `InputSimulator::mouseClick()` |
+| 上下文超了怎么办 | `ContextWindowManager::manageContext()` |

@@ -258,4 +258,84 @@
 
 参考回答：
 
+> 记忆文件只作为项目上下文，不自动保存聊天全文或模型输出。追加记忆必须走用户确认流程。明显包含凭据或密钥的内容会被拒绝。记忆不能扩大工具权限或绕过安全策略。
+
+---
+
+## v1.0 新增面试问题（V12 - V18 Agent 系统）
+
+## 44. 你的 Agent 系统是怎么工作的？
+
+参考回答：
+
+> 我实现了一个 Agentic Loop。用户输入目标后，系统先做意图分类——通过关键词把目标归到 7 种场景之一，比如改代码就是 CodeEdit。然后按意图把匹配的工具排到前面加 ⭐ 推荐，不相关的工具软限制 30 个。之后进入 OODA 循环：每一轮 AI 选择一个工具执行，执行完把结果追加到 observation，然后再让 AI 选择下一步。循环继续直到 AI 返回 done=true。过程中有重复动作检测、上下文压缩、输出截断续接等保护。
+
+## 45. 51 个工具有哪些类别？怎么管理的？
+
+参考回答：
+
+> 分为 7 大类：文件操作（read/save/edit/copy/move/delete/grep/archive 等 15 个）、命令执行（bash/git/cmake/ctest 等 6 个）、桌面感知（截图/OCR/窗口枚举/焦点控件/屏幕尺寸等 9 个）、桌面操作（鼠标点击拖拽滚轮/键盘输入/按键等 8 个）、剪贴板（读写 2 个）、网络请求（HTTP 的 GET/POST/下载/打开 URL 共 4 个）、代码执行（Python/JS 沙箱和子代理探索 2 个），还有 JSON 格式化、项目文件搜索等辅助工具。
+
+> 管理上用了统一注册表 AgentToolRegistry，每个工具一个条目包含 ID、描述、参数 schema、执行函数。新增工具只需要在注册表里加一个条目。7 个 CMake 子库按领域独立编译。
+
+## 46. Function Calling 是怎么实现的？
+
+参考回答：
+
+> Qt 的 QNetworkAccessManager 发起 HTTP 请求时会附带 tools 数组——这个数组是从 AgentToolRegistry 的 tool descriptors 自动生成的 Function Calling schema。模型返回的 tool_calls 增量文本由 StreamParser 实时聚合，解析出 function name 和 arguments。function name 必须在注册表中存在，否则拒绝。arguments 是 JSON object，由 lambda 闭包接收后调用对应的 FileInteractionService 或 InputSimulator。
+
+## 47. 桌面自动化具体怎么做？从截图到点击的全链路。
+
+参考回答：
+
+> 第一步 system.capture_screen 用 QScreen::grabWindow 截图存 PNG。第二步 system.ocr_text 用 Windows.Media.Ocr API 提取文字，获得坐标信息。第三步 system.active_control 用 UIAutomation COM 接口获取当前焦点控件名称和位置。第四步 input.validate_foreground 用 GetForegroundWindow 确认前台窗口正确。第五步 input.mouse_click 用 SetCursorPos + SendInput(INPUT_MOUSE) 点击目标坐标。第六步 input.type_text 用 SendInput(KEYEVENTF_UNICODE) 输入文本。整个过程有系统窗口黑名单保护，不能操作 Task Manager、UAC 弹窗、Ctrl+Alt+Del 屏幕。
+
+## 48. 三层记忆系统是什么？怎么设计的？
+
+参考回答：
+
+> L1 是用户级跨项目偏好，保存在 ~/.codex/MEMORY.md。L2 是项目级技术决策和约定，保存在 .workbuddy/memory/MEMORY.md。L3 是每日工作日志，Agent 执行完自动追加到 YYYY-MM-DD.md。
+
+> 设计上每一层独立读写。L3 有 14 天窗口、50 条上限、30K 字符硬上限。超过 14 天的日志进入 ISO 周压缩，通过 LLM 生成摘要保存为 compressed.md。所有三层记忆都通过 buildMemorySection() 拼接后注入到 systemPrompt。安全方面，包含 api_key、token、password 等敏感字段的内容会被自动拒绝。
+
+## 49. Skill 系统是什么？和工具注册表有什么关系？
+
+参考回答：
+
+> 工具注册表告诉 AI "你能用什么"，Skill 告诉 AI "在这个场景下你应该怎么用"。Skill 是一个 YAML frontmatter + Markdown 指令的 SKILL.md 文件，放在项目的 .workbuddy/skills/ 目录。用户输入触发词匹配到某个 Skill 时，Skill 的指令会注入到 Agent 提示词的 [Active Skills] 段。
+
+> 比如用户说"全自动开发：帮我改个 bug"，SkillManager 匹配到 auto-dev-cycle 这个 Skill，它的指令会告诉 AI：先读文件→修改→自动构建→测试→失败就修复→最终报告。Skill 只是工作流指导，不会绕过工具注册表的安全限制。
+
+## 50. 怎么防止 Agent 陷入死循环？
+
+参考回答：
+
+> 有三层防护。第一层是重复动作检测：同一个 toolId + 相同参数出现 3 次就终止，维护了一个指纹表。第二层是上下文压缩：Microcompact 把早期 observation 压缩为短摘要（只保留最近 5 条完整），Reactive 压缩在 API 报 context_length_exceeded 时触发。第三层是 Stop Hook：在提示词中注入规则，要求 AI 在 done=true 前必须验证目标是否真的完成了。
+
+## 51. 编辑代码后怎么自动验证？
+
+参考回答：
+
+> 我设计了一个 AutoFix 闭环。AgentOrchestrator 在执行完计划后，检测是否有 file.edit_text 或 workspace.write_text 这类编辑操作。如果有，自动用 QProcess 运行 cmake --build 和 ctest，把构建和测试结果作为 observation 注入到 Agent 循环中。如果构建或测试失败，AI 看到失败信息可以自动修复再重试。最多 5 次循环。
+
+## 52. 项目从聊天客户端到 Agent 平台的架构演进是怎样的？
+
+参考回答：
+
+> V1-V11 是聊天客户端阶段，重点是流式对话、会话管理、安全存储这些基础能力。V12 开始逐步加入 Agent 循环、连续执行能力。V13 是最重要的一步——加入三层记忆系统、Skill 系统和 Hook 系统，让 Agent 有了"记忆"和"场景化行为"。V14-V15 加入桌面自动化和架构重构，ApplicationController 从一个 350 行的单体类拆分为三个 Coordinator。V18 是能力爆发期，工具从 20 多个扩展到 51 个，加上了意图感知工具排序、AutoFix、智能步骤折叠。
+
+> 整个演进过程我是独立完成的。从"能聊天"到"能像人一样操作电脑"，每一步的架构决策都是基于前一步遇到的问题。
+
+## 53. 为什么选 C++/Qt 做 Agent 而不是 Python？
+
+参考回答：
+
+> 功能上说，Python 的 langchain/autogen 确实生态更成熟，但我做这个项目的目标是：第一，练 C++ 工程化能力；第二，能做 Python 做不了的事——比如 SendInput 键盘鼠标模拟、UIAutomation 控件定位、Windows Credential Manager 凭据存储，这些在 Qt/Win32 里是一手 API，Python 反而要绕很多层。另外 65 个 CTest 测试让我对 C++ 项目的构建、测试、CI 流程有了真实经验，这是调 Python 包得不到的。
+
+## 54. 这个项目最大的技术难点是什么？
+
+参考回答：
+
+> 最难的倒不是某个单一技术点，而是系统复杂度的管理。从 20 个工具到 51 个工具，从 1 个 ApplicationController 到 3 个 Coordinator + 7 个工具子库，每一步都要保证 65 个测试零回归。印象最深的是工具注册表的设计——一开始工具描述散落在 Prompt 构建、计划执行、Function Calling schema 三个地方，每加一个工具要改三处。后来我把它统一到 AgentToolRegistry，描述和执行函数来自同一份定义，新增工具只需要 10 行代码。这就是设计模式里说的"单一数据源"。
+
 > V10.3 的记忆是项目级受控记忆，不是自动长期记忆。应用会读取项目目录下的 `AGENT_MEMORY.md` 作为受限上下文；追加记忆必须通过 `memory.append_project_note` 工具，并经过计划窗口和用户确认。服务层会拒绝明显包含 API Key、password、token、Bearer、secret 等敏感字段的内容，也限制单条记忆长度。记忆只帮助 Agent 理解用户明确要求保存的偏好或项目决策，不能扩大工具权限、绕过确认或覆盖本地安全策略。

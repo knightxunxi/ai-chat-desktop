@@ -237,3 +237,130 @@ flowchart TD
 - 在 V6 文件工具基础上进入 V7 AI 任务拆解和受控工具建议。
 - 在 V9 命令执行基础上进入开发者技能、项目级指令和工作记忆。
 - 在 V12/V13 之后再评估操作记录和设备输入模拟。
+
+## 6. v1.0 新增模块（V12 - V18）
+
+以下模块在项目从"聊天客户端"迭代为"桌面 Agent 平台"过程中加入。
+
+### `src/memory/` — 三层记忆系统（V13+）
+
+负责 AI Agent 的长期记忆能力。
+
+代表文件：
+
+- `MemoryEntry.h`：记忆条目数据结构。
+- `DailyMemoryWriter.h/.cpp`：每日日志写入器，追加到 `YYYY-MM-DD.md`。
+- `ProjectMemoryManager.h/.cpp`：三层记忆管理器。L1（`~/.codex/MEMORY.md`）用户级跨项目偏好，L2（`.workbuddy/memory/MEMORY.md`）项目级技术决策，L3 每日日志。支持检索、压缩、敏感内容检测和 systemPrompt 注入。
+
+设计要点：
+- 每层独立读写，不互相覆盖。
+- L3 日志超过 14 天后进入 ISO 周压缩（通过 LLM 生成摘要）。
+- 敏感内容自动拒绝（api_key / token / password / secret / bearer / credential / private_key）。
+- 30K 字符总预算硬上限，单条 2000 字符截断。
+
+### `src/skills/` — 技能系统（V13.3+）
+
+让 Agent 按场景加载工作流指令。
+
+代表文件：
+
+- `SkillDefinition.h`：技能元数据（名称、描述、触发词、优先级、版本）。
+- `SkillFileParser.h/.cpp`：手写 YAML frontmatter 解析器（不从 YAML 库依赖）。
+- `SkillManager.h/.cpp`：双目录扫描（用户级 `~/.workbuddy/skills/` + 项目级 `.workbuddy/skills/`），子串触发词匹配，优先级合并。
+
+当前 15 个 Skill：3 工作流（全自动开发 / 代码审查 / 项目扫描）+ 12 工具（JSON 格式化、文件读写等）。
+
+### `src/hooks/` — Hook 系统（V13.3+）
+
+在 Agent 循环生命周期注入检查点。
+
+代表文件：
+
+- `HookDefinition.h`：Hook 类型枚举（BeforePlan / AfterObservation / BeforeAction / AfterAction / BeforeDone / OnError）。
+- `HookManager.h/.cpp`：管理 6 个生命周期钩子。
+- `BuiltinHooks.h/.cpp`：内置 Hook（Timestamp 记录、RateLimit 速率限制、SensitiveFilter 敏感过滤）。
+- `ScriptHookRunner.h/.cpp`：QProcess 沙箱执行外部 Hook 脚本。
+
+### `src/app/` — 应用层重构（V15+）
+
+ApplicationController 从单体拆分为三个 Coordinator：
+
+- `ConfigCoordinator`：配置管理 + Prompt 模板。
+- `SessionCoordinator`：会话生命周期 + SQLite 持久化。
+- `AgentOrchestrator`：Agent 循环编排，持有 SkillManager、HookManager、AgentToolRegistry。
+
+新增文件：
+- `AgentLoopController.h/.cpp`：OODA 循环（Observe→Think→Act→Evaluate），支持消重复动作检测和 Microcompact 压缩。
+- `AgentLoopPromptBuilder.h/.cpp`：生成 Agent 单步提示词，支持意图分类 ⭐ 工具排序、最佳实践注入和工具序列记忆。
+- `ContextWindowManager.h/.cpp`：上下文窗口管理，85% 阈值触发压缩，保留最近 3 轮 + LLM 摘要。
+
+### `src/tools/` — 工具系统重构（V15.4+）
+
+从单个 `tools/` 目录拆分为 7 个 CMake 子库：
+
+| 子库 | 内容 |
+|------|------|
+| `codexx_tools_registry` | AgentToolRegistry、AgentToolCatalog、ToolResult |
+| `codexx_tools_core` | FileInteractionService、WorkspacePolicy、CommandRunner |
+| `codexx_tools_perception` | WindowDetector、ScreenCaptureService、SystemInfoService |
+| `codexx_tools_input` | InputSimulator（SendInput 键盘鼠标模拟） |
+| `codexx_tools_dev` | UiAutomationService、ProjectFindService、ForegroundValidator |
+| `codexx_tools_text` | JSON/Markdown/Text 清理工具 |
+| `codexx_tools_assistant` | AssistantService（工作日报、提醒） |
+
+每子库独立编译，依赖方向明确（tools_core ← tools_input ← AgentToolRegistry）。
+
+### 桌面自动化层（V14+ / V18.2+）
+
+| 能力 | 实现 |
+|------|------|
+| 屏幕截图 | `ScreenCaptureService` → QScreen grabWindow |
+| OCR 文字提取 | `OcrService` → Windows OCR（Windows.Media.Ocr） |
+| 窗口枚举 | `WindowDetector` → Win32 EnumWindows |
+| UIA 控件定位 | `UiAutomationService` → IUIAutomation COM 接口 |
+| 键盘输入 | `InputSimulator` → Win32 SendInput(KEYEVENTF_UNICODE) |
+| 鼠标操作 | `InputSimulator` → SendInput(INPUT_MOUSE) + SetCursorPos |
+| 剪贴板 | QApplication::clipboard() |
+
+这些能力让 Agent 可以像人一样操作电脑，而不只是操作文件系统。
+
+## 7. v1.0 整体架构图
+
+```text
+用户操作
+  ↓
+src/ui           Qt Widgets 界面层（ChatView, AgentStepGroupWidget, SettingsDialog...）
+  ↓
+src/app          ┌─ ConfigCoordinator（配置+Prompt）
+                 ├─ SessionCoordinator（会话+持久化）
+                 └─ AgentOrchestrator（Agent循环+Skills+Hooks+AutoFix）
+  ↓
+src/services     AI API 客户端（OpenAICompatibleClient + StreamParser）
+src/memory       三层记忆（L1/L2/L3 → systemPrompt 注入）
+src/skills       15 个 Skill（工作流 + 工具）
+src/hooks        6 个生命周期钩子（速率限制 / 敏感过滤 / 外部脚本）
+  ↓
+src/tools        ┌─ registry（51 工具注册表）
+                 ├─ core（文件交互、工作区策略、命令运行）
+                 ├─ perception（窗口、截图、OCR）
+                 ├─ input（键盘鼠标 Win32 模拟）
+                 ├─ dev（UIA 控件定位、文件搜索）
+                 ├─ text（JSON/Markdown 清理）
+                 └─ assistant（日报、提醒）
+  ↓
+src/core         核心数据模型（AppConfig, ChatSession, AgentPlan...）
+src/support      日志、脱敏等通用能力
+```
+
+## 8. v1.0 与早期版本的架构对比
+
+| 维度 | V1-V11 (聊天客户端) | V12-V18 (Agent 平台) |
+|------|-------------------|---------------------|
+| 工具数量 | ~15 个（文本+文件+命令） | **51 个**（7 领域） |
+| 架构复杂度 | ui→app→services→storage | 同左 + memory/skills/hooks + 7 工具子库 |
+| ApplicationController | 单体 ~350 行 .h | 拆为 3 个 Coordinator |
+| Agent 能力 | AI 建议计划→用户确认→执行 | 全自动 OODA 循环 + 意图排序 + AutoFix |
+| 桌面操作 | 无 | Win32/UIA 全链路（截图→OCR→点击→输入） |
+| 记忆 | 无 | 三层记忆 + 每周压缩 + systemPrompt 注入 |
+| 代码量 | ~10,000 行 | ~31,000 行 |
+| 测试 | ~30 个 | **65 个，100% 通过** |

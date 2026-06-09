@@ -520,4 +520,132 @@ flowchart TD
 - 不自动保存模型输出。
 - 追加记忆必须走计划预览和用户确认。
 - 明显包含凭据或密钥的内容会被拒绝。
+
+---
+
+## v1.0 新增流程（V12 - V18）
+
+以下流程是项目从聊天客户端进化为桌面 Agent 平台后新增的关键能力。
+
+## 21. Agentic Loop 全自动执行流程
+
+V12 开始，Agent 循环进入连续 OODA 模式，最高支持 50 轮。
+
+```mermaid
+flowchart TD
+    Goal["用户输入目标"] --> Classify["classifyGoal() 意图分类"]
+    Classify --> Reorder["⭐ 工具排序（匹配工具前移）"]
+    Reorder --> Prompt["buildNextActionPrompt() 注入最佳实践"]
+    Prompt --> AI["AI 模型返回 { done, step }"]
+    AI --> Check{"done=true?"}
+    Check -->|是| StopCheck["Stop Hook: 验证目标完成"]
+    StopCheck -->|通过| Done["循环完成"]
+    StopCheck -->|未完成| Continue["继续循环"]
+    Check -->|否| Execute["AgentToolRegistry::execute()"]
+    Execute --> Observe["追加 observation"]
+    Observe --> Detect{"重复动作检测？"}
+    Detect -->|3 次重复| Reject["终止循环"]
+    Detect -->|否| Compact["Microcompact 压缩早期观测"]
+    Compact --> Prompt
+```
+
+关键点：
+- 每轮只执行一个工具步骤。
+- 重复动作指纹检测：同 toolId + 同参数 3 次 → 终止。
+- 上下文超限时触发 Reactive 压缩（压 50% observation → 重试 3 次）。
+- 输出截断（finish_reason=length）自动续接。
+
+## 22. 意图感知工具排序流程
+
+V18.6 新增，让 AI 不会在 60 个工具中迷失。
+
+```
+classifyGoal("帮我改代码") → CodeEdit 意图
+  ↓
+reorderToolsByIntent() 
+  → file.edit_text ⭐（排第 1）
+  → file.read_text ⭐（排第 2）
+  → command.bash  ⭐（排第 3）
+  → ...
+  → input.mouse_click（排最后，带软限制 30 个截断）
+  ↓
+buildToolGuidance()
+  → "• file.edit_text: 精确替换...先用 old_str 定位再替换"
+  → "• command.bash: 执行构建测试...用绝对路径"
+```
+
+7 种意图：CodeEdit / CodeSearch / BuildTest / FileManage / DesktopOp / WebRequest / ShellCmd。
+
+## 23. AutoFix 自动修复闭环
+
+V18.5 新增。Agent 编辑代码后自动触发：
+
+```mermaid
+sequenceDiagram
+    participant Agent as Agent
+    participant Orchestrator as AgentOrchestrator
+    participant CMake as cmake --build
+    participant CTest as ctest
+
+    Agent->>Orchestrator: 执行 file.edit_text
+    Orchestrator->>Orchestrator: 检测到编辑操作
+    Orchestrator->>CMake: QProcess 执行构建（60s 超时）
+    CMake->>Orchestrator: 构建结果
+    Orchestrator->>CTest: QProcess 执行测试（60s 超时）
+    CTest->>Orchestrator: 测试结果
+    Orchestrator->>Orchestrator: 结果注入为 observation
+    Note over Agent: AI 看到构建/测试结果，失败则自动修复
+```
+
+## 24. 三层记忆注入流程
+
+V13.1+ 开始，Agent 循环每次都注入记忆。
+
+```mermaid
+flowchart TD
+    Loop["Agent 循环开始"] --> L1["读取 ~/.codex/MEMORY.md（用户偏好）"]
+    L1 --> L2["读取 .workbuddy/memory/MEMORY.md（项目约定）"]
+    L2 --> L3["读取 YYYY-MM-DD.md（每日日志，14 天窗口）"]
+    L3 --> Compress["查找压缩摘要（YYYY-Www-compressed.md）"]
+    Compress --> Build["buildMemorySection() 拼接记忆片段"]
+    Build --> Inject["注入到 systemPrompt"]
+```
+
+关键点：
+- L1/L2 内容全量注入（体积可控）。
+- L3 按 14 天窗口 + 50 条上限 + 30K 字符硬上限过滤。
+- 14 天前的日志进入 ISO 周压缩（LLM 摘要 → `*-compressed.md`）。
+
+## 25. Skill 匹配与注入流程
+
+V13.3+ 开始，用户输入触发的 Skill 自动注入提示词。
+
+```mermaid
+flowchart TD
+    Input["用户输入"全自动开发：改代码""] --> Match["SkillManager::matchSkills()"]
+    Match --> Scan["扫描 ~/.workbuddy/skills/ + .workbuddy/skills/"]
+    Scan --> Trigger["子串匹配触发词（"全自动开发"命中）"]
+    Trigger --> Load["SkillFileParser 解析 SKILL.md"]
+    Load --> Priority["按 priority 排序（100 > 0）"]
+    Priority --> Inject["[Active Skills] 段注入 Agent 提示词"]
+```
+
+## 26. 桌面自动化闭环
+
+Agent 操作桌面的完整认知-执行链条：
+
+```
+1. system.capture_screen      → 截图当前屏幕
+2. system.ocr_text             → OCR 提取文字，定位坐标
+3. system.active_control       → 获取当前焦点控件信息
+4. input.validate_foreground   → 确认前台窗口正确
+5. input.mouse_click(x, y)     → 点击目标位置
+6. input.type_text("hello")    → 输入文本
+7. system.get_selected_text    → Ctrl+C 获取结果
+```
+
+关键安全边界：
+- 系统窗口黑名单（Task Manager / UAC / Ctrl+Alt+Del）。
+- 禁止向密码域发送输入。
+- 操作前必须校验前台窗口。
 - 记忆文件只作为项目上下文，不能覆盖安全规则。

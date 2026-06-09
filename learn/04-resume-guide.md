@@ -151,6 +151,88 @@ Result：用户可以更快定位配置或网络问题，并直接重试。
 
 更稳妥的说法：
 
-- “接近企业桌面应用开发流程的个人项目”。
-- “围绕安全存储、可诊断性、测试和发布做了工程化补齐”。
-- “后续可以继续补 UI 自动化测试、全文索引和更完整的 Markdown 渲染”。
+- "接近企业桌面应用开发流程的个人项目"。
+- "围绕安全存储、可诊断性、测试和发布做了工程化补齐"。
+- "后续可以继续补 UI 自动化测试、全文索引和更完整的 Markdown 渲染"。
+
+---
+
+## 11. v1.0 更新：Agent 平台化表达
+
+v1.0 后，项目已从聊天客户端进化为桌面 Agent 平台，简历应体现这些新能力。
+
+### 更新后的简历项目描述
+
+```text
+CodeXX (AI Chat Desktop) 桌面 AI Agent 平台 | C++17 / Qt 6 / Win32 / CMake
+
+- 基于 Qt6 Widgets 开发 Windows 桌面 AI Agent 平台，从基础聊天客户端迭代为完整的 Agent 系统。内置 51 个自动化工具，覆盖文件操作、命令执行、桌面操控、网络请求、代码运行等 7 大领域。
+- 实现 Agentic Loop 编排：7 种意图场景自动分类 → ⭐推荐工具优先排序 → 注入最佳实践提示；编辑后自动触发 cmake 构建 + ctest 测试（AutoFix 闭环），重复动作指纹检测防死循环。
+- 设计三层记忆系统（L1 用户级 / L2 项目级 / L3 每日日志），自动注入 systemPrompt；15 个 Skill 支持子串匹配与优先级合并；Hook 系统 6 个生命周期钩子。
+- 基于 Win32 API + UIAutomation 实现桌面自动化：SendInput 键盘鼠标模拟、UIA 控件定位、窗口枚举、截图 OCR、剪贴板读写。
+- 基于 Function Calling 协议实现 51 个工具的统一注册表，7 个 CMake 子库独立编译，65 项自动化测试零回归。
+- 使用 CMake/CTest/CI 搭建构建测试流程，GitHub 开源（v1.0, MIT），287 个 C++ 文件，约 31,000 行代码。
+```
+
+### 更新后的关键词
+
+新增技术关键词：
+- **Agentic Loop**、**Function Calling**、**OODA 循环**
+- **Win32 API**、**UIAutomation**、**SendInput**、**OCR**
+- **三层记忆系统**、**Skill 系统**、**Hook 系统**
+- **意图感知工具排序**、**AutoFix 自动修复闭环**
+
+## 12. STAR 故事 5：Agent 工具系统设计
+
+Situation：项目需要让 AI 不仅聊天，还能操作文件系统、执行命令、操控桌面。
+
+Task：设计一套可扩展的 Agent 工具注册表，让 AI 能安全调用本地能力。
+
+Action：
+- 设计 `AgentToolRegistry` 统一注册表，每个工具的 ID、描述、Schema、执行函数集中管理。
+- 按领域拆分为 7 个 CMake 子库（registry / core / perception / input / dev / text / assistant）。
+- 工具注册时绑定 lambda 闭包，工具描述自动转为 Function Calling schema。
+- 对危险操作建立安全边界：系统目录保护、危险命令黑名单、受保护文件校验。
+
+Result：51 个工具，统一注册表，新增工具 10 行代码即可注册。7 个子库独立编译，依赖方向明确。
+
+## 13. STAR 故事 6：桌面自动化闭环
+
+Situation：Agent 只能操作文件，无法像人一样使用 GUI 软件。
+
+Task：实现 Agent 的桌面感知和操作能力。
+
+Action：
+- 使用 Win32 `SendInput` 实现键盘（Unicode 输入 + 组合键）和鼠标（点击/拖拽/滚轮/位置查询）。
+- 使用 UIAutomation COM 接口实现控件定位（按名称/AutomationId 查找）。
+- 实现截图 → OCR 文字提取 → 坐标定位 → 点击输入的完整感知操作链路。
+- 加入系统保护窗口黑名单和前台窗口校验，防止误操作。
+
+Result：Agent 可以独立完成"打开浏览器→搜索→截图→OCR→点击→输入"的完整桌面操作。
+
+## 14. STAR 故事 7：Agent 死循环防护
+
+Situation：Agent 循环可能出现无限重复相同操作，消耗 API 额度。
+
+Task：设计多层防护机制。
+
+Action：
+- 同步路径：`AgentLoopController` 中维护 `seenActions` 指纹表，同 toolId+同参数 3 次 → 终止。
+- 异步路径：`AgentOrchestrator` 中维护 `m_actionFingerprints`，检测后注入警告 observation。
+- 上下文管理：Microcompact 压缩早期 observation，Reactive 压缩（API 报 context_length_exceeded 时）。
+- Stop Hook：done=true 前验证目标是否完成（提示词注入）。
+
+Result：Agent 循环不会无限运行。重复动作 3 次自动终止，上下文超限自动压缩重试。
+
+## 15. 不建议夸大的点（v1.0 更新）
+
+v1.0 之后，以下表述是**可以说的**：
+
+- "实现了完整的桌面 Agent 系统"
+- "具备 51 个自动化工具，覆盖 7 大领域"
+- "独立完成从基础聊天应用到 Agent 平台的架构演进"
+
+**仍然不建议说**的：
+- "具备企业级高并发能力"（单用户桌面应用）
+- "达到商业产品安全标准"（个人项目级别的安全实践）
+- "支持全平台"（目前仅 Windows）
