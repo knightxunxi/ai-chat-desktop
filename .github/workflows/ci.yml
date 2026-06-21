@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   windows:
-    name: Windows ${{ matrix.build_type }} (MinGW)
+    name: Windows ${{ matrix.build_type }} (MSVC)
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -28,28 +28,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Qt (MinGW)
+      - name: Install Qt (MSVC)
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.8.0"
           host: windows
           target: desktop
-          arch: win64_mingw
+          arch: win64_msvc2022_64
           cache: true
 
       - name: Configure
-        shell: bash
         run: >
           cmake
           -S .
           -B build-ci
-          -G "MinGW Makefiles"
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
       - name: Build
-        shell: bash
-        run: cmake --build build-ci -j4
+        run: cmake --build build-ci --config ${{ matrix.build_type }} --parallel 4
 
       - name: Test
-        shell: bash
         run: ctest --test-dir build-ci -C ${{ matrix.build_type }} --output-on-failure
