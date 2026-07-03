@@ -13,9 +13,11 @@
 
 1. [项目架构说明](01-architecture.md) — 分层结构、模块职责、v1.0 整体架构
 2. [关键业务流程](02-key-flows.md) — 26 个流程（Chat + Agent + 记忆 + 桌面自动化）
-3. [技术栈讲解](03-technology-notes.md) — 22 个技术点 + **8 项设计决策取舍** + 代码阅读指南
+3. [技术栈讲解](03-technology-notes.md) — 技术点 + 设计决策取舍 + 代码阅读指南
 4. [简历项目表达](04-resume-guide.md) — 项目描述、STAR 故事、关键词
 5. [面试问题预测与参考答案](05-interview-qa.md) — 54 道题（含 11 道 Agent 专题）
+6. [Agent 岗位求职准备](06-Agent岗位求职准备.md) — Agent 岗位市场分析、简历优化、高频考点、STAR 故事、自查清单
+7. [V19 Python 能力层学习](07-Python能力层学习.md) — Python sidecar、JSONL 协议、C++/Python 分层边界
 
 ## 文档层次
 
@@ -25,6 +27,8 @@
 03-technology-notes → WHAT + WHY + TRADE — 用什么技术、为什么选它、替代方案是什么
 04-resume-guide    → TALK   — 怎么讲给面试官
 05-interview-qa    → ANSWER — 怎么回答追问
+06-agent-job-prep  → MARKET  — 市场定位、岗位匹配、Agent 专属面试策略
+07-python-sidecar  → NEXT    — Python 能力层、协议设计、后续扩展路线
 ```
 
 ## 和 docs 目录的区别
@@ -50,3 +54,5 @@
 - 你怎么设计。
 - 为什么这样设计（替代方案是什么，为什么没选）。
 - 最后如何验证。
+
+后续开发学习资料默认使用中文；代码新增注释也以中文为主，重点解释模块职责、边界和非显而易见的设计原因，便于审查。

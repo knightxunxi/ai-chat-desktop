@@ -3,6 +3,10 @@ add_library(codexx_services STATIC
     AIClient.h
     OpenAICompatibleClient.h
     OpenAICompatibleClient.cpp
+    PythonSidecarClient.h
+    PythonSidecarClient.cpp
+    PythonSidecarProtocol.h
+    PythonSidecarProtocol.cpp
     RequestErrorCategory.h
     StreamParser.h
     StreamParser.cpp

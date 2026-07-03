@@ -11,7 +11,8 @@ src/ui          Qt Widgets 界面层
   ↓
 src/app         应用控制层
   ↓
-src/services    AI API 和流式响应服务
+src/services    AI API、流式响应服务、Python sidecar 协议客户端
+python/agent_sidecar  Python AI 能力层 sidecar（V19 实验分支）
 src/storage     本地配置、凭据、聊天记录、模板存储
 src/tools       本地文本工具
 src/core        核心数据模型
@@ -92,8 +93,12 @@ src/support     日志、日志读取等通用能力
 - `StreamParser.h/.cpp`：解析 Server-Sent Events 流式响应。
 - `ToolCall.h`：原生 Function Calling 工具调用数据结构。
 - `RequestErrorCategory.h`：请求错误分类。
+- `PythonSidecarProtocol.h/.cpp`：V19 Python sidecar JSONL 请求构造与响应解析。
+- `PythonSidecarClient.h/.cpp`：V19 通过 `QProcess` 启动 Python sidecar，处理请求、超时和 stderr。
 
 这一层屏蔽了 HTTP 请求、流式解析和错误分类细节，控制层只关心“收到增量文本、收到工具调用、请求完成、请求失败”这些事件。
+
+V19 开始增加 Python 能力层 sidecar。它不接管 Agent 主循环，也不执行本机高权限工具；C++ 仍负责 UI、会话、Agent 状态机、工具注册和权限边界，Python 只提供模型调用、token 统计、网页抽取、文档解析等更适合 Python 生态的能力。
 
 ### `src/storage`
 
@@ -199,6 +204,8 @@ flowchart TD
     MainWindow --> Controller["ApplicationController"]
     Controller --> Session["ChatSession"]
     Controller --> Client["OpenAICompatibleClient"]
+    Controller --> SidecarClient["PythonSidecarClient (V19 可选能力层)"]
+    SidecarClient --> PySidecar["python/agent_sidecar"]
     Client --> API["OpenAI 兼容 API"]
     API --> Client
     Client --> Parser["StreamParser"]
@@ -237,6 +244,7 @@ flowchart TD
 - 在 V6 文件工具基础上进入 V7 AI 任务拆解和受控工具建议。
 - 在 V9 命令执行基础上进入开发者技能、项目级指令和工作记忆。
 - 在 V12/V13 之后再评估操作记录和设备输入模拟。
+- 在 V19 Python sidecar 稳定后，把多厂商适配、精确 tokenizer、WebSearch 和文档解析逐步迁移到能力层。
 
 ## 6. v1.0 新增模块（V12 - V18）
 
@@ -335,7 +343,8 @@ src/app          ┌─ ConfigCoordinator（配置+Prompt）
                  ├─ SessionCoordinator（会话+持久化）
                  └─ AgentOrchestrator（Agent循环+Skills+Hooks+AutoFix）
   ↓
-src/services     AI API 客户端（OpenAICompatibleClient + StreamParser）
+src/services     AI API 客户端（OpenAICompatibleClient + StreamParser + PythonSidecarClient）
+python/agent_sidecar  Python 能力层（JSONL 协议，模型/token/Web/文档能力预留）
 src/memory       三层记忆（L1/L2/L3 → systemPrompt 注入）
 src/skills       15 个 Skill（工作流 + 工具）
 src/hooks        6 个生命周期钩子（速率限制 / 敏感过滤 / 外部脚本）
@@ -363,4 +372,4 @@ src/support      日志、脱敏等通用能力
 | 桌面操作 | 无 | Win32/UIA 全链路（截图→OCR→点击→输入） |
 | 记忆 | 无 | 三层记忆 + 每周压缩 + systemPrompt 注入 |
 | 代码量 | ~10,000 行 | ~31,000 行 |
-| 测试 | ~30 个 | **65 个，100% 通过** |
+| 测试 | ~30 个 | **68 个，100% 通过** |

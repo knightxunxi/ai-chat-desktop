@@ -36,6 +36,9 @@ Thumbs.db
 *.swp
 *.swo
 *~
+__pycache__/
+.pytest_cache/
+.venv/
 
 # Secrets
 .env
@@ -43,7 +46,5 @@ Thumbs.db
 *.pem
 credentials.json
 
-# WorkBuddy (project memory, not to commit)
-.workbuddy/memory/
-.workbuddy/blobs/
-.workbuddy/clipboard-images/
+# WorkBuddy
+.workbuddy/
