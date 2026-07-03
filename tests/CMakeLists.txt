@@ -198,6 +198,44 @@ target_link_libraries(OpenAICompatibleClientTest PRIVATE
 
 add_test(NAME OpenAICompatibleClientTest COMMAND OpenAICompatibleClientTest)
 
+add_executable(PythonSidecarProtocolTest
+    services/PythonSidecarProtocolTest.cpp
+)
+
+target_link_libraries(PythonSidecarProtocolTest PRIVATE
+    Qt6::Core
+    codexx_services
+)
+
+add_test(NAME PythonSidecarProtocolTest COMMAND PythonSidecarProtocolTest)
+
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME PythonAgentSidecarTest
+        COMMAND ${Python3_EXECUTABLE} -m unittest discover -s ${PROJECT_SOURCE_DIR}/python/agent_sidecar/tests
+    )
+    set_tests_properties(PythonAgentSidecarTest PROPERTIES
+        ENVIRONMENT "PYTHONPATH=${PROJECT_SOURCE_DIR}/python/agent_sidecar"
+    )
+
+    add_executable(PythonSidecarClientTest
+        services/PythonSidecarClientTest.cpp
+    )
+
+    target_compile_definitions(PythonSidecarClientTest PRIVATE
+        CODEXX_PYTHON_EXECUTABLE="${Python3_EXECUTABLE}"
+        CODEXX_PYTHON_SIDECAR_DIR="${PROJECT_SOURCE_DIR}/python/agent_sidecar"
+    )
+
+    target_link_libraries(PythonSidecarClientTest PRIVATE
+        Qt6::Core
+        codexx_services
+    )
+
+    add_test(NAME PythonSidecarClientTest COMMAND PythonSidecarClientTest)
+endif()
+
 # =========================================================================
 # Support 测试
 # =========================================================================

@@ -16,6 +16,7 @@
 3. [技术栈讲解](03-technology-notes.md) — 22 个技术点 + **8 项设计决策取舍** + 代码阅读指南
 4. [简历项目表达](04-resume-guide.md) — 项目描述、STAR 故事、关键词
 5. [面试问题预测与参考答案](05-interview-qa.md) — 54 道题（含 11 道 Agent 专题）
+6. [Agent 岗位求职准备](06-Agent岗位求职准备.md) — Agent 岗位市场分析、简历优化、高频考点、STAR 故事、自查清单
 
 ## 文档层次
 
@@ -25,6 +26,7 @@
 03-technology-notes → WHAT + WHY + TRADE — 用什么技术、为什么选它、替代方案是什么
 04-resume-guide    → TALK   — 怎么讲给面试官
 05-interview-qa    → ANSWER — 怎么回答追问
+06-agent-job-prep  → MARKET  — 市场定位、岗位匹配、Agent 专属面试策略
 ```
 
 ## 和 docs 目录的区别

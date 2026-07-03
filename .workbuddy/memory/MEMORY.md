@@ -98,3 +98,7 @@ AC 保留：AI 客户端（m_aiClient）、Chat 消息流（sendMessage→handle
 
 ## 已知问题
 - 项目有 4 个 exe 构建目录 (build/, build-qt/, build-release-qt/, release/)，需保持同步
+
+## 学习资料体系 (2026-07-01)
+- learn/ 目录 6 份文档：架构→流程→技术栈→简历→面试QA→Agent岗位求职
+- 最后一份 `06-Agent岗位求职准备.md`：Agent 岗位市场分析、JD 关键词与 CodeXX 覆盖度映射、Agent 专用简历描述、7 道 Agent 高频面试考点、3 个 Agent STAR 故事、岗位匹配度自查表
