@@ -1,6 +1,6 @@
 # CodeXX Agent 岗位求职准备
 
-> 基于 CodeXX 项目（23,448行 C++/Qt6，65个 CTest，12个静态库）
+> 基于 CodeXX 项目（约 3 万行 C++/Qt6，68 个 CTest，12 个 CMake 静态库）
 > 目标岗位：AI Agent 开发工程师 / LLM应用开发 / 智能体引擎开发
 
 ---
@@ -26,6 +26,7 @@ Prompt Engineering / 提示工程   — 80% 的岗位会提
 MCP（Model Context Protocol）  — 2025后热门，40% 岗位
 Agent Loop / ReAct / Plan-Execute — 60% 会提
 LangChain / AutoGen / CrewAI   — Python 栈常提
+Sidecar / JSONL / JSON-RPC     — 混合语言 Agent 架构常见
 流式输出 / SSE                  — 基础能力，普遍要求
 记忆系统 / Memory              — 30% 会提
 安全沙箱 / 工具权限控制         — 大厂/金融看重
@@ -46,6 +47,7 @@ LangChain / AutoGen / CrewAI   — Python 栈常提
 | 桌面自动化 | SendInput 键鼠模拟 + UIAutomation + OCR + 截图 + 前台窗口校验 | ✅ Win32原生 |
 | 工具注册表 | AgentToolRegistry，35+工具，7类，单一数据源，Lambda执行体 | ✅ 教科书级 |
 | Hook插件 | 6个Hook点 + BuiltinHook + ScriptHookRunner + QProcess沙箱 | ✅ 可扩展 |
+| Python 能力层 | Python sidecar + JSONL 协议 + C++ QProcess 客户端 | ✅ V19 已启动 |
 
 ---
 
@@ -80,7 +82,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 - 桌面自动化闭环：Win32 SendInput 键鼠模拟 + UIAutomation 控件定位 +
   Windows.Media.Ocr OCR + 前台窗口黑名单安全校验。
 - 集成 MCP 协议支持，JSON-RPC over QProcess 连接外部工具服务器。
-- 65 个 CTest 自动化测试零回归，12 个 CMake 静态库分层架构。
+- 68 个 CTest 自动化测试零回归，12 个 CMake 静态库分层架构，并启动 Python sidecar 能力层演进。
 ```
 
 ### 2.3 一句话项目描述（不同场合）
@@ -159,7 +161,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 - 把 762 行的 defaultRegistry() 拆为 9 个类别化注册函数（registerFileTools/registerPerceptionTools...）
 - tools/ 目录拆为 7 个 CMake 子库按领域独立编译
 
-**R**：新增工具从"改 3 个文件"变成"Registry 里加 10 行"，65 个测试零回归。面试时可以直接展示代码：`REGISTER_TOOL("file.read_text", ..., [](const QJsonObject &args) { ... });`
+**R**：新增工具从"改 3 个文件"变成"Registry 里加 10 行"，68 个测试零回归。面试时可以直接展示代码：`REGISTER_TOOL("file.read_text", ..., [](const QJsonObject &args) { ... });`
 
 ### STAR 2：ApplicationController 上帝对象拆分
 
@@ -174,7 +176,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 - AC 从 350→220 行（-37%），.cpp 从 1600→1270 行（-21%）
 - Coordinator signals → AC connect 转发 → MainWindow，上层零改动
 
-**R**：65 个测试全部通过，零回归。架构师的角色在这里体现——不是"能跑就行"，而是"怎么跑得更好维护"。
+**R**：68 个测试全部通过，零回归。架构师的角色在这里体现——不是"能跑就行"，而是"怎么跑得更好维护"。
 
 ### STAR 3：Agent 会话恢复
 
@@ -190,6 +192,20 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 
 **R**：Agent 循环从"一次性"变成"可恢复"，提升了生产级的可靠性。
 
+### STAR 4：C++ 主控 + Python 能力层演进
+
+**S**：项目的 UI、Agent 循环、工具执行和桌面自动化都已在 C++/Qt 中稳定运行，但后续多厂商 SDK、精确 tokenizer、embedding、网页抽取、文档解析、Playwright 浏览器自动化更适合 Python 生态。
+
+**T**：在不重写 Agent 主循环的前提下，引入 Python 能力层，为后续 AI 能力扩展留出架构空间。
+
+**A**：
+- 保留 C++ 作为主控层，继续负责 UI、会话、Agent 状态机、工具注册和权限边界。
+- 新增 Python sidecar，通过 stdin/stdout 上的 JSONL 协议提供 `ping`、`token.count`、`model.chat` 等能力。
+- C++ 新增 `PythonSidecarProtocol` 和 `PythonSidecarClient`，用 `QProcess` 管理子进程、请求超时、stderr 和结构化错误。
+- 新增 Python 单元测试、C++ 协议测试和 C++ 启动真实 Python sidecar 的集成测试。
+
+**R**：Python 能力层已能独立运行并被 C++ 调用，CTest 演进到 68/68 通过；后续可在不破坏 C++ Agent 主循环的情况下接入 tokenizer、WebSearch、文档解析和 Playwright。
+
 ---
 
 ## 五、岗位匹配度自查表
@@ -197,7 +213,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 | 岗位方向 | CodeXX 匹配度 | 需要补的知识 |
 |----------|:---:|------|
 | AI Agent 开发（C++） | ⭐⭐⭐⭐⭐ 95% | 几乎全部覆盖 |
-| AI Agent 开发（Python） | ⭐⭐⭐ 60% | LangChain/AutoGen/CrewAI 框架 |
+| AI Agent 开发（Python） | ⭐⭐⭐⭐ 75% | Python sidecar 已启动，后续补 tokenizer/embedding/Web/Playwright |
 | LLM 应用开发 | ⭐⭐⭐⭐ 80% | RAG 专项（向量数据库/Milvus） |
 | 后端开发（C++） | ⭐⭐⭐ 65% | 网络编程/多线程/分布式 |
 | 桌面应用开发（Qt） | ⭐⭐⭐⭐⭐ 90% | CodeXX 本身就是 Qt 项目 |
@@ -210,7 +226,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 | P0 | **AI 平台工具开发** | Function Calling/MCP 是核心能力 |
 | P1 | **Qt 桌面开发** | 技术栈完全匹配 |
 | P1 | **通用 C++ 后端** | 项目体现工程能力 |
-| P2 | **Python AI 开发** | 需要额外学 LangChain，但 Agent 思维通用 |
+| P1 | **Python AI 开发** | V19 已开始 Python 能力层，重点补 tokenizer、embedding、Web/文档处理 |
 
 ---
 
@@ -226,6 +242,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 - [ ] 记忆系统的三层设计和压缩策略
 - [ ] 上下文窗口管理的压缩触发条件
 - [ ] AutoFix 闭环（编辑→编译→测试→修复）
+- [ ] Python sidecar 为什么只做能力层、不接管 Agent 主循环
 
 ### 必须能写出来（白板）
 

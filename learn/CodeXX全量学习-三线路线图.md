@@ -30,6 +30,7 @@
 | QSS 样式表 | `resources/styles/app.qss` | 813 行暗/亮双主题 |
 | eventFilter 拦截事件 | `MainWindow.cpp` | Ctrl+V 粘贴检测 |
 | QProcess 外部进程 | `McpConnector.cpp`, `CommandRunner.cpp` | MCP 协议、命令执行 |
+| Python sidecar | `PythonSidecarClient.cpp`, `python/agent_sidecar` | V19 能力层，JSONL over QProcess |
 | QSyntaxHighlighter | `CodeHighlighter.cpp` | 12 种语言语法着色 |
 
 ### 1.3 C++ 工程能力
@@ -54,6 +55,7 @@
 | JSON 流式累积判断完整性 | `StreamParser.cpp:161-188` | `QJsonDocument::fromJson() != null` |
 | OpenAI API 协议 | `buildRequestBody` | messages + tools + stream + tool_choice |
 | 多模态图片格式 | `OpenAICompatibleClient.cpp:265-280` | base64 → `{type:"image", image:{data, format}}` |
+| Python 能力层协议 | `PythonSidecarProtocol.cpp`, `protocol.py` | 一行一个 JSON 请求/响应，带 id/ok/error |
 
 ### 1.5 算法与数据结构
 
@@ -71,7 +73,8 @@
 第1周: CMake 静态库拆分 + 信号槽
 第2周: QMainWindow 布局 + QSS 样式
 第3周: HTTP 客户端 + SSE 流式解析
-第4周: 智能指针 + 工厂模式 + JSON 序列化
+第4周: QProcess + Python sidecar + JSONL 协议
+第5周: 智能指针 + 工厂模式 + JSON 序列化
 ```
 
 ---
@@ -82,7 +85,7 @@
 
 | 知识点 | 对应文件 | 做什么 |
 |--------|---------|--------|
-| CTest 注册与执行 | `tests/CMakeLists.txt` | `add_test(NAME ...)` 注册 67 个 |
+| CTest 注册与执行 | `tests/CMakeLists.txt` | `add_test(NAME ...)` 注册 68 个 |
 | `assert()` 断言机制 | 每个测试 exe 的 `main()` | 失败→abort→退出码≠0→CTest FAILED |
 | 测试金字塔 | 整个 tests/ | 45单元+8集成+2系统 |
 | 每个测试 exe 链接最小静态库 | `tests/CMakeLists.txt` | CronParserTest 只链 `codexx_scheduler` |
@@ -147,7 +150,7 @@
 | 持续集成 | ❌ 无 CI | 学习如何加 GitHub Actions / Jenkins |
 | 持续部署 | ❌ 手动 | 学习如何加自动打包发布 |
 | 自动化测试流水线 | 手动 `ctest` | 学习如何在 CI 中触发 `ctest --output-on-failure` |
-| 版本号管理 | `CMakeLists.txt` 中 `VERSION 0.3.0` | 学习语义化版本 |
+| 版本号管理 | `CMakeLists.txt` 中 `VERSION 1.0` | 学习语义化版本 |
 
 ### 3.3 日志与监控
 
@@ -185,7 +188,7 @@
 | 岗位 | 核心技能 | CodeXX 知识点 | 可写到简历上的话 |
 |------|---------|-------------|---------------|
 | **C++ 开发** | Qt6、CMake | 12 静态库架构、信号槽 | "参与 Qt6/C++ AI 桌面应用开发，实现 Agent 循环和 30+ 工具系统" |
-| **QA 测试** | 单元/集成/系统测试 | 67 个 CTest | "从零建立自动化测试体系，覆盖 67 个测试用例，使用 assert 框架" |
+| **QA 测试** | 单元/集成/系统测试 | 68 个 CTest | "从零建立自动化测试体系，覆盖 68 个测试用例，使用 assert 框架" |
 | **DevOps** | CI/CD、打包 | 4 个 build 目录 | "配置 CMake 多编译器构建，实现 Debug/Release 自动化打包" |
 | **AI 应用开发** | Function Calling、Agent | Agent 循环全流程 | "实现 OpenAI-compatible 的 Agent 循环，支持 50 轮自主决策" |
 | **安全工程师** | 注入防护、凭证过滤 | Hook 系统 | "实现 4 层注入防护：prompt 围栏+敏感过滤+截断+系统保护" |
@@ -201,4 +204,5 @@
 | 学 Qt 信号槽 | `ApplicationController.h` 的 signals 区域 → `MainWindow.cpp` 的 connectController | 1 小时 |
 | 学测试 | `learn/软件测试学习-理论对照CodeXX实操.md` | 4 小时（含动手） |
 | 学 Agent 循环 | `AgentLoopPromptBuilder.cpp` → `AgentOrchestrator.cpp` → `ApplicationController.cpp:handleRequestFinished` | 2 小时 |
+| 学 Python 能力层 | `learn/07-Python能力层学习.md` | 1 小时 |
 | 面试准备 | 上面 5 个都过一遍，挑 2 个深入 | 1 天 |

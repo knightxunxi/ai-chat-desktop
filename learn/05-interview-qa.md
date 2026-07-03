@@ -114,7 +114,7 @@
 
 参考回答：
 
-> 项目使用 CTest 统一运行测试。测试覆盖核心模型、服务商预设、会话列表排序、SSE 解析、请求体构建、HTTP 错误分类、配置和凭据迁移、SQLite 存储、Markdown 导出、日志脱敏、日志读取、本地工具逻辑、文件交互服务、Agent 工具目录、计划解析、计划 Prompt、低风险步骤执行、工作目录策略、工作目录文件服务、Agentic Loop、工具注册表、Function Calling schema、tool_calls 流式解析、受控命令执行策略、命令运行器、开发者命令技能目录、外部技能文件、工具调用计划转换、项目级指令读取和受控工作记忆，以及多个 UI smoke test。当前是 40 个测试全部通过。
+> 项目使用 CTest 统一运行测试。测试覆盖核心模型、服务商预设、会话列表排序、SSE 解析、请求体构建、HTTP 错误分类、配置和凭据迁移、SQLite 存储、Markdown 导出、日志脱敏、日志读取、本地工具逻辑、Agent 工具目录、计划解析、Agentic Loop、工具注册表、Function Calling schema、tool_calls 流式解析、命令执行策略、记忆/Skills/Hooks/MCP、UI smoke test，以及 V19 Python sidecar 协议和 QProcess 客户端。当前是 68 个测试全部通过。
 
 ## 20. UI 部分怎么测试？
 
@@ -126,7 +126,7 @@
 
 参考回答：
 
-> 使用 CMake 配置 Release 构建，生成 `AIChatDesktop.exe` 后，用 Qt 的 `windeployqt` 收集 Qt 运行依赖、平台插件、SQL 驱动和 TLS 插件。最后把发布目录压缩成 zip。V3 已生成 `AIChatDesktop-0.3.0-windows.zip`，并做过发布目录启动关闭 smoke check。
+> 使用 CMake 配置 Release 构建，生成 `AIChatDesktop.exe` 后，用 Qt 的 `windeployqt` 收集 Qt 运行依赖、平台插件、SQL 驱动和 TLS 插件。最后把发布目录压缩成 zip。v1.0 已生成 `AIChatDesktop-1.0-windows.zip`，并做过发布目录启动关闭 smoke check。
 
 ## 22. 如果让你继续优化，你会做什么？
 
@@ -330,12 +330,12 @@
 
 参考回答：
 
-> 功能上说，Python 的 langchain/autogen 确实生态更成熟，但我做这个项目的目标是：第一，练 C++ 工程化能力；第二，能做 Python 做不了的事——比如 SendInput 键盘鼠标模拟、UIAutomation 控件定位、Windows Credential Manager 凭据存储，这些在 Qt/Win32 里是一手 API，Python 反而要绕很多层。另外 65 个 CTest 测试让我对 C++ 项目的构建、测试、CI 流程有了真实经验，这是调 Python 包得不到的。
+> 功能上说，Python 的 langchain/autogen 确实生态更成熟，但这个项目的核心目标是桌面 Agent：Qt UI、Win32 SendInput、UIAutomation、Windows Credential Manager、工具权限边界这些能力更适合在 C++/Qt 主程序里掌控。后续我没有否定 Python，而是采用 sidecar 架构：C++ 保留 Agent 主循环和本机权限，Python 通过 JSONL 协议提供模型调用、tokenizer、Web/文档解析等能力。这样能同时保留 C++ 工程资产和 Python AI 生态。
 
 ## 54. 这个项目最大的技术难点是什么？
 
 参考回答：
 
-> 最难的倒不是某个单一技术点，而是系统复杂度的管理。从 20 个工具到 51 个工具，从 1 个 ApplicationController 到 3 个 Coordinator + 7 个工具子库，每一步都要保证 65 个测试零回归。印象最深的是工具注册表的设计——一开始工具描述散落在 Prompt 构建、计划执行、Function Calling schema 三个地方，每加一个工具要改三处。后来我把它统一到 AgentToolRegistry，描述和执行函数来自同一份定义，新增工具只需要 10 行代码。这就是设计模式里说的"单一数据源"。
+> 最难的倒不是某个单一技术点，而是系统复杂度的管理。从 20 个工具到 51 个工具，从 1 个 ApplicationController 到 3 个 Coordinator + 7 个工具子库，再到 V19 Python sidecar，每一步都要保证 68 个测试零回归。印象最深的是工具注册表的设计——一开始工具描述散落在 Prompt 构建、计划执行、Function Calling schema 三个地方，每加一个工具要改三处。后来我把它统一到 AgentToolRegistry，描述和执行函数来自同一份定义，新增工具只需要 10 行代码。这就是设计模式里说的"单一数据源"。
 
 > V10.3 的记忆是项目级受控记忆，不是自动长期记忆。应用会读取项目目录下的 `AGENT_MEMORY.md` 作为受限上下文；追加记忆必须通过 `memory.append_project_note` 工具，并经过计划窗口和用户确认。服务层会拒绝明显包含 API Key、password、token、Bearer、secret 等敏感字段的内容，也限制单条记忆长度。记忆只帮助 Agent 理解用户明确要求保存的偏好或项目决策，不能扩大工具权限、绕过确认或覆盖本地安全策略。

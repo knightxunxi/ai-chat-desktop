@@ -392,7 +392,7 @@ v1.0 提示词结构：意图标签 + 工具使用提示 + 匹配 Skill + ⭐ �
 
 ## 21. v1.0 测试统计
 
-v1.0 全量 65 个测试，100% 通过。覆盖核心模型、服务、存储、工具、Agent、记忆、Skills、Hooks、UI、输入、桌面等 12 个层级。CI 双重构建（Debug/Release），GitHub Actions 自动触发。
+当前全量 68 个测试，100% 通过。覆盖核心模型、服务、存储、工具、Agent、记忆、Skills、Hooks、UI、输入、桌面和 Python sidecar 等层级。CI 双重构建（Debug/Release），GitHub Actions 自动触发。
 
 ## 14. windeployqt
 
@@ -460,7 +460,7 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 实际选择：自定义轻量级 assert + CTest
 ```
 
-**为什么**：QTest 需要 Qt 事件循环，Google Test 需要额外编译依赖。手写框架的测试入口是 `int main() { assert(...); }`——不需要链接任何框架库。65 个测试都是纯逻辑测试，不依赖窗口和事件循环。另外，手写测试意味着你对每个断言的发生位置和失败信息有完全控制。
+**为什么**：QTest 需要 Qt 事件循环，Google Test 需要额外编译依赖。手写框架的测试入口是 `int main() { assert(...); }`——不需要链接任何框架库。当前 68 个测试大多是纯逻辑测试，不依赖窗口和事件循环。另外，手写测试意味着你对每个断言的发生位置和失败信息有完全控制。
 
 **面试表达**：在不需要 mock/spy 的纯逻辑测试场景下，轻量方案往往比重框架更实用。
 
@@ -521,6 +521,17 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 ```
 
 **为什么**：QTest 是测试框架的 API，不是为生产环境设计的——它只在窗口拥有焦点时可靠。SendInput 是 Windows 最底层的输入注入 API，绕过了窗口焦点限制，可以模拟全局键盘鼠标操作。代价是代码绑定 Windows 平台，但桌面 Agent 本身就是 Windows-only 的定位。
+
+### 决策 9：为什么 V19 用 Python sidecar，而不是把 Agent 主循环迁移到 Python？
+
+```
+替代方案：继续纯 C++；或直接用 Python/LangChain 重写 Agent
+实际选择：C++ 保留主控，Python 作为能力层 sidecar
+```
+
+**为什么**：C++ 已经沉淀了 Qt UI、Agent 循环、工具注册、Win32 桌面操作、权限边界和 68 项测试。如果把 Agent 主循环迁移到 Python，会丢掉这些工程资产，并且形成两套 Agent 流程。Python 的优势在 AI 生态：多厂商 SDK、tokenizer、embedding、网页解析、文档解析、Playwright。因此更合理的边界是：C++ 负责“决策和权限”，Python 负责“模型和能力”。
+
+**面试表达**：这是 sidecar 架构。主进程通过 `QProcess + JSONL` 调用 Python 子进程，既保持桌面主程序稳定，又为后续接入 Python AI 生态留下空间。
 
 ---
 
@@ -583,6 +594,7 @@ ApplicationController::sendAgentLoopMessage()
 | 桌面输入 | `InputSimulator.cpp` | `sendText()`→`mouseClick()`→`keyPress()` 看 SendInput 细节 |
 | 技能匹配 | `SkillManager.cpp` | `matchSkills()` 看触发词怎么命中 |
 | 上下文管理 | `ContextWindowManager.cpp` | 超 85% 阈值时怎么压缩 |
+| Python 能力层 | `PythonSidecarClient.cpp` + `python/agent_sidecar/protocol.py` | `QProcess + JSONL` 如何把 C++ 主控和 Python 能力解耦 |
 
 ### 关键入口速查表
 

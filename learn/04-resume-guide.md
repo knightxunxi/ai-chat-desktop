@@ -170,8 +170,8 @@ CodeXX (AI Chat Desktop) 桌面 AI Agent 平台 | C++17 / Qt 6 / Win32 / CMake
 - 实现 Agentic Loop 编排：7 种意图场景自动分类 → ⭐推荐工具优先排序 → 注入最佳实践提示；编辑后自动触发 cmake 构建 + ctest 测试（AutoFix 闭环），重复动作指纹检测防死循环。
 - 设计三层记忆系统（L1 用户级 / L2 项目级 / L3 每日日志），自动注入 systemPrompt；15 个 Skill 支持子串匹配与优先级合并；Hook 系统 6 个生命周期钩子。
 - 基于 Win32 API + UIAutomation 实现桌面自动化：SendInput 键盘鼠标模拟、UIA 控件定位、窗口枚举、截图 OCR、剪贴板读写。
-- 基于 Function Calling 协议实现 51 个工具的统一注册表，7 个 CMake 子库独立编译，65 项自动化测试零回归。
-- 使用 CMake/CTest/CI 搭建构建测试流程，GitHub 开源（v1.0, MIT），287 个 C++ 文件，约 31,000 行代码。
+- 基于 Function Calling 协议实现 51 个工具的统一注册表，7 个 CMake 子库独立编译，68 项自动化测试零回归。
+- 使用 CMake/CTest/CI 搭建构建测试流程，GitHub 开源（v1.0, MIT），并启动 Python sidecar 能力层演进。
 ```
 
 ### 更新后的关键词
@@ -181,6 +181,7 @@ CodeXX (AI Chat Desktop) 桌面 AI Agent 平台 | C++17 / Qt 6 / Win32 / CMake
 - **Win32 API**、**UIAutomation**、**SendInput**、**OCR**
 - **三层记忆系统**、**Skill 系统**、**Hook 系统**
 - **意图感知工具排序**、**AutoFix 自动修复闭环**
+- **Python sidecar**、**JSONL 协议**、**QProcess 子进程能力层**
 
 ## 12. STAR 故事 5：Agent 工具系统设计
 
