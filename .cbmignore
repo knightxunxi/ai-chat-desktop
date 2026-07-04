@@ -1,0 +1,26 @@
+# codebase-memory-mcp ignores for generated artifacts.
+build/
+build-*/
+build-qt/
+build-release/
+build-release-qt/
+cmake-build-*/
+release/
+
+CMakeFiles/
+Testing/
+*_autogen/
+*.obj
+*.obj.d
+*.exe
+*.dll
+*.a
+*.lib
+*.so
+*.dylib
+
+__pycache__/
+.pytest_cache/
+.venv/
+
+.workbuddy/

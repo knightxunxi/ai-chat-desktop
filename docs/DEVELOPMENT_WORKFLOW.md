@@ -1,6 +1,6 @@
 # CodeXX 开发工作流
 
-> 目标：让每次开发都按“确定方向 -> 参考现有框架 -> 开发 -> 验证 -> 文档同步”的固定路径推进，减少上下文遗漏和返工。
+> 目标：让每次开发都按“确定方向 -> MCP 图查询 -> 参考现有框架 -> 开发 -> 验证 -> 文档同步”的固定路径推进，减少上下文遗漏、token 浪费和返工。
 
 ---
 
@@ -10,9 +10,11 @@
 
 每次进入开发前，先读取：
 
-1. `docs/DEVELOPMENT_WORKFLOW.md`：固定执行流程。
-2. `docs/DEVELOPMENT_PLAN.md`：当前进度、优先级和待开发项。
-3. 与任务相关的专题文档、学习文档和现有源码。
+1. `docs/DOCUMENT_INDEX.md`：文档总目录，先判断要读哪些文档。
+2. `docs/DEVELOPMENT_WORKFLOW.md`：固定执行流程。
+3. `docs/DEVELOPMENT_PLAN.md`：当前进度、优先级和待开发项。
+4. `docs/codebase-memory-mcp-callgraph.md`：MCP 使用方式和调用关系入口。
+5. 与任务相关的专题文档、学习文档和现有源码。
 
 根目录 `AGENT.md` 是给本地 Agent/Codex 使用的自动化入口，它会指向本工作流。
 
@@ -23,8 +25,11 @@
 | 文件或目录 | 作用 |
 |------------|------|
 | `AGENT.md` | 项目级 Agent 指令，让后续开发默认遵守本工作流 |
+| `docs/DOCUMENT_INDEX.md` | 文档总目录，记录方向、状态、日期和阅读入口 |
 | `docs/DEVELOPMENT_WORKFLOW.md` | 稳定工作流，不随单个任务频繁改动 |
+| `docs/REVIEW_WORKFLOW.md` | 审查工作流，覆盖影响分析、问题等级、验证和学习沉淀 |
 | `docs/DEVELOPMENT_PLAN.md` | 实时开发计划，记录优先级、状态、技术债 |
+| `docs/codebase-memory-mcp-callgraph.md` | codebase-memory-mcp 使用方式、调用关系分析和开发前后索引规则 |
 | `docs/49-v19-python-agent-capability-layer-plan.md` | Python 能力层专项计划 |
 | `docs/50-modular-ai-assisted-development.md` | 模块化 AI 辅助开发方法论 |
 | `docs/架构优化方向.md` | 架构债务和优化方向 |
@@ -51,6 +56,8 @@
 - 目标：
 - 非目标：
 - 影响模块：
+- MCP 查询：
+- Token 策略：
 - 参考文档：
 - 参考源码：
 - 验收标准：
@@ -64,11 +71,44 @@
 
 - 优先从 `docs/DEVELOPMENT_PLAN.md` 选择 P0 或当前 Phase 项。
 - 如果任务不在计划中，先补充到计划或在本次变更说明中明确它为什么优先。
+- 开发前必须确认 `codebase-memory-mcp` 中 `D-C1-CodeXX` 索引为 `ready`，并把本次相关的图查询结论写入任务卡。
+- 开发前先用 `docs/DOCUMENT_INDEX.md` 选择文档，再用 MCP 定位源码；禁止为了“了解项目”直接批量读取整个 `src/` 或所有 `docs/`。
 - 如果涉及 Python 能力层，必须确认它只是能力层，不接管 C++ Agent 主循环。
 - 如果涉及高权限本机操作，默认允许常规开发命令，但不得主动修改 Windows 系统文件。
 - 如果需求边界不清晰，先更新文档和任务卡，再开始编码。
 
-### 3.2 阶段二：参考已有框架
+### 3.2 阶段二：MCP 图查询和 token 节省
+
+默认策略是先用结构化图查询缩小范围，再读少量必要源码。
+
+执行顺序：
+
+1. `index_status`：确认 `D-C1-CodeXX` 为 `ready`。
+2. `get_architecture`：只有在不熟悉方向或跨模块任务时使用。
+3. `search_graph`：按类、方法、文件名定位候选入口。
+4. `trace_path` 或 `query_graph`：查看调用方、被调用方和影响边界。
+5. `get_code_snippet`：如果 MCP 能返回精确节点，先读片段。
+6. `rg`：只用于字符串、错误文本、配置值或 MCP 结果不足的场景。
+7. 直接读文件：仅限最终要修改的文件、直接调用方、直接测试。
+
+token 节省规则：
+
+- 每个任务先做 2-5 次 MCP 查询，再决定读哪些文件。
+- 每次读取源码前，先说明读取原因。
+- 优先读取函数、类、测试文件，不读取无关目录。
+- `docs/` 先读 `DOCUMENT_INDEX.md`，再读对应专题文档。
+- MCP 对 Qt/C++ 成员函数 callee 可能不完整，关键结论必须用源码核对。
+- 若 MCP 查询结果已经足够定位，不再重复全文读取同一批文件。
+
+常用命令：
+
+```powershell
+D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe cli index_status '{"project":"D-C1-CodeXX"}'
+D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe cli search_graph '{"project":"D-C1-CodeXX","label":"Class","name_pattern":".*ApplicationController.*","limit":10}'
+D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe cli detect_changes '{"project":"D-C1-CodeXX"}'
+```
+
+### 3.3 阶段三：参考已有框架
 
 按任务类型读取最小必要上下文，不一次性塞入全项目。
 
@@ -76,6 +116,7 @@
 |----------|----------|--------------|
 | Python 能力层 | `docs/49-v19-python-agent-capability-layer-plan.md`、`learn/07-Python能力层学习.md` | `src/services/PythonSidecar*`、`python/agent_sidecar/`、相关测试 |
 | Agent 循环和工具执行 | `docs/已实现功能与待开发路线.md`、`docs/架构优化方向.md` | `src/app/ApplicationController*`、`src/agent/`、`src/tools/` |
+| 调用关系和影响分析 | `docs/codebase-memory-mcp-callgraph.md` | 先用 `codebase-memory-mcp` 查询相关类、方法、调用边，再读源码核对 |
 | UI 和交互 | `learn/01-architecture.md`、`learn/03-technology-notes.md` | `src/ui/`、`resources/styles/app.qss`、UI 相关测试 |
 | 文件能力 | `docs/FileInteractionService-API.md` | `src/services/FileInteractionService*`、文件工具测试 |
 | 架构重构 | `docs/50-modular-ai-assisted-development.md`、`docs/架构优化方向.md` | 目标模块和接口调用方 |
@@ -88,7 +129,7 @@
 2. 再找现有测试。
 3. 最后读实现细节。
 
-### 3.3 阶段三：开发
+### 3.4 阶段四：开发
 
 开发规则：
 
@@ -108,7 +149,7 @@
 3. 再补 UI、配置或文档。
 4. 最后跑验证并处理回归。
 
-### 3.4 阶段四：验证
+### 3.5 阶段五：验证
 
 默认验证命令：
 
@@ -116,6 +157,14 @@
 git diff --check
 cmake --build build -j4
 ctest --test-dir build --output-on-failure
+```
+
+源码结构或调用关系相关任务额外执行：
+
+```powershell
+D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe cli detect_changes '{"project":"D-C1-CodeXX"}'
+D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe cli index_repository '{"repo_path":"D:/C1/CodeXX"}'
+D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe cli index_status '{"project":"D-C1-CodeXX"}'
 ```
 
 Python 能力层相关任务额外执行：
@@ -150,7 +199,7 @@ cmake --build build --config Release -j4
 - 当前风险。
 - 用户可以如何补跑。
 
-### 3.5 阶段五：实时文档更新
+### 3.6 阶段六：实时文档更新
 
 文档更新不是只在开发结束后补一次，而是跟随开发过程实时更新。每次状态、范围或结论发生变化时，先更新对应文档，再继续下一步。
 
@@ -166,8 +215,10 @@ cmake --build build --config Release -j4
 根据影响范围更新文档：
 
 - 修改了计划项：更新 `docs/DEVELOPMENT_PLAN.md` 状态、日期和技术债。
+- 修改了文档状态、新增文档或归档文档：更新 `docs/DOCUMENT_INDEX.md`。
 - 完成了专项计划：更新对应专题文档，必要时移入 `docs/done/`。
 - 修改了架构边界：更新 `docs/架构优化方向.md` 或新增专题说明。
+- 修改了调用关系、主流程入口或 MCP 索引规则：更新 `docs/codebase-memory-mcp-callgraph.md`。
 - 修改了 Python 能力层：更新 `docs/49-v19-python-agent-capability-layer-plan.md` 和 `learn/07-Python能力层学习.md`。
 - 修改了学习价值较高的逻辑：更新 `learn/` 中对应学习文档。
 
@@ -181,7 +232,12 @@ cmake --build build --config Release -j4
 ## 开发执行清单
 
 - [ ] 已读取 `docs/DEVELOPMENT_WORKFLOW.md`
+- [ ] 已读取 `docs/DOCUMENT_INDEX.md`
 - [ ] 已读取 `docs/DEVELOPMENT_PLAN.md`
+- [ ] 已读取 `docs/codebase-memory-mcp-callgraph.md`
+- [ ] 已确认 `codebase-memory-mcp` 索引状态为 `ready`
+- [ ] 已把本次相关 MCP 查询结论写入任务卡
+- [ ] 已记录本次 token 节省策略，避免批量读取无关文件
 - [ ] 已确认任务卡
 - [ ] 已确认是否需要实时更新计划或专题文档
 - [ ] 已读取任务相关专题文档
@@ -189,8 +245,10 @@ cmake --build build --config Release -j4
 - [ ] 已完成最小范围实现
 - [ ] 已补充或调整测试
 - [ ] 已更新中文注释或中文文档
+- [ ] 若新增、完成、归档文档，已更新 `docs/DOCUMENT_INDEX.md`
 - [ ] 已执行 `git diff --check`
 - [ ] 已执行构建和测试，或已说明不能执行的原因
+- [ ] 若修改源码结构或调用关系，已执行 `detect_changes` 和重新索引
 - [ ] 已在最终说明中列出变更、验证和剩余风险
 ```
 
@@ -253,15 +311,19 @@ cmake --build build --config Release -j4
 后续 Codex 或项目内 Agent 进入仓库时，默认按以下顺序执行：
 
 1. 读取 `AGENT.md`。
-2. 读取本文件。
-3. 读取 `docs/DEVELOPMENT_PLAN.md`。
-4. 为当前用户请求生成任务卡。
-5. 判断是否需要立即更新计划或专题文档。
-6. 读取任务相关文档和源码。
-7. 完成最小范围开发。
-8. 在方向、阻塞、验证结果变化时实时更新文档。
-9. 执行验证。
-10. 更新计划或学习文档。
-11. 最终答复只保留变更、验证和风险。
+2. 读取 `docs/DOCUMENT_INDEX.md`。
+3. 读取本文件。
+4. 读取 `docs/DEVELOPMENT_PLAN.md`。
+5. 读取 `docs/codebase-memory-mcp-callgraph.md`，确认 MCP 索引状态。
+6. 为当前用户请求生成任务卡。
+7. 判断是否需要立即更新计划或专题文档。
+8. 使用 MCP 图查询定位相关类、方法、调用关系，再读取任务相关文档和源码。
+9. 完成最小范围开发。
+10. 在方向、阻塞、验证结果变化时实时更新文档。
+11. 执行验证。
+12. 若修改源码结构或调用关系，执行 `detect_changes`、重新索引并更新调用关系文档。
+13. 若新增、完成、归档文档，更新 `docs/DOCUMENT_INDEX.md`。
+14. 更新计划或学习文档。
+15. 最终答复只保留变更、验证和风险。
 
 这个顺序是项目默认工作方式，除非用户在当前对话中明确要求跳过某一步。

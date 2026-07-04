@@ -31,6 +31,9 @@
 | 文件 | 类型 | 状态 |
 |------|------|:---:|
 | `14-code-style.md` | 代码规范（流程文档） | ✅ 已实施 |
+| `DOCUMENT_INDEX.md` | 文档总目录 | 🔄 实时维护 |
+| `REVIEW_WORKFLOW.md` | 审查工作流 | 🔄 实时维护 |
+| `codebase-memory-mcp-callgraph.md` | MCP 使用方式 + 调用关系分析 | 🔄 随主流程和索引规则实时更新 |
 | `50-modular-ai-assisted-development.md` | 方法论文档 | ✅ 仅文档 |
 | `FileInteractionService-API.md` | API 参考文档 | ✅ 仅文档 |
 | `49-v19-python-agent-capability-layer-plan.md` | V19 计划 | 🔄 Phase A+B 完成，C+D 待做 |
