@@ -269,4 +269,4 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 | 想理解技术栈和设计决策 | [03-technology-notes.md](03-technology-notes.md) |
 | 想看简历怎么写 | [04-resume-guide.md](04-resume-guide.md) |
 | 想看 54 道面试题 | [05-interview-qa.md](05-interview-qa.md) |
-| 想看项目全面评分 | [../docs/项目全面分析报告.md](../docs/项目全面分析报告.md) |
+| 想看项目全面评分 | [../docs/done/项目全面分析报告.md](../docs/done/项目全面分析报告.md) |

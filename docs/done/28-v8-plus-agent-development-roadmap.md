@@ -1,6 +1,6 @@
 # V8+ Agent 详细开发路线
 
-本文档基于当前开发进度、[Agent 与电脑交互后续规划](22-agent-automation-roadmap.md)、[V8 Roadmap](26-v8-agent-workspace-roadmap.md)、[下一版本开发计划](27-next-version-development-plan.md)，并参考本地不提交的 `docs/优化方向.md`。`docs/UI优化方向.md` 暂不纳入版本开发计划。V9 及以后执行级拆分见 [V9+ 后续开发规划](31-v9-plus-development-roadmap.md)。
+本文档基于当前开发进度、[Agent 与电脑交互后续规划](22-agent-automation-roadmap.md)、[V8 Roadmap](26-v8-agent-workspace-roadmap.md)、[下一版本开发计划](27-next-version-development-plan.md)，并参考 `优化方向.md`。`UI优化方向.md` 暂不纳入版本开发计划。V9 及以后执行级拆分见 [V9+ 后续开发规划](31-v9-plus-development-roadmap.md)。
 
 ## 1. 当前状态判断
 
