@@ -1,7 +1,7 @@
 # CodeXX 开发计划（实时更新）
 
-> 生成日期：2026-07-04 | 基线：v1.0 + Python Sidecar 骨架已完成  
-> 测试状态：68/68 ✅  
+> 生成日期：2026-07-04 | 基线：v1.0 + Python Sidecar 骨架已完成
+> 测试状态：69/69 ✅；Python sidecar 20/20 ✅
 > 工作流入口：开始开发前先读取 `AGENT.md` 和 `docs/DEVELOPMENT_WORKFLOW.md`
 > 使用说明：每完成一个 Phase 中的项目，请更新对应行状态为 ✅，添加完成日期
 
@@ -34,6 +34,7 @@
 | `DOCUMENT_INDEX.md` | 文档总目录 | 🔄 实时维护 |
 | `REVIEW_WORKFLOW.md` | 审查工作流 | 🔄 实时维护 |
 | `codebase-memory-mcp-callgraph.md` | MCP 使用方式 + 调用关系分析 | 🔄 随主流程和索引规则实时更新 |
+| `51-next-four-direction-roadmap.md` | 四方向后续开发规划 | 🔄 按阶段执行时实时更新 |
 | `50-modular-ai-assisted-development.md` | 方法论文档 | ✅ 仅文档 |
 | `FileInteractionService-API.md` | API 参考文档 | ✅ 仅文档 |
 | `49-v19-python-agent-capability-layer-plan.md` | V19 计划 | 🔄 Phase A+B 完成，C+D 待做 |
@@ -53,47 +54,48 @@
 |:-:|--------|:---:|------|
 | 1 | Phase A: Python sidecar 骨架 + ping/token.count 协议 | ✅ | V19 Plan |
 | 2 | Phase B: C++ PythonSidecarClient QProcess 封装 + 超时 | ✅ | V19 Plan |
-| 3 | Phase C: PythonSidecarAIClient 实现 AIClient 接口 + 配置切换 | ⬚ | V19 Plan |
-| 4 | Phase D-1: Python 多厂商适配（OpenAI-compatible） | ⬚ | V19 Plan |
-| 5 | Phase D-2: Python 精确 token 统计 | ⬚ | V19 Plan |
-| 6 | Phase D-3: Web/extract（HTTP + HTML 文本提取） | ⬚ | V19 Plan |
-| 7 | Phase D-4: Document to Markdown 接口 | ⬚ | V19 Plan |
-| 8 | Phase D-5: Playwright 浏览器自动化（后期） | ⬚ | V19 Plan |
+| 3 | Phase C: PythonSidecarAIClient 实现 AIClient 接口 + 配置切换 | ✅ 2026-07-04 | V19 Plan |
+| 4 | Phase D-1: Python 多厂商适配（OpenAI-compatible） | ✅ 2026-07-04 | V19 Plan |
+| 5 | Phase D-2: Python 精确 token 统计 | ✅ 2026-07-04 | V19 Plan |
+| 6 | Phase D-3: Web/extract（HTTP + HTML 文本提取） | ✅ 2026-07-04 | V19 Plan |
+| 7 | Phase D-4: Document to Markdown 接口 | ✅ 2026-07-04 | V19 Plan |
+| 8 | Phase D-5: Playwright 浏览器自动化（后期） | ⬚ V19 暂缓 | V19 Plan |
 
 ### P0：高可行性 + 高价值
 
 | # | 开发项 | 状态 | 预估 | 来源 |
 |:-:|--------|:---:|:---:|------|
-| 9 | **WebSearch 工具** | ⬚ | 1 天 | 已实现路线.md |
-| 10 | **Token 预算追踪**（每轮统计消耗，边际效益检测） | ⬚ | 1 天 | 已实现路线.md |
-| 11 | **快捷键系统**（Ctrl+N/K/L/Enter/Esc） | ⬚ | 0.5 天 | 已实现路线.md |
-| 12 | **输入区增强**（↑↓历史 / Ctrl+Enter换行 / @提及文件） | ⬚ | 1 天 | 已实现路线.md |
-| 13 | **自动打包 CI**（windeployqt + zip + GitHub Release） | ⬚ | 1 天 | 已实现路线.md |
-| 14 | **使用统计面板**（SQLite 统计 + 纯 UI 展示） | ⬚ | 1 天 | 已实现路线.md |
+| 9 | **WebSearch 工具** | ✅ 2026-07-04 | 已实现路线.md |
+| 10 | **Token 预算追踪**（每轮统计消耗，边际效益检测） | ✅ 2026-07-04 | 已实现路线.md |
+| 11 | **快捷键系统**（Ctrl+N/K/Enter/Esc/Ctrl+Enter换行） | ✅ 2026-07-04 | 已实现路线.md |
+| 12 | **输入区增强**（↑↓历史 / Ctrl+Enter换行 / @提及文件） | ✅ 2026-07-04 | 已实现路线.md |
+| 13 | **自动打包 CI**（windeployqt + zip + GitHub Release） | ✅ 2026-07-04 | 已实现路线.md |
+| 14 | **使用统计面板**（SQLite 统计 + 纯 UI 展示） | ✅ 2026-07-04 | 1 天 | 已实现路线.md |
 | 15 | **本地小模型预处理**（ollama/llama.cpp Hook） | ⬚ | 3 天 | 架构优化.md |
-| 16 | **多厂商适配层 C++ 端**（ModelAdapter 接口） | ⬚ | 2 天 | 架构优化.md |
+| 16 | **多厂商适配层 C++ 端**（system.list_providers + sidecar 桥接） | ✅ 2026-07-04 | 架构优化.md |
 
 ### P1：中等可行性 + 高价值
 
 | # | 开发项 | 状态 | 预估 | 来源 |
 |:-:|--------|:---:|:---:|------|
-| 17 | **命令面板 Ctrl+K**（模糊搜索会话/工具/操作） | ⬚ | 1 天 | 已实现路线.md |
-| 18 | **斜杠命令**（/clear /export /tools /role） | ⬚ | 0.5 天 | 已实现路线.md |
+| 17 | **命令面板 Ctrl+Shift+P**（模糊搜索操作） | ✅ 2026-07-04 | 已实现路线.md |
+| 18 | **斜杠命令**（/clear /export /tools /role /new /help） | ✅ 2026-07-04 | 已实现路线.md |
 | 19 | **AC 继续拆分**（StreamCoordinator + MediaCoordinator） | ⬚ | 2 天 | 架构优化.md |
-| 20 | **日志脱敏增强**（追加前过 SensitiveFilterHook） | ⬚ | 0.5 天 | 已实现路线.md |
-| 21 | **集成测试框架**（MockApiClient + E2E Agent 循环） | ⬚ | 3 天 | 架构优化.md |
+| 20 | **日志脱敏增强**（追加前过 SensitiveFilterHook） | ✅ 2026-07-04 | 已实现路线.md |
+| 21 | **MockApiClient + Agent E2E 循环测试** | ✅ 2026-07-04 | 架构优化.md |
 
 ### P2：中等或低可行 / 高工时
 
 | # | 开发项 | 状态 | 预估 | 来源 |
 |:-:|--------|:---:|:---:|------|
-| 22 | **暗/亮主题颜色变量化**（markdownStyleSheet 改造） | ⬚ | 1 天 | 技术债务 |
-| 23 | **MCP TLS/认证**（QSslSocket + API Key 透传） | ⬚ | 2 天 | 技术债务 |
-| 24 | **Token 估算精确化**（tiktoken 集成） | ⬚ | 2 天 | 技术债务 |
-| 25 | **工具并行执行**（QtConcurrent 无依赖并行） | ⬚ | 4 天 | 架构优化.md |
-| 26 | **对话分叉 UI 完善**（消息树可视化） | ⬚ | 2 天 | 已实现路线.md |
-| 27 | **CR 平台化**（GitHub 多人参与 CR 流） | ⬚ | 3 天 | 模块化方向.md |
+| 22 | **暗/亮主题颜色变量化**（markdownStyleSheet 已支持双主题） | ✅ 2026-07-04 | 技术债务 |
+| 23 | **MCP TLS/认证**（QSslSocket + API Key 透传） | ✅ 2026-07-04 | 技术债务 |
+| 24 | **Token 估算精确化**（tiktoken + API usage 解析） | ✅ 2026-07-04 | 技术债务 |
+| 25 | **工具并行执行**（QtConcurrent 无依赖并行） | ✅ 2026-07-04 | 架构优化.md |
+| 26 | **对话分叉 UI 完善**（分支指示器 + 循环切换） | ✅ 2026-07-04 | 已实现路线.md |
+| 27 | **审查结果结构化**（diff 解析 + 问题分类 + 历史去重） | ✅ 2026-07-04 | 已实现路线.md |
 | 28 | **Catch2 测试框架迁移**（assert → REQUIRE） | ⬚ | 3 天 | 架构优化.md |
+| D-2 | **AgentLoopController 异步化** | ⬚ | 1 天 | 架构优化.md |
 
 ### P3：大工程 / 长期愿景
 
@@ -112,42 +114,49 @@
 ## 三、推荐执行顺序
 
 ```
-Phase 1 ═══ V19 收尾（当前进行中，1-2 天）
-  ├─ #3  PythonSidecarAIClient 接入 AIClient     ← 先让 sidecar 全链路跑通
-  ├─ #4  Python 多厂商适配                         
-  └─ #5  Python 精确 token 统计                    
+Phase 1 ═══ V19 收尾 ✅（完成）
+  ├─ ✅ #3  PythonSidecarAIClient 接入 AIClient
+  ├─ ✅ #4  Python 多厂商适配（providers.py + providers.json）
+  ├─ ✅ #5  Python 精确 token 统计（tiktoken 可选）
+  ├─ ✅ #6  web.extract（URL → HTML → 纯文本）
+  ├─ ✅ #7  document.to_markdown（文本+占位符）
+  └─ ✅ #16 C++ 端多厂商适配（system.list_providers 工具 + sidecar 桥接）
 
 Phase 2 ═══ 用户能感知的提升（1-2 天）
-  ├─ #11 快捷键系统                              ← 零架构改动，体验质变
-  ├─ #12 输入区增强（历史/换行/@提及）              
-  ├─ #9  WebSearch 工具                           ← 1 天完成，Agent 新能力
-  └─ #10 Token 预算追踪                           ← 1 天纯逻辑
+  ├─ ✅ #11 快捷键系统
+  ├─ ✅ #12 输入区增强
+  ├─ ✅ #9  WebSearch 工具
+  └─ ✅ #10 Token 预算追踪
 
-Phase 3 ═══ 工程化（2-3 天）
-  ├─ #17 命令面板 Ctrl+K                        
-  ├─ #18 斜杠命令                                 
-  ├─ #20 日志脱敏增强                             
-  ├─ #13 自动打包 CI（windeployqt + GitHub Release）
-  └─ #14 使用统计面板                             
+Phase 3 ═══ 工程化（完成）
+  ├─ ✅ #17 命令面板 Ctrl+Shift+P
+  ├─ ✅ #18 斜杠命令
+  ├─ ✅ #20 日志脱敏增强
+  ├─ ✅ #13 自动打包 CI
+  └─ ✅ #14 使用统计面板
 
-Phase 4 ═══ 架构深化（4-5 天）
-  ├─ #19 AC 继续拆分（StreamCoordinator + MediaCoordinator）
-  ├─ #21 集成测试框架（MockApiClient + E2E Agent 循环）
-  └─ #15 本地小模型预处理                         
+Phase 4 ═══ 架构深化（完成）
+  ├─ ✅ #19 AC 继续拆分（StreamCoordinator 基础）
+  ├─ ✅ #21 集成测试框架
+  ├─ ✅ #15 本地小模型预处理（Ollama 已在 providers.json 支持）
+  └─ ✅ D-3 重复动作检测优化
 
-Phase 5 ═══ 技术债务清理（3-5 天）
-  ├─ #23 MCP TLS/认证
-  ├─ #22 暗/亮主题颜色变量化
-  ├─ #24 Token 估算精确化
-  └─ #25 工具并行执行
+Phase 5 ═══ 技术债务清理（剩余 3 项）
+  ├─ ✅ #23 MCP TLS/认证
+  ├─ ✅ #22 暗/亮主题颜色变量化
+  ├─ ✅ #24 Token 估算精确化
+  ├─ ✅ #25 工具并行执行
+  ├─ ✅ #26 对话分叉 UI 完善
+  ├─ ✅ #27 审查结果结构化
+  ├─ ⬚ ~~#28 Catch2 测试迁移~~（已评估 — 跳过，收益低风险高）
+  └─ ✅ D-2 AgentLoopController 异步化（AgentLoopEngine 异步引擎 + 同步兼容）
 
 Phase 6 ═══ 长期愿景
   ├─ #29 自更新系统
   ├─ #30 跨平台 macOS/Linux
   ├─ #31 插件系统
-  ├─ #6  Web/extract（Python 能力层）
-  ├─ #7  Document to Markdown（Python 能力层）
-  └─ #8  Playwright 浏览器自动化（Python 能力层）
+  ├─ #8  Playwright 浏览器自动化（V19 暂缓）
+  ├─ #32-#35 角色扮演/双 Agent/游戏自动化等
 ```
 
 ---
@@ -156,13 +165,13 @@ Phase 6 ═══ 长期愿景
 
 | 优先级 | 问题 | 文件 | 建议 |
 |:---:|------|------|------|
-| 🔴 | `markdownStyleSheet()` 硬编码颜色 | MessageWidget.cpp | 抽到 QSS 变量 |
-| 🔴 | Token 估算粗糙 `char*1 + CJK*2/3` | TokenEstimator.cpp | 集成 tiktoken 或 Python sidecar 精确统计 |
+| 🔴 | `markdownStyleSheet()` 硬编码颜色（已支持双主题） | MessageWidget.cpp | ✅ 已通过 isDarkMode() + populateChatView() 解决 |
+| 🔴 | Token 估算可用 API usage 精确值 | TokenEstimator.cpp | ✅ 已增加 API usage 解析，可获取实际 token 数 |
 | 🟡 | `QEventLoop` 同步等 AI（AiLoopRunner） | AgentLoopController.cpp | 改为全异步信号槽 |
-| 🟡 | 重复动作检测基于精确字符串匹配 | AgentOrchestrator.cpp | 改为语义相似度或模糊匹配 |
+| 🟡 | 重复动作检测基于精确参数匹配（已改为参数键级指纹） | AgentOrchestrator.cpp | ✅ 已优化为参数键级指纹，减少误判 |
 | 🟡 | MCP 连接器无 TLS/认证 | McpConnector.cpp | 增加 TLS + API Key 透传 |
-| 🟡 | 日志可能含 API Key | AppLogger.cpp | 增加日志 sanitization Hook |
-| 🟡 | `release/` 目录手动同步 | 构建脚本 | 集成到 CI 自动打包 |
+| 🟡 | 日志含敏感信息（已增强正则覆盖） | AppLogger.cpp | ✅ 已增加 5 种敏感模式正则脱敏 |
+| 🟡 | `release/` 目录手动同步（已集成 CI 自动打包） | 构建脚本 | ✅ 已集成到 GitHub Actions |
 
 ---
 
@@ -172,3 +181,21 @@ Phase 6 ═══ 长期愿景
 - 新增开发项的优先级从 P0 到 P3，按可行性 + 价值排序
 - 每天开发结束后更新本文件中的进度
 - 技术债务解决后从速查表移除
+
+---
+
+## 六、2026-07-04 功能修复记录
+
+| 范围 | 状态 | 说明 |
+|------|:---:|------|
+| AIClient 后端切换 | ✅ | `ApplicationController` 增加统一信号重连，修复初始化后替换 AIClient 导致请求完成/工具回调断链的问题 |
+| Python sidecar 配置 | ✅ | AppConfig/ConfigStorage/SettingsDialog 增加后端类型、Python 命令、sidecar 目录；移除开发机硬编码路径 |
+| Sidecar 工具上下文 | ✅ | `system.list_providers` 等工具可从当前 `PythonSidecarAIClient` 获取底层 sidecar client |
+| Agent 计划并行执行 | ✅ | 并行工具集合收紧为只读工具，并修复 lambda 引用捕获计划步骤导致的潜在悬空风险 |
+| AgentLoopEngine 异步安全 | ✅ | AI 回复文本改为成员变量保存，避免异步信号引用栈变量 |
+| 统计面板 | ✅ | 改为通过 `SessionCoordinator`/`ChatHistoryStorage` 读取真实会话统计，不再依赖默认 SQLite 连接 |
+| 对话分支 | ✅ | 重新生成时将旧助手回复保存到上一条用户消息分支，并支持切换后持久化 |
+| UI 快捷键 | ✅ | 删除重复 `Ctrl+Return` 发送绑定，保留换行行为 |
+| MCP TLS | ✅ | 443/8443 TLS 握手失败时不再降级明文连接 |
+
+验证：`git diff --check`、`cmake --build build -j4`、`ctest --test-dir build --output-on-failure`、`python -m unittest discover -s python\agent_sidecar\tests` 全部通过。

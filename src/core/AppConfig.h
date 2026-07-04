@@ -4,8 +4,14 @@
 
 #include <QDir>
 #include <QStandardPaths>
-#include <optional>
 #include <QString>
+#include <optional>
+
+// V19: AI 后端类型
+enum class AIBackendType {
+    Direct,   // C++ OpenAICompatibleClient 直连
+    Sidecar   // Python sidecar 能力层
+};
 
 // 学习注释：应用配置模型，集中描述一次 API 请求和界面语言所需的设置。
 // 使用模块：SettingsDialog 负责编辑，ConfigStorage 负责保存，ApplicationController 负责读取并传给 AIClient。
@@ -16,28 +22,35 @@ struct AppConfig {
     QString apiKey;                     // 功能：API 访问凭据；使用模块：ConfigStorage 通过 CredentialStorage 安全读写。
     std::optional<double> temperature;  // 功能：可选采样温度；使用模块：请求体构造时决定是否写入 JSON。
     std::optional<int> maxTokens;       // 功能：可选最大输出 token 数；使用模块：请求体构造时决定是否写入 JSON。
-    AppLanguage language = AppLanguage::Chinese; // 功能：界面语言；使用模块：各 UI 组件选择中文或英文文案。
-    QString agentWorkspaceDirectory;    // 功能：Agent 默认工作目录；使用模块：后续自动文件生成和工作目录策略。
-    QString agentProjectDirectory;      // 功能：Agent 命令项目目录；使用模块：V9 command.* 命令执行。
+    AppLanguage language = AppLanguage::Chinese;
+    QString agentWorkspaceDirectory;
+    QString agentProjectDirectory;
+    AIBackendType backendType = AIBackendType::Direct; // V19
+    QString pythonExecutable;       // 功能：Python sidecar 启动命令；使用模块：ApplicationController::initAIClient。
+    QString pythonSidecarDirectory; // 功能：Python sidecar 包目录；使用模块：ApplicationController::initAIClient。
 
-    // 功能：返回默认 Agent 工作目录；使用模块：默认配置和工作目录策略。
     static QString defaultAgentWorkspaceDirectory()
     {
-        QString baseDirectory = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-        if (baseDirectory.trimmed().isEmpty()) {
-            baseDirectory = QDir::homePath();
-        }
-
-        return QDir(baseDirectory).filePath(QStringLiteral("AIChatDesktop/workspace"));
+        QString base = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+        if (base.trimmed().isEmpty()) base = QDir::homePath();
+        return QDir(base).filePath(QStringLiteral("AIChatDesktop/workspace"));
     }
 
-    // 功能：返回默认 Agent 项目目录；使用模块：默认配置和 V9 命令执行。
     static QString defaultAgentProjectDirectory()
     {
         return QDir::currentPath();
     }
 
-    // 功能：生成默认配置；使用模块：ConfigStorage 在本地无配置时提供初始值。
+    static QString defaultPythonExecutable()
+    {
+        return QStringLiteral("python");
+    }
+
+    static QString defaultPythonSidecarDirectory()
+    {
+        return QDir(QDir::currentPath()).filePath(QStringLiteral("python/agent_sidecar"));
+    }
+
     static AppConfig defaultConfig()
     {
         AppConfig config;
@@ -47,10 +60,12 @@ struct AppConfig {
         config.language = AppLanguage::Chinese;
         config.agentWorkspaceDirectory = defaultAgentWorkspaceDirectory();
         config.agentProjectDirectory = defaultAgentProjectDirectory();
+        config.backendType = AIBackendType::Direct;
+        config.pythonExecutable = defaultPythonExecutable();
+        config.pythonSidecarDirectory = defaultPythonSidecarDirectory();
         return config;
     }
 
-    // 功能：判断发送请求前的必要配置是否齐全；使用模块：ApplicationController::sendMessage。
     bool isComplete() const
     {
         return !baseUrl.trimmed().isEmpty() &&

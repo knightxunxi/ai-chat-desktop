@@ -343,3 +343,41 @@ void ChatView::hideTyping()
         m_typingIndicator->stopAnimation();
     }
 }
+
+// ─── #26: 对话分支指示器 ───────────────────────────────────────────
+
+QPushButton *ChatView::addBranchIndicator(const QString &messageId, int branchCount, int currentIndex)
+{
+    auto *btn = new QPushButton(this);
+    btn->setText(QStringLiteral("↳ %1 branches (branch %2/%3)")
+                     .arg(branchCount).arg(currentIndex + 1).arg(branchCount));
+    btn->setProperty("messageId", messageId);
+    btn->setProperty("branchCount", branchCount);
+    btn->setProperty("currentIndex", currentIndex);
+    btn->setToolTip(QStringLiteral("Click to browse alternative replies for this message."));
+    btn->setStyleSheet(QStringLiteral(
+        "QPushButton { border: 1px solid #ccc; border-radius: 4px; padding: 4px 10px;"
+        "  font-size: 12px; color: #555; background: #f9f9f9; }"
+        "QPushButton:hover { background: #eef; border-color: #888; }"));
+
+    if (m_contentLayout) {
+        m_contentLayout->insertWidget(m_contentLayout->count() - 1, btn);
+    }
+    return btn;
+}
+
+MessageWidget *ChatView::addBranchMessage(MessageRole role, const QString &content, const QString &branchId)
+{
+    auto *widget = new MessageWidget(role, content, this);
+    widget->setProperty("branchId", branchId);
+    widget->setProperty("isBranchMessage", true);
+    // 分支消息使用浅色左边框标识
+    widget->setStyleSheet(
+        widget->styleSheet() +
+        QStringLiteral("MessageWidget { border-left: 3px solid #f59e0b; margin-left: 20px; }"));
+
+    if (m_contentLayout) {
+        m_contentLayout->insertWidget(m_contentLayout->count() - 1, widget);
+    }
+    return widget;
+}

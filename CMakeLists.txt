@@ -16,6 +16,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Sql
     Test
     Gui
+    Concurrent
 )
 
 qt_standard_project_setup()

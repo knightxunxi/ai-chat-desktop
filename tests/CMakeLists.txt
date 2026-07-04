@@ -745,6 +745,32 @@ endif()
 add_test(NAME AgentLoopExecutionTest COMMAND AgentLoopExecutionTest)
 
 # =========================================================================
+# V19 Agent E2E 循环测试（MockApiClient）
+# =========================================================================
+
+add_executable(AgentE2ETest
+    services/AgentE2ETest.cpp
+    MockApiClient.cpp
+)
+
+target_link_libraries(AgentE2ETest PRIVATE
+    Qt6::Core
+    Qt6::Network
+    Qt6::Sql
+    codexx_app
+)
+
+target_include_directories(AgentE2ETest PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+if(WIN32)
+    target_link_libraries(AgentE2ETest PRIVATE Advapi32)
+endif()
+
+add_test(NAME AgentE2ETest COMMAND AgentE2ETest)
+
+# =========================================================================
 # AppLaunch 冒烟测试 (仅 Windows)
 # =========================================================================
 

@@ -16,8 +16,10 @@
 #include "hooks/HookDefinition.h"
 #include "hooks/HookManager.h"
 #include "mcp/McpRegistry.h"
+#include <QtConcurrent/QtConcurrentRun>
 #include "skills/SkillDefinition.h"
 #include "skills/SkillManager.h"
+#include "services/PythonSidecarAIClient.h"
 #include "support/AppLogger.h"
 #include "tools/AgentToolCatalog.h"
 #include "tools/AgentToolRegistry.h"
@@ -33,22 +35,10 @@
 
 namespace {
 
-// V17.3: 粗略 Token 估算，用于 TokenBar 显示。
+// V17.3: Token 估算统一走 TokenEstimator，避免多处算法漂移。
 int estimateTokenCount(const QString &text)
 {
-    if (text.isEmpty()) {
-        return 0;
-    }
-
-    int tokens = 0;
-    for (const QChar &ch : text) {
-        if (ch.unicode() > 0x7F) {
-            tokens += 2;
-        } else {
-            tokens += 1;
-        }
-    }
-    return tokens / 3;
+    return static_cast<int>(TokenEstimator::estimateTokens(text));
 }
 
 } // namespace
@@ -394,7 +384,10 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
 {
     const QString &workspace = m_configCoordinator->config().agentProjectDirectory;
     const AgentToolRegistry registry = toolRegistry();
-    const AgentToolExecutionContext context{workspace, workspace};
+    AgentToolExecutionContext context;
+    context.workspaceDirectory = workspace;
+    context.projectDirectory = workspace;
+    context.sidecarClient = activeSidecarClient();
     QString execSummary;
     int successCount = 0;
     int failCount = 0;
@@ -405,38 +398,23 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
         QStringLiteral("**Executing plan (%1 steps)...**\n").arg(plan.steps.size()),
         QStringLiteral("**正在执行计划 (%1 步)...**\n").arg(plan.steps.size()));
 
+    // V19 #25: 使用并行执行替换顺序执行
+    const QVector<StepResult> stepResults = executePlanStepsParallel(plan, registry, context);
+
     for (int i = 0; i < plan.steps.size(); ++i) {
         const AgentPlanStep &step = plan.steps[i];
 
-        // V17.6 P0-2: 重复动作检测
-        const QString argsCompact = QString::fromUtf8(
-            QJsonDocument(step.parameters).toJson(QJsonDocument::Compact));
-        const QString fp = QStringLiteral("%1|%2").arg(step.toolId, argsCompact);
-        if (m_actionFingerprints.contains(fp)) {
-            const QString warnMsg = m_configCoordinator->text(
-                QStringLiteral("WARNING: Repeated action detected — tool `%1` with the same parameters has already been executed. Consider a different approach."),
-                QStringLiteral("警告：检测到重复动作 — 工具 `%1` 以相同参数已执行过。请尝试不同方法。")).arg(step.toolId);
-            AppLogger::warning(QStringLiteral("AgentOrchestrator"), warnMsg);
-            // 注入为 observation，让 AI 下一轮自行调整
-            appendLoopObservation(QStringLiteral("[repeated-action-warning] ") + warnMsg);
+        // 查找对应的执行结果
+        StepResult stepResult;
+        stepResult.ok = false;
+        stepResult.output = QStringLiteral("Step result not found");
+        stepResult.stepIndex = i;
+        for (const auto &sr : stepResults) {
+            if (sr.stepIndex == i) {
+                stepResult = sr;
+                break;
+            }
         }
-        m_actionFingerprints.insert(fp);
-
-        // V16.1: 发送思考信号
-        emit agentLoopThought(displayIteration, step.reason, step.toolId, step.title);
-
-        const ToolResult result = registry.execute(
-            step.toolId,
-            step.parameters,
-            context,
-            m_hookManager.get());
-
-        // V16.1: 发送工具执行完成信号
-        const QString resultText = result.ok ? result.output : result.error;
-        emit agentLoopToolFinished(displayIteration, step.toolId, result.ok,
-            resultText.left(80));
-
-        // AG-4: 记录 Agent 执行步骤
         QString argsStr;
         {
             QJsonDocument argsDoc(step.parameters);
@@ -447,10 +425,10 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
             step.reason,
             step.toolId,
             argsStr,
-            resultText.left(500),
-            result.ok ? QStringLiteral("success") : QStringLiteral("error")));
+            stepResult.output.left(500),
+            stepResult.ok ? QStringLiteral("success") : QStringLiteral("error")));
 
-        const QString status = result.ok
+        const QString status = stepResult.ok
             ? QStringLiteral("\u2705")
             : QStringLiteral("\u274C");
 
@@ -458,7 +436,7 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
             ? step.toolId
             : step.title;
 
-        QString resultPreview = resultText;
+        QString resultPreview = stepResult.output;
         if (resultPreview.length() > 300) {
             resultPreview = resultPreview.left(300) + QStringLiteral("...");
         }
@@ -469,13 +447,13 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
             .arg(plan.steps.size())
             .arg(desc, resultPreview);
 
-        if (result.ok) {
+        if (stepResult.ok) {
             ++successCount;
         } else {
             ++failCount;
             AppLogger::warning(QStringLiteral("AgentPlan"),
                                QStringLiteral("Step failed. step=%1 toolId=%2 error=%3")
-                                   .arg(step.id, step.toolId, result.output));
+                                   .arg(step.id, step.toolId, stepResult.output));
         }
     }
 
@@ -582,6 +560,92 @@ bool AgentOrchestrator::executePlanAndReportToChat(const AgentPlan &plan)
     }
 
     return (failCount == 0);
+}
+
+// V19 #25: 并行执行计划步骤
+// 将无依赖的"安全并行"工具分组执行，减少整体执行时间
+QVector<AgentOrchestrator::StepResult> AgentOrchestrator::executePlanStepsParallel(
+    const AgentPlan &plan,
+    const AgentToolRegistry &registry,
+    const AgentToolExecutionContext &context)
+{
+    QVector<StepResult> results;
+    results.reserve(plan.steps.size());
+
+    // 安全并行工具集合（只读/轻量，无副作用）
+    const QSet<QString> safeParallelTools = {
+        QStringLiteral("file.read_text"),
+        QStringLiteral("file.grep"),
+        QStringLiteral("file.get_info"),
+        QStringLiteral("file.list_directory"),
+        QStringLiteral("system.screen_size"),
+        QStringLiteral("input.mouse_position"),
+        QStringLiteral("project.find_files"),
+        QStringLiteral("command.git_status"),
+    };
+
+    // 分批执行：累积安全工具到 batch，遇到非安全工具先 flush batch
+    auto flushBatch = [&](QVector<int> &batch) {
+        if (batch.isEmpty()) return;
+        if (batch.size() == 1) {
+            // 单步执行，不走并行
+            const auto &step = plan.steps[batch[0]];
+            emit agentLoopThought(m_agentLoopIteration + 1, step.reason, step.toolId, step.title);
+            ToolResult r = registry.execute(step.toolId, step.parameters, context, m_hookManager.get());
+            results.append({batch[0], step.toolId, r.ok, r.ok ? r.output : r.error});
+            return;
+        }
+
+        // 并行执行 batch
+        QVector<QFuture<ToolResult>> futures;
+
+        for (int idx : batch) {
+            const AgentPlanStep step = plan.steps[idx];
+            emit agentLoopThought(m_agentLoopIteration + 1, step.reason, step.toolId, step.title);
+
+            const AgentToolExecutionContext contextCopy = context;
+            futures.append(QtConcurrent::run([&registry, step, contextCopy]() -> ToolResult {
+                return registry.execute(step.toolId, step.parameters, contextCopy, nullptr);
+            }));
+        }
+
+        for (int fi = 0; fi < futures.size(); ++fi) {
+            ToolResult r = futures[fi].result();
+            const int idx = batch[fi];
+            const auto &step = plan.steps[idx];
+            results.append({idx, step.toolId, r.ok, r.ok ? r.output : r.error});
+        }
+    };
+
+    QVector<int> currentBatch;
+    for (int i = 0; i < plan.steps.size(); ++i) {
+        const auto &step = plan.steps[i];
+        if (safeParallelTools.contains(step.toolId)) {
+            currentBatch.append(i);
+        } else {
+            flushBatch(currentBatch);
+            currentBatch.clear();
+            // 非安全工具单独执行
+            QVector<int> single = {i};
+            flushBatch(single);
+        }
+    }
+    // flush 最后一组
+    flushBatch(currentBatch);
+
+    // 按原始顺序排序结果
+    std::sort(results.begin(), results.end(),
+              [](const StepResult &a, const StepResult &b) {
+                  return a.stepIndex < b.stepIndex;
+              });
+
+    return results;
+}
+
+PythonSidecarClient *AgentOrchestrator::activeSidecarClient() const
+{
+    auto *sidecar = qobject_cast<PythonSidecarAIClient *>(m_aiClient);
+    return sidecar == nullptr ? nullptr : sidecar->sidecarClient();
 }
 
 // V17.6 P1-3: 轻量子代理 — agent.explore 工具，使用只读工具异步探索

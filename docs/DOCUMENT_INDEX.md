@@ -32,11 +32,12 @@
 | `docs/DEVELOPMENT_WORKFLOW.md` | 开发流程 | 🔄 | 2026-07-04 | 标准开发流程，包含 MCP token 节省、实时文档更新和验证规则 |
 | `docs/REVIEW_WORKFLOW.md` | 审查流程 | 🔄 | 2026-07-04 | 企业级审查流程，包含影响分析、问题等级、验证和学习沉淀 |
 | `docs/DEVELOPMENT_PLAN.md` | 开发计划 | 🔄 | 2026-07-04 | 实时计划、优先级、技术债和后续路线 |
+| `docs/51-next-four-direction-roadmap.md` | 四方向规划 | 🔄 | 2026-07-04 | Python 能力层、Agent 实用能力、工程化质量、核心复杂度治理的顺序和并行关系 |
 | `docs/codebase-memory-mcp-callgraph.md` | 调用关系 | 🔄 | 2026-07-04 | MCP 使用方式、调用关系分析、开发前后索引规则 |
-| `docs/49-v19-python-agent-capability-layer-plan.md` | Python 能力层 | 🔄 | 2026-07-03 | Python sidecar 专项计划，Phase A/B 完成，C/D 待做 |
+| `docs/49-v19-python-agent-capability-layer-plan.md` | Python 能力层 | ✅ | 2026-07-04 | Python sidecar 专项计划，全部 Phase 已完成 |
 | `docs/已实现功能与待开发路线.md` | 产品路线 | 🔄 | 2026-07-03 | 已完成功能、待开发功能和体验路线 |
 | `docs/架构优化方向.md` | 架构优化 | 🔄 | 2026-06-18 | 架构债务、拆分方向和长期优化 |
-| `docs/自更新方向优化.md` | 自更新 | ❌ | 2026-06-05 | 自更新设计方向，当前未实施 |
+| `docs/CODE_REVIEW_DOCUMENT.md` | 代码审查 | ✅ | 2026-07-04 | 功能↔代码位置映射归档，60+ 工具定位，含设计决策和测试结构 |
 
 ---
 
@@ -87,6 +88,7 @@
 | 开发任务 | `DEVELOPMENT_WORKFLOW.md`、`DEVELOPMENT_PLAN.md`、`codebase-memory-mcp-callgraph.md` |
 | 审查任务 | `REVIEW_WORKFLOW.md`、`codebase-memory-mcp-callgraph.md`、相关 diff 和测试 |
 | Python 能力层 | `49-v19-python-agent-capability-layer-plan.md`、`learn/07-Python能力层学习.md` |
+| 四方向开发规划 | `51-next-four-direction-roadmap.md`、`DEVELOPMENT_PLAN.md` |
 | Agent 循环 | `codebase-memory-mcp-callgraph.md`、`DEVELOPMENT_PLAN.md`、`docs/已实现功能与待开发路线.md` |
 | 架构优化 | `架构优化方向.md`、`50-modular-ai-assisted-development.md` |
 | 工具系统 | `FileInteractionService-API.md`、`docs/done/15-tool-integration-design.md` |

@@ -2,6 +2,7 @@
 
 #include "core/ChatMessage.h"
 
+#include <QJsonObject>
 #include <QString>
 #include <QVector>
 
@@ -17,6 +18,11 @@ public:
     static size_t estimateTotalTokens(const QVector<ChatMessage> &messages);
     // 功能：估算系统提示词的 token 数（内容 + 4 token 开销）；使用模块：计入上下文总 token。
     static size_t estimateSystemPromptTokens(const QString &systemPrompt);
+
+    // V19: 从 OpenAI API usage JSON 解析实际 token 数
+    static size_t parseUsageTokens(const QJsonObject &usage);
+    static size_t promptTokensFromUsage(const QJsonObject &usage);
+    static size_t completionTokensFromUsage(const QJsonObject &usage);
 
 private:
     TokenEstimator() = delete;

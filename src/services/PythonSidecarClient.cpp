@@ -1,6 +1,8 @@
 #include "services/PythonSidecarClient.h"
 
 #include <QElapsedTimer>
+#include <QJsonArray>
+#include <QJsonObject>
 
 namespace {
 
@@ -122,5 +124,13 @@ QString PythonSidecarClient::nextRequestId()
 {
     ++m_nextRequestNumber;
     return QStringLiteral("cpp-%1").arg(m_nextRequestNumber);
+}
+
+QJsonArray PythonSidecarClient::listProviders(int timeoutMs)
+{
+    if (!isRunning()) return {};
+    PythonSidecarResponse resp = send(QStringLiteral("model.list_providers"), QJsonObject(), timeoutMs);
+    if (!resp.ok) return {};
+    return resp.result.value(QStringLiteral("providers")).toArray();
 }
 

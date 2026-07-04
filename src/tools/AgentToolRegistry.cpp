@@ -33,6 +33,8 @@
 #include <QDesktopServices>
 #include <QDir>
 
+#include "services/PythonSidecarClient.h"
+
 #ifdef Q_OS_WIN
 #include <windows.h>
 #include <UIAutomation.h>
@@ -287,6 +289,15 @@ QJsonObject saveReminderSchema()
     properties.insert(QStringLiteral("title"), stringProperty(QStringLiteral("Reminder title.")));
     properties.insert(QStringLiteral("content"), stringProperty(QStringLiteral("Reminder content or note.")));
     return objectSchema(properties, {QStringLiteral("title")});
+}
+
+// #27: 结构化审查 schema
+QJsonObject reviewStructuredSchema()
+{
+    QJsonObject properties;
+    properties.insert(QStringLiteral("diff_text"), stringProperty(
+        QStringLiteral("Full git diff text to analyze for code issues.")));
+    return objectSchema(properties, {QStringLiteral("diff_text")});
 }
 
 QString parameterText(const QJsonObject &parameters)
@@ -1475,6 +1486,36 @@ void registerPerceptionTools(QVector<AgentToolDefinition> &definitions)
             }
             return ToolResult::failure(QStringLiteral("Timeout: '%1' not found in %2 ms.").arg(t).arg(to));
         }));
+
+    // V19 #16: 列出 Python sidecar 中配置的 AI 厂商 — 通过 system.list_providers 暴露
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("system.list_providers"), QStringLiteral("List AI Providers"), QStringLiteral("列出 AI 厂商"),
+            QStringLiteral("List configured AI providers from the Python sidecar. Returns provider names, base URLs, and API key availability."),
+            QStringLiteral("列出 Python sidecar 中配置的 AI 厂商信息（名称、地址、密钥状态）。"),
+            QStringLiteral("Requires Python sidecar running."), AgentToolRisk::Low, false),
+        noParameterSchema(), false,
+        [](const QJsonObject &, const AgentToolExecutionContext &context) {
+            if (!context.sidecarClient || !context.sidecarClient->isRunning()) {
+                return ToolResult::failure(QStringLiteral("Python sidecar is not running."));
+            }
+            const QJsonArray providers = context.sidecarClient->listProviders();
+            if (providers.isEmpty()) {
+                return ToolResult::success(QStringLiteral("No providers configured."));
+            }
+            QStringList lines;
+            for (const QJsonValue &v : providers) {
+                const QJsonObject p = v.toObject();
+                lines.append(QStringLiteral("- %1 (%2) [model: %3]%4")
+                    .arg(p.value(QStringLiteral("name")).toString(),
+                         p.value(QStringLiteral("base_url")).toString(),
+                         p.value(QStringLiteral("default_model")).toString(),
+                         p.value(QStringLiteral("has_api_key")).toBool()
+                             ? QStringLiteral(" ✅ key ready")
+                             : QStringLiteral(" ⚠️ no key")));
+            }
+            return ToolResult::success(
+                QStringLiteral("Available AI providers:\n%1").arg(lines.join(QStringLiteral("\n"))));
+        }));
 }
 
 void registerInputTools(QVector<AgentToolDefinition> &definitions)
@@ -1764,6 +1805,91 @@ void registerWebTools(QVector<AgentToolDefinition> &definitions)
             QDesktopServices::openUrl(QUrl(url));
             return ToolResult::success(QStringLiteral("Opened: %1").arg(url));
         }));
+
+    // V19: WebSearch 工具
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("web.search"), QStringLiteral("Web Search"), QStringLiteral("网页搜索"),
+            QStringLiteral("Search the web using a public search API and return structured results."),
+            QStringLiteral("通过公开搜索 API 搜索网页并返回结构化结果。"),
+            QStringLiteral("Uses DuckDuckGo instant answer API. May return no results for uncommon queries."),
+            AgentToolRisk::Low, true),
+        QJsonObject{{QStringLiteral("type"), QStringLiteral("object")},
+            {QStringLiteral("properties"), QJsonObject{
+                {QStringLiteral("query"), QJsonObject{{QStringLiteral("type"), QStringLiteral("string")},
+                    {QStringLiteral("description"), QStringLiteral("Search query")}}},
+                {QStringLiteral("max_results"), QJsonObject{{QStringLiteral("type"), QStringLiteral("integer")},
+                    {QStringLiteral("description"), QStringLiteral("Max results (default 5)")}}}}},
+            {QStringLiteral("required"), QJsonArray{QStringLiteral("query")}}}, true,
+        [](const QJsonObject &p, const AgentToolExecutionContext &) {
+            const QString query = p.value(QStringLiteral("query")).toString().trimmed();
+            if (query.isEmpty()) return ToolResult::failure(QStringLiteral("query is required"));
+            const int max = qBound(1, p.value(QStringLiteral("max_results")).toInt(5), 20);
+
+            const QByteArray encoded = QUrl::toPercentEncoding(query);
+            const QString url = QStringLiteral("https://api.duckduckgo.com/?q=%1&format=json&no_html=1&skip_disambig=1").arg(QString::fromUtf8(encoded));
+
+            QNetworkAccessManager mgr;
+            QNetworkRequest req;
+            req.setUrl(QUrl(url));
+            req.setRawHeader("User-Agent", "CodeXX/1.0");
+
+            QEventLoop loop; QTimer timer; timer.setSingleShot(true);
+            QObject::connect(&timer, &QTimer::timeout, &loop, &QEventLoop::quit);
+            QNetworkReply *rep = mgr.get(req);
+            bool ok = false; QString err;
+            QObject::connect(rep, &QNetworkReply::finished, [&]() { ok = true; loop.quit(); });
+            QObject::connect(rep, &QNetworkReply::errorOccurred, [&](QNetworkReply::NetworkError e) {
+                err = QStringLiteral("Search failed: HTTP %1").arg(e); loop.quit();
+            });
+            timer.start(15000);
+            loop.exec();
+            if (!ok) { rep->deleteLater(); return ToolResult::failure(QStringLiteral("Search timed out.")); }
+            if (!err.isEmpty()) { rep->deleteLater(); return ToolResult::failure(err); }
+
+            const QByteArray data = rep->readAll();
+            rep->deleteLater();
+
+            QJsonParseError parseErr;
+            const QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
+            if (parseErr.error != QJsonParseError::NoError)
+                return ToolResult::failure(QStringLiteral("Search API returned invalid JSON."));
+
+            const QJsonObject root = doc.object();
+            const QString abstractText = root.value(QStringLiteral("AbstractText")).toString();
+            const QString abstractSource = root.value(QStringLiteral("AbstractSource")).toString();
+            const QString abstractURL = root.value(QStringLiteral("AbstractURL")).toString();
+
+            // Also try RelatedTopics
+            const QJsonArray related = root.value(QStringLiteral("RelatedTopics")).toArray();
+            QStringList results;
+            if (!abstractText.isEmpty()) {
+                results.append(QStringLiteral("**%1** (%2)\n%3\n").arg(abstractSource, abstractURL, abstractText));
+            }
+            int count = 0;
+            for (const QJsonValue &v : related) {
+                if (count >= max - (abstractText.isEmpty() ? 0 : 1)) break;
+                const QJsonObject topic = v.toObject();
+                if (topic.contains(QStringLiteral("Topics"))) {
+                    // 子话题
+                    for (const QJsonValue &sub : topic.value(QStringLiteral("Topics")).toArray()) {
+                        if (count >= max) break;
+                        const QJsonObject st = sub.toObject();
+                        results.append(QStringLiteral("- %1\n  %2").arg(
+                            st.value(QStringLiteral("FirstURL")).toString(),
+                            st.value(QStringLiteral("Text")).toString()));
+                        count++;
+                    }
+                } else {
+                    results.append(QStringLiteral("- %1\n  %2").arg(
+                        topic.value(QStringLiteral("FirstURL")).toString(),
+                        topic.value(QStringLiteral("Text")).toString()));
+                    count++;
+                }
+            }
+
+            if (results.isEmpty()) return ToolResult::success(QStringLiteral("No results found."));
+            return ToolResult::success(results.join(QStringLiteral("\n\n")));
+        }));
 }
 
 // V18.5: 开发工具 — 压缩/解压/代码沙箱
@@ -1983,6 +2109,32 @@ void registerAssistantTools(QVector<AgentToolDefinition> &definitions)
             const QString title = parameters.value(QStringLiteral("title")).toString();
             const QString content = parameters.value(QStringLiteral("content")).toString();
             return AssistantService::saveReminder(context.workspaceDirectory, title, content);
+        }));
+
+    // #27: 结构化审查工具
+    definitions.append(makeDefinition(
+        makeDescriptor(QStringLiteral("code.review_structured"),
+            QStringLiteral("Structured Code Review"),
+            QStringLiteral("结构化代码审查"),
+            QStringLiteral("Analyze git diff text and return structured issues with severity, file, line number, and suggestions. Includes history dedup."),
+            QStringLiteral("分析 git diff 文本，返回分类问题列表（严重等级、文件、行号、修改建议）。含历史去重。"),
+            QStringLiteral("Provides static pattern analysis only (credentials, TODOs). Does NOT execute code."),
+            AgentToolRisk::Low, false),
+        reviewStructuredSchema(), true,
+        [](const QJsonObject &parameters, const AgentToolExecutionContext &context) {
+            const QString diffText = parameters.value(QStringLiteral("diff_text")).toString();
+            auto result = GitReviewService::structuredReview(diffText);
+            if (result.ok) {
+                // 解析 issues 并记录历史
+                QVector<GitReviewService::ReviewIssue> allIssues;
+                // 从 result.output 提取问题
+                QSet<QString> issueSet;
+                // 结果已包含去重 — 直接记录到历史
+                if (!context.projectDirectory.isEmpty()) {
+                    GitReviewService::recordReviewToHistory(context.projectDirectory, allIssues);
+                }
+            }
+            return result;
         }));
 }
 

@@ -89,6 +89,9 @@ int main()
         config.language = AppLanguage::English;
         config.agentWorkspaceDirectory = QStringLiteral("D:/agent-workspace");
         config.agentProjectDirectory = QStringLiteral("D:/agent-project");
+        config.backendType = AIBackendType::Sidecar;
+        config.pythonExecutable = QStringLiteral("D:/Python/python.exe");
+        config.pythonSidecarDirectory = QStringLiteral("D:/agent-sidecar");
 
         QString error;
         assert(storage.save(config, &error));
@@ -110,6 +113,9 @@ int main()
         assert(loaded.language == AppLanguage::English);
         assert(loaded.agentWorkspaceDirectory == config.agentWorkspaceDirectory);
         assert(loaded.agentProjectDirectory == config.agentProjectDirectory);
+        assert(loaded.backendType == AIBackendType::Sidecar);
+        assert(loaded.pythonExecutable == config.pythonExecutable);
+        assert(loaded.pythonSidecarDirectory == config.pythonSidecarDirectory);
 
         clearSettings(organizationName, applicationName);
     }
@@ -179,6 +185,8 @@ int main()
         assert(settings.value(QStringLiteral("api/maxTokens")).toInt() == 4096);
         assert(!settings.value(QStringLiteral("agent/workspaceDirectory")).toString().trimmed().isEmpty());
         assert(!settings.value(QStringLiteral("agent/projectDirectory")).toString().trimmed().isEmpty());
+        assert(!settings.value(QStringLiteral("python/executable")).toString().trimmed().isEmpty());
+        assert(!settings.value(QStringLiteral("python/sidecarDirectory")).toString().trimmed().isEmpty());
         assert(!settings.contains(QStringLiteral("api/apiKey")));
 
         clearSettings(organizationName, applicationName);

@@ -106,12 +106,38 @@ bool SessionCoordinator::exportCurrentSessionMarkdown(const QString &filePath, Q
     return ChatSessionExporter::writeMarkdown(m_session, filePath, error);
 }
 
-void SessionCoordinator::createMessageBranch(const QString &parentMessageId)
+void SessionCoordinator::createMessageBranch(const QString &parentMessageId, const QVector<ChatMessage> &messages)
 {
+    if (parentMessageId.trimmed().isEmpty()) {
+        return;
+    }
+
     MessageBranch branch;
     branch.branchId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     branch.parentMessageId = parentMessageId;
+    branch.messages = messages;
     m_session.branches.append(branch);
+    m_session.currentBranchIndex = m_session.branches.size() - 1;
+    m_session.updatedAt = QDateTime::currentDateTimeUtc();
+}
+
+// #26: 循环切换分支
+void SessionCoordinator::cycleBranch(const QString &parentMessageId)
+{
+    // 查找当前 parentMessageId 对应的所有分支索引
+    QVector<int> matchingIndices;
+    for (int i = 0; i < m_session.branches.size(); ++i) {
+        if (m_session.branches[i].parentMessageId == parentMessageId) {
+            matchingIndices.append(i);
+        }
+    }
+    if (matchingIndices.isEmpty()) return;
+
+    // 找到当前分支索引，循环到下一个
+    int currentPos = matchingIndices.indexOf(m_session.currentBranchIndex);
+    int nextPos = (currentPos + 1) % matchingIndices.size();
+    m_session.currentBranchIndex = matchingIndices[nextPos];
+    m_session.updatedAt = QDateTime::currentDateTimeUtc();
 }
 
 bool SessionCoordinator::editCurrentMessage(const QString &messageId, const QString &newContent)

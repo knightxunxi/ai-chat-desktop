@@ -55,7 +55,7 @@ struct AgentLoopExecutionTestAccessor {
     }
 
     static void initOrchestrator(ApplicationController &c) {
-        c.m_agentOrchestrator.initialize(&c.m_aiClient, &c.m_configCoordinator, &c.m_sessionCoordinator);
+        c.m_agentOrchestrator.initialize(c.m_aiClient.data(), &c.m_configCoordinator, &c.m_sessionCoordinator);
     }
 
     static QString buildNextLoopPrompt(ApplicationController &c) {

@@ -20,8 +20,10 @@
 #include "tools/ProjectMemoryService.h"
 #include "memory/ProjectMemoryManager.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonParseError>
 #include <QSet>
@@ -30,22 +32,10 @@
 
 namespace {
 
-// V17.3: 粗略 Token 估算，用于 TokenBar 显示。
+// V17.3: Token 估算统一走 TokenEstimator，避免多处算法漂移。
 int estimateTokenCount(const QString &text)
 {
-    if (text.isEmpty()) {
-        return 0;
-    }
-
-    int tokens = 0;
-    for (const QChar &ch : text) {
-        if (ch.unicode() > 0x7F) {
-            tokens += 2;
-        } else {
-            tokens += 1;
-        }
-    }
-    return tokens / 3;
+    return static_cast<int>(TokenEstimator::estimateTokens(text));
 }
 
 QString commandSkillSectionForProject(const QString &projectDirectory, AppLanguage language)
@@ -130,6 +120,7 @@ QString compactPreview(QString text, int maxLength)
 
 ApplicationController::ApplicationController(QObject *parent)
     : QObject(parent)
+    , m_aiClient(new OpenAICompatibleClient(this)) // 默认直连后端，initAIClient 可选择切换
 {
     // 信号转发：ConfigCoordinator → ApplicationController
     connect(&m_configCoordinator, &ConfigCoordinator::configChanged,
@@ -173,13 +164,7 @@ ApplicationController::ApplicationController(QObject *parent)
     connect(&m_agentOrchestrator, &AgentOrchestrator::statusMessage,
             this, &ApplicationController::statusMessage);
 
-    // AI 客户端信号
-    connect(&m_aiClient, &OpenAICompatibleClient::textDeltaReceived, this, &ApplicationController::handleTextDelta);
-    connect(&m_aiClient, &OpenAICompatibleClient::toolCallsReceived, this, &ApplicationController::handleToolCallsReceived);
-    connect(&m_aiClient, &OpenAICompatibleClient::toolUseBlockComplete, this, &ApplicationController::handleToolUseBlockComplete);
-    connect(&m_aiClient, &OpenAICompatibleClient::requestFinished, this, &ApplicationController::handleRequestFinished);
-    connect(&m_aiClient, &OpenAICompatibleClient::responseTruncated, this, &ApplicationController::handleResponseTruncated);
-    connect(&m_aiClient, &OpenAICompatibleClient::requestFailed, this, &ApplicationController::handleRequestFailed);
+    connectAIClientSignals();
 }
 
 ApplicationController::~ApplicationController()
@@ -187,6 +172,112 @@ ApplicationController::~ApplicationController()
     if (m_taskStorage && m_taskScheduler) {
         m_taskStorage->save(m_taskScheduler->allTasks());
     }
+}
+
+void ApplicationController::initAIClient()
+{
+    const AppConfig &config = m_configCoordinator.config();
+    for (const QMetaObject::Connection &connection : m_aiClientConnections) {
+        QObject::disconnect(connection);
+    }
+    m_aiClientConnections.clear();
+
+    if (config.backendType == AIBackendType::Sidecar) {
+        auto *sidecar = new PythonSidecarAIClient(this);
+        const QString pythonExecutable = config.pythonExecutable.trimmed().isEmpty()
+                                             ? AppConfig::defaultPythonExecutable()
+                                             : config.pythonExecutable.trimmed();
+        const QString sidecarDirectory = resolvePythonSidecarDirectory();
+        const bool started = sidecar->startSidecar(pythonExecutable, sidecarDirectory, 5000);
+        if (started) {
+            AppLogger::info(QStringLiteral("PythonSidecar"),
+                            QStringLiteral("Python sidecar started. executable=%1 dir=%2")
+                                .arg(pythonExecutable, sidecarDirectory));
+            m_aiClient.reset(sidecar);
+        } else {
+            // sidecar 启动失败，回退到直连
+            const QString error = sidecar->lastError();
+            delete sidecar;
+            AppLogger::warning(QStringLiteral("PythonSidecar"),
+                               QStringLiteral("Python sidecar failed to start. executable=%1 dir=%2 error=%3")
+                                   .arg(pythonExecutable, sidecarDirectory, error));
+            emit startupWarning(
+                QStringLiteral("Python sidecar failed to start, so the app fell back to the direct C++ client.\n\n%1").arg(error),
+                QStringLiteral("Python 能力层启动失败，已回退到 C++ 直连客户端。\n\n%1").arg(error));
+            m_aiClient.reset(new OpenAICompatibleClient(this));
+        }
+    } else {
+        m_aiClient.reset(new OpenAICompatibleClient(this));
+    }
+
+    connectAIClientSignals();
+}
+
+void ApplicationController::connectAIClientSignals()
+{
+    for (const QMetaObject::Connection &connection : m_aiClientConnections) {
+        QObject::disconnect(connection);
+    }
+    m_aiClientConnections.clear();
+
+    if (m_aiClient.isNull()) {
+        return;
+    }
+
+    // AIClient 可在运行期切换，所有入口统一走这里，避免替换后信号链断开。
+    m_aiClientConnections.append(connect(m_aiClient.get(), &AIClient::textDeltaReceived,
+                                         this, &ApplicationController::handleTextDelta));
+    m_aiClientConnections.append(connect(m_aiClient.get(), &AIClient::toolCallsReceived,
+                                         this, &ApplicationController::handleToolCallsReceived));
+    m_aiClientConnections.append(connect(m_aiClient.get(), &AIClient::requestFinished,
+                                         this, &ApplicationController::handleRequestFinished));
+    m_aiClientConnections.append(connect(m_aiClient.get(), &AIClient::responseTruncated,
+                                         this, &ApplicationController::handleResponseTruncated));
+    m_aiClientConnections.append(connect(m_aiClient.get(), &AIClient::requestFailed,
+                                         this, &ApplicationController::handleRequestFailed));
+}
+
+QString ApplicationController::resolvePythonSidecarDirectory() const
+{
+    const QString configured = m_configCoordinator.config().pythonSidecarDirectory.trimmed();
+    if (!configured.isEmpty()) {
+        return QDir::cleanPath(configured);
+    }
+
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString currentDir = QDir::currentPath();
+    const QStringList candidates = {
+        QDir(appDir).filePath(QStringLiteral("python/agent_sidecar")),
+        QDir(appDir).filePath(QStringLiteral("../python/agent_sidecar")),
+        QDir(currentDir).filePath(QStringLiteral("python/agent_sidecar")),
+        QDir(currentDir).filePath(QStringLiteral("../python/agent_sidecar")),
+        AppConfig::defaultPythonSidecarDirectory()
+    };
+
+    for (const QString &candidate : candidates) {
+        const QDir dir(candidate);
+        if (dir.exists(QStringLiteral("agent_sidecar"))) {
+            return QDir::cleanPath(candidate);
+        }
+    }
+
+    return QDir::cleanPath(candidates.isEmpty() ? AppConfig::defaultPythonSidecarDirectory() : candidates.first());
+}
+
+PythonSidecarClient *ApplicationController::activeSidecarClient() const
+{
+    auto *sidecar = qobject_cast<PythonSidecarAIClient *>(m_aiClient.get());
+    return sidecar == nullptr ? nullptr : sidecar->sidecarClient();
+}
+
+AgentToolExecutionContext ApplicationController::buildToolExecutionContext() const
+{
+    const QString workspace = m_configCoordinator.config().agentProjectDirectory;
+    AgentToolExecutionContext context;
+    context.workspaceDirectory = workspace;
+    context.projectDirectory = workspace;
+    context.sidecarClient = activeSidecarClient();
+    return context;
 }
 
 void ApplicationController::initialize()
@@ -197,8 +288,11 @@ void ApplicationController::initialize()
     // 会话初始化
     m_sessionCoordinator.initialize();
 
+    // V19: 根据配置选择 AI 后端
+    initAIClient();
+
     // Agent 编排器初始化（上下文窗口、技能/钩子、MCP、残留状态检测）
-    m_agentOrchestrator.initialize(&m_aiClient, &m_configCoordinator, &m_sessionCoordinator);
+    m_agentOrchestrator.initialize(m_aiClient.data(), &m_configCoordinator, &m_sessionCoordinator);
 
     // V15.1: 初始化调度器
     m_taskScheduler = std::make_unique<TaskScheduler>(this);
@@ -253,7 +347,17 @@ bool ApplicationController::exportCurrentSessionMarkdown(const QString &filePath
 
 void ApplicationController::saveConfig(const AppConfig &config)
 {
+    const AppConfig previousConfig = m_configCoordinator.config();
     m_configCoordinator.saveConfig(config);
+
+    const bool backendChanged =
+        previousConfig.backendType != config.backendType
+        || previousConfig.pythonExecutable != config.pythonExecutable
+        || previousConfig.pythonSidecarDirectory != config.pythonSidecarDirectory;
+    if (backendChanged) {
+        initAIClient();
+        m_agentOrchestrator.initialize(m_aiClient.data(), &m_configCoordinator, &m_sessionCoordinator);
+    }
 }
 
 void ApplicationController::savePromptTemplates(const QVector<PromptTemplate> &templates)
@@ -422,7 +526,7 @@ void ApplicationController::sendMessageWithImages(const QString &content, const 
     setGenerating(true);
     m_activeRequestKind = ActiveRequestKind::ChatMessage;
     m_lastRequestUserContent = trimmedContent;
-    m_aiClient.sendChatWithImages(m_configCoordinator.config(), m_sessionCoordinator.currentSession(), QJsonArray(), m_pendingImages);
+    m_aiClient->sendChatWithImages(m_configCoordinator.config(), m_sessionCoordinator.currentSession(), QJsonArray(), m_pendingImages);
 
     // V17.3: Token 估算更新
     int totalTokens = estimateTokenCount(m_sessionCoordinator.currentSession().systemPrompt);
@@ -457,7 +561,7 @@ void ApplicationController::startAssistantRequest(const QString &userContentForR
     emit assistantMessageStarted();
 
     setGenerating(true);
-    m_aiClient.sendChat(m_configCoordinator.config(), m_sessionCoordinator.currentSession());
+    m_aiClient->sendChat(m_configCoordinator.config(), m_sessionCoordinator.currentSession());
 
     // V17.3: Token 估算更新
     int totalTokens = estimateTokenCount(m_sessionCoordinator.currentSession().systemPrompt);
@@ -536,7 +640,7 @@ void ApplicationController::generateAgentPlan(const QString &goal, int continuat
     }
 
     setGenerating(true);
-    m_aiClient.sendChatWithTools(m_configCoordinator.config(), planningSession, registry.functionToolSchemas(m_configCoordinator.config().language));
+    m_aiClient->sendChatWithTools(m_configCoordinator.config(), planningSession, registry.functionToolSchemas(m_configCoordinator.config().language));
 
     emit statusMessage(QStringLiteral("Generating Agent plan..."),
                        QStringLiteral("正在生成 Agent 计划..."),
@@ -609,7 +713,7 @@ void ApplicationController::sendUnifiedMessage(const QString &content)
     }
 
     setGenerating(true);
-    m_aiClient.sendChatWithTools(m_configCoordinator.config(), requestSession, registry.functionToolSchemas(m_configCoordinator.config().language));
+    m_aiClient->sendChatWithTools(m_configCoordinator.config(), requestSession, registry.functionToolSchemas(m_configCoordinator.config().language));
 
     AppLogger::info(QStringLiteral("UnifiedAgent"),
                     QStringLiteral("Unified agent request started. messageLength=%1")
@@ -668,7 +772,7 @@ void ApplicationController::sendAgentLoopMessage(const QString &content)
 
         m_pendingAgentRequestSession = loopSession;
         setGenerating(true);
-        m_aiClient.sendChatWithTools(m_configCoordinator.config(), loopSession,
+        m_aiClient->sendChatWithTools(m_configCoordinator.config(), loopSession,
             registry.functionToolSchemas(m_configCoordinator.config().language));
         return;
     }
@@ -755,7 +859,7 @@ void ApplicationController::continueAgentLoop()
     m_pendingAgentRequestSession = loopSession;
 
     setGenerating(true);
-    m_aiClient.sendChatWithTools(m_configCoordinator.config(), loopSession,
+    m_aiClient->sendChatWithTools(m_configCoordinator.config(), loopSession,
         registry.functionToolSchemas(m_configCoordinator.config().language));
 }
 
@@ -766,7 +870,7 @@ void ApplicationController::cancelCurrentRequest()
     }
 
     const ActiveRequestKind requestKind = m_activeRequestKind;
-    m_aiClient.cancel();
+    m_aiClient->cancel();
     setGenerating(false);
     m_agentOrchestrator.clearPendingToolResults();
 
@@ -871,8 +975,7 @@ PendingToolResult ApplicationController::executeAgentToolDefinition(
     const QString &reasoning,
     const QString &title)
 {
-    const QString workspace = m_configCoordinator.config().agentProjectDirectory;
-    const AgentToolExecutionContext context{workspace, workspace};
+    const AgentToolExecutionContext context = buildToolExecutionContext();
     const int displayIteration = m_agentOrchestrator.agentLoopIteration() + 1;
     const QString resolvedTitle = title.trimmed().isEmpty()
                                       ? agentToolDisplayName(definition.descriptor, m_configCoordinator.config().language)
@@ -1532,7 +1635,7 @@ bool ApplicationController::retryAgentRequestWithoutNativeTools(RequestErrorCate
     emit statusMessage(QStringLiteral("Native tool call request failed. Retrying with JSON plan fallback..."),
                        QStringLiteral("原生工具调用请求失败，正在退回 JSON 计划模式..."),
                        4000);
-    m_aiClient.sendChat(m_configCoordinator.config(), m_pendingAgentRequestSession);
+    m_aiClient->sendChat(m_configCoordinator.config(), m_pendingAgentRequestSession);
     return true;
 }
 
@@ -1633,9 +1736,17 @@ void ApplicationController::resumeAgentLoop()
 }
 
 // V17.4: 对话分支
-void ApplicationController::createMessageBranch(const QString &parentMessageId)
+void ApplicationController::createMessageBranch(const QString &parentMessageId, const QVector<ChatMessage> &messages)
 {
-    m_sessionCoordinator.createMessageBranch(parentMessageId);
+    m_sessionCoordinator.createMessageBranch(parentMessageId, messages);
+    m_sessionCoordinator.saveCurrentSession(false);
+}
+
+// #26: 循环切换分支
+void ApplicationController::cycleBranchMessage(const QString &messageId)
+{
+    m_sessionCoordinator.cycleBranch(messageId);
+    m_sessionCoordinator.saveCurrentSession(false);
 }
 
 // V15.1: 定时任务调度

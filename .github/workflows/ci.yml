@@ -23,6 +23,7 @@ jobs:
       matrix:
         build_type:
           - Debug
+          - Release
 
     steps:
       - name: Checkout
@@ -49,3 +50,19 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build-ci -C ${{ matrix.build_type }} --output-on-failure
+
+      - name: Package (Release only)
+        if: matrix.build_type == 'Release'
+        shell: pwsh
+        run: |
+          mkdir release-artifacts -Force
+          windeployqt build-ci/Release/AIChatDesktop.exe --dir release-artifacts
+          Copy-Item build-ci/Release/AIChatDesktop.exe release-artifacts/
+          Compress-Archive -Path release-artifacts/* -DestinationPath AIChatDesktop-windows-x64-${{ github.sha }}.zip -Force
+
+      - name: Upload Artifact (Release only)
+        if: matrix.build_type == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIChatDesktop-windows-x64
+          path: AIChatDesktop-windows-x64-*.zip

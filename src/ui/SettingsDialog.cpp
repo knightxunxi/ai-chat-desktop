@@ -56,15 +56,26 @@ SettingsDialog::SettingsDialog(const AppConfig &config, QWidget *parent)
     applyTexts();
 }
 
+void SettingsDialog::setDebugMode(bool enabled)
+{
+    m_debugMode = enabled;
+    if (m_debugModeCheckbox != nullptr) {
+        m_debugModeCheckbox->setChecked(enabled);
+    }
+}
+
 AppConfig SettingsDialog::config() const
 {
     AppConfig config;
     const QString providerId = m_providerCombo->currentData().toString();
     const std::optional<ProviderPreset> preset = ProviderPresets::findById(providerId);
+    config.backendType = static_cast<AIBackendType>(m_backendCombo->currentData().toInt());
     config.providerName = preset.has_value() ? preset->name : m_customProviderEdit->text().trimmed();
     config.baseUrl = m_baseUrlEdit->text().trimmed();
     config.modelName = m_modelNameEdit->text().trimmed();
     config.apiKey = m_apiKeyEdit->text().trimmed();
+    config.pythonExecutable = m_pythonExecutableEdit->text().trimmed();
+    config.pythonSidecarDirectory = m_pythonSidecarEdit->text().trimmed();
     config.temperature = optionalDoubleFromText(m_temperatureEdit->text());
     config.maxTokens = optionalIntFromText(m_maxTokensEdit->text());
     config.agentWorkspaceDirectory = m_agentWorkspaceEdit->text().trimmed();
@@ -89,6 +100,12 @@ void SettingsDialog::setupUi()
     m_formLayout = new QFormLayout();
     m_formLayout->setContentsMargins(0, 0, 0, 0);
     m_formLayout->setSpacing(12);
+
+    m_backendCombo = new QComboBox(this);
+    m_backendCombo->setObjectName(QStringLiteral("backendCombo"));
+    m_backendCombo->addItem(QStringLiteral("Direct C++"), static_cast<int>(AIBackendType::Direct));
+    m_backendCombo->addItem(QStringLiteral("Python sidecar"), static_cast<int>(AIBackendType::Sidecar));
+    m_backendCombo->setCurrentIndex(m_initialConfig.backendType == AIBackendType::Sidecar ? 1 : 0);
 
     m_providerCombo = new QComboBox(this);
     m_providerCombo->setObjectName(QStringLiteral("providerCombo"));
@@ -115,6 +132,18 @@ void SettingsDialog::setupUi()
     m_apiKeyEdit = new QLineEdit(this);
     m_apiKeyEdit->setText(m_initialConfig.apiKey);
     m_apiKeyEdit->setEchoMode(QLineEdit::Password);
+
+    m_pythonExecutableEdit = new QLineEdit(this);
+    m_pythonExecutableEdit->setObjectName(QStringLiteral("pythonExecutableEdit"));
+    m_pythonExecutableEdit->setText(m_initialConfig.pythonExecutable.trimmed().isEmpty()
+                                        ? AppConfig::defaultPythonExecutable()
+                                        : m_initialConfig.pythonExecutable);
+
+    m_pythonSidecarEdit = new QLineEdit(this);
+    m_pythonSidecarEdit->setObjectName(QStringLiteral("pythonSidecarEdit"));
+    m_pythonSidecarEdit->setText(m_initialConfig.pythonSidecarDirectory.trimmed().isEmpty()
+                                     ? AppConfig::defaultPythonSidecarDirectory()
+                                     : m_initialConfig.pythonSidecarDirectory);
 
     m_temperatureEdit = new QLineEdit(this);
     m_temperatureEdit->setObjectName(QStringLiteral("temperatureEdit"));
@@ -147,22 +176,28 @@ void SettingsDialog::setupUi()
     m_languageCombo->addItem(QStringLiteral("English"), static_cast<int>(AppLanguage::English));
     m_languageCombo->setCurrentIndex(m_initialConfig.language == AppLanguage::English ? 1 : 0);
 
+    m_backendLabel = new QLabel(this);
     m_providerLabel = new QLabel(this);
     m_customProviderLabel = new QLabel(this);
     m_baseUrlLabel = new QLabel(this);
     m_modelNameLabel = new QLabel(this);
     m_apiKeyLabel = new QLabel(this);
+    m_pythonExecutableLabel = new QLabel(this);
+    m_pythonSidecarLabel = new QLabel(this);
     m_temperatureLabel = new QLabel(this);
     m_maxTokensLabel = new QLabel(this);
     m_agentWorkspaceLabel = new QLabel(this);
     m_agentProjectLabel = new QLabel(this);
     m_languageLabel = new QLabel(this);
 
+    m_formLayout->addRow(m_backendLabel, m_backendCombo);
     m_formLayout->addRow(m_providerLabel, m_providerCombo);
     m_formLayout->addRow(m_customProviderLabel, m_customProviderEdit);
     m_formLayout->addRow(m_baseUrlLabel, m_baseUrlEdit);
     m_formLayout->addRow(m_modelNameLabel, m_modelNameEdit);
     m_formLayout->addRow(m_apiKeyLabel, m_apiKeyEdit);
+    m_formLayout->addRow(m_pythonExecutableLabel, m_pythonExecutableEdit);
+    m_formLayout->addRow(m_pythonSidecarLabel, m_pythonSidecarEdit);
     m_formLayout->addRow(m_temperatureLabel, m_temperatureEdit);
     m_formLayout->addRow(m_maxTokensLabel, m_maxTokensEdit);
     m_formLayout->addRow(m_agentWorkspaceLabel, m_agentWorkspaceEdit);
@@ -195,9 +230,11 @@ void SettingsDialog::setupUi()
     connect(m_buttonBox, &QDialogButtonBox::accepted, this, &SettingsDialog::accept);
     connect(m_buttonBox, &QDialogButtonBox::rejected, this, &SettingsDialog::reject);
     connect(m_providerCombo, &QComboBox::currentIndexChanged, this, &SettingsDialog::applySelectedProviderPreset);
+    connect(m_backendCombo, &QComboBox::currentIndexChanged, this, &SettingsDialog::updateBackendVisibility);
     rootLayout->addWidget(m_buttonBox);
 
     updateCustomProviderVisibility();
+    updateBackendVisibility();
 }
 
 void SettingsDialog::applyTexts()
@@ -206,6 +243,9 @@ void SettingsDialog::applyTexts()
     setWindowTitle(dialogText(language, QStringLiteral("Settings"), QStringLiteral("设置")));
 
     m_titleLabel->setText(dialogText(language, QStringLiteral("Settings"), QStringLiteral("设置")));
+    m_backendLabel->setText(dialogText(language, QStringLiteral("AI backend"), QStringLiteral("AI 后端")));
+    m_backendCombo->setItemText(0, dialogText(language, QStringLiteral("Direct C++ client"), QStringLiteral("C++ 直连")));
+    m_backendCombo->setItemText(1, dialogText(language, QStringLiteral("Python sidecar"), QStringLiteral("Python 能力层")));
     m_providerLabel->setText(dialogText(language, QStringLiteral("Provider"), QStringLiteral("服务商")));
     m_customProviderLabel->setText(dialogText(language, QStringLiteral("Custom name"), QStringLiteral("自定义名称")));
     const int customIndex = m_providerCombo->findData(ProviderPresets::customId());
@@ -215,6 +255,10 @@ void SettingsDialog::applyTexts()
     m_baseUrlLabel->setText(QStringLiteral("Base URL"));
     m_modelNameLabel->setText(dialogText(language, QStringLiteral("Model"), QStringLiteral("模型名称")));
     m_apiKeyLabel->setText(QStringLiteral("API Key"));
+    m_pythonExecutableLabel->setText(dialogText(language, QStringLiteral("Python command"), QStringLiteral("Python 命令")));
+    m_pythonExecutableEdit->setPlaceholderText(AppConfig::defaultPythonExecutable());
+    m_pythonSidecarLabel->setText(dialogText(language, QStringLiteral("Sidecar directory"), QStringLiteral("Sidecar 目录")));
+    m_pythonSidecarEdit->setPlaceholderText(AppConfig::defaultPythonSidecarDirectory());
     m_temperatureLabel->setText(dialogText(language, QStringLiteral("Temperature"), QStringLiteral("随机性")));
     m_temperatureEdit->setPlaceholderText(dialogText(language, QStringLiteral("Optional, 0-2"), QStringLiteral("可选，0-2")));
     m_maxTokensLabel->setText(dialogText(language, QStringLiteral("Max tokens"), QStringLiteral("最大输出")));
@@ -249,6 +293,15 @@ void SettingsDialog::updateCustomProviderVisibility()
     m_customProviderEdit->setVisible(isCustom);
 }
 
+void SettingsDialog::updateBackendVisibility()
+{
+    const bool isSidecar = static_cast<AIBackendType>(m_backendCombo->currentData().toInt()) == AIBackendType::Sidecar;
+    m_pythonExecutableLabel->setVisible(isSidecar);
+    m_pythonExecutableEdit->setVisible(isSidecar);
+    m_pythonSidecarLabel->setVisible(isSidecar);
+    m_pythonSidecarEdit->setVisible(isSidecar);
+}
+
 void SettingsDialog::accept()
 {
     const AppConfig nextConfig = config();
@@ -259,6 +312,18 @@ void SettingsDialog::accept()
             dialogText(nextConfig.language,
                        QStringLiteral("Provider, Base URL, and model are required."),
                        QStringLiteral("服务商、Base URL 和模型名称不能为空。")));
+        return;
+    }
+
+    if (nextConfig.backendType == AIBackendType::Sidecar
+        && (nextConfig.pythonExecutable.trimmed().isEmpty()
+            || nextConfig.pythonSidecarDirectory.trimmed().isEmpty())) {
+        QMessageBox::warning(
+            this,
+            dialogText(nextConfig.language, QStringLiteral("Missing sidecar settings"), QStringLiteral("Sidecar 配置不完整")),
+            dialogText(nextConfig.language,
+                       QStringLiteral("Python command and sidecar directory are required for the Python backend."),
+                       QStringLiteral("使用 Python 能力层时，Python 命令和 sidecar 目录不能为空。")));
         return;
     }
 

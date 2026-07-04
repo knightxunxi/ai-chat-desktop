@@ -11,6 +11,7 @@ class QLabel;
 class QLineEdit;
 class QScrollArea;
 class QVBoxLayout;
+class QPushButton;
 class TokenBar;
 class TypingIndicator;
 
@@ -52,6 +53,11 @@ public:
     // V17.4: 打字指示器
     void showTyping();
     void hideTyping();
+
+    // V26: 在指定消息下方添加分支指示器按钮
+    QPushButton *addBranchIndicator(const QString &messageId, int branchCount, int currentIndex);
+    // V26: 添加分支消息预览
+    MessageWidget *addBranchMessage(MessageRole role, const QString &content, const QString &branchId);
 
 private:
     // 功能：滚动到最新消息；使用模块：addMessage/updateLastAssistantMessage 内部调用。

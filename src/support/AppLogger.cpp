@@ -27,10 +27,23 @@ QString normalizedMessage(QString message)
 {
     message.replace(QLatin1Char('\r'), QLatin1Char(' '));
     message.replace(QLatin1Char('\n'), QLatin1Char(' '));
-    message.replace(QRegularExpression(QStringLiteral("Bearer\\s+[^\\s,;]+"), QRegularExpression::CaseInsensitiveOption),
+
+    // Bearer token
+    message.replace(QRegularExpression(QStringLiteral("Bearer\\s+[a-zA-Z0-9\\-._~+/]+=*"), QRegularExpression::CaseInsensitiveOption),
                     QStringLiteral("Bearer [REDACTED]"));
-    message.replace(QRegularExpression(QStringLiteral("((?:api[_-]?key|apikey)\\s*[:=]\\s*)[^\\s,;]+"), QRegularExpression::CaseInsensitiveOption),
+    // api_key / apikey
+    message.replace(QRegularExpression(QStringLiteral("((?:api[_-]?key|apikey)\\s*[:=]\\s*)[^\\s,;\"]+"), QRegularExpression::CaseInsensitiveOption),
                     QStringLiteral("\\1[REDACTED]"));
+    // sk-... (OpenAI API key)
+    message.replace(QRegularExpression(QStringLiteral("sk-[a-zA-Z0-9]{20,}")),
+                    QStringLiteral("sk-[REDACTED]"));
+    // ghp_... (GitHub PAT)
+    message.replace(QRegularExpression(QStringLiteral("ghp_[a-zA-Z0-9]{20,}")),
+                    QStringLiteral("ghp_[REDACTED]"));
+    // password, secret, private_key, auth_token
+    message.replace(QRegularExpression(QStringLiteral("((?:password|secret|private_key|auth_token)\\s*[:=]\\s*)[^\\s,;\"]+"), QRegularExpression::CaseInsensitiveOption),
+                    QStringLiteral("\\1[REDACTED]"));
+
     return message.trimmed();
 }
 

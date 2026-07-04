@@ -26,6 +26,7 @@ target_link_libraries(codexx_tools PUBLIC
     codexx_mcp
     codexx_hooks
     codexx_support
+    codexx_services
     Qt6::Core
     Qt6::Widgets
     Qt6::Network

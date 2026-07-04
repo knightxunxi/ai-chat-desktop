@@ -3,7 +3,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .capabilities import SidecarError, chat, count_tokens, ping
+from .capabilities import (
+    SidecarError,
+    chat,
+    count_tokens,
+    document_to_markdown,
+    list_providers_handler,
+    ping,
+    web_extract,
+)
 
 SIDECAR_VERSION = "0.1.0"
 
@@ -77,5 +85,11 @@ def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
         return count_tokens(params)
     if method == "model.chat":
         return chat(params)
+    if method == "model.list_providers":
+        return list_providers_handler()
+    if method == "web.extract":
+        return web_extract(params)
+    if method == "document.to_markdown":
+        return document_to_markdown(params)
     raise SidecarError("method_not_found", f"Unsupported sidecar method: {method}.")
 

@@ -12,11 +12,14 @@ constexpr auto ProviderNameKey = "api/providerName";
 constexpr auto BaseUrlKey = "api/baseUrl";
 constexpr auto ModelNameKey = "api/modelName";
 constexpr auto ApiKeyKey = "api/apiKey";
+constexpr auto BackendTypeKey = "api/backendType";
 constexpr auto TemperatureKey = "api/temperature";
 constexpr auto MaxTokensKey = "api/maxTokens";
 constexpr auto LanguageKey = "ui/language";
 constexpr auto AgentWorkspaceDirectoryKey = "agent/workspaceDirectory";
 constexpr auto AgentProjectDirectoryKey = "agent/projectDirectory";
+constexpr auto PythonExecutableKey = "python/executable";
+constexpr auto PythonSidecarDirectoryKey = "python/sidecarDirectory";
 constexpr auto DefaultOrganizationName = "AIChatDesktop";
 constexpr auto DefaultApplicationName = "AIChatDesktop";
 
@@ -25,6 +28,25 @@ void setError(QString *error, const QString &message)
     if (error != nullptr) {
         *error = message;
     }
+}
+
+QString backendTypeToString(AIBackendType backendType)
+{
+    switch (backendType) {
+    case AIBackendType::Direct:
+        return QStringLiteral("direct");
+    case AIBackendType::Sidecar:
+        return QStringLiteral("sidecar");
+    }
+    return QStringLiteral("direct");
+}
+
+AIBackendType backendTypeFromString(const QString &value)
+{
+    if (value.compare(QStringLiteral("sidecar"), Qt::CaseInsensitive) == 0) {
+        return AIBackendType::Sidecar;
+    }
+    return AIBackendType::Direct;
 }
 
 } // namespace
@@ -57,6 +79,8 @@ AppConfig ConfigStorage::load() const
     config.providerName = settings.value(ProviderNameKey, defaults.providerName).toString();
     config.baseUrl = settings.value(BaseUrlKey, defaults.baseUrl).toString();
     config.modelName = settings.value(ModelNameKey, defaults.modelName).toString();
+    config.backendType = backendTypeFromString(
+        settings.value(BackendTypeKey, backendTypeToString(defaults.backendType)).toString());
     config.apiKey = m_credentialStorage->readApiKey();
     if (settings.contains(TemperatureKey)) {
         config.temperature = settings.value(TemperatureKey).toDouble();
@@ -72,6 +96,14 @@ AppConfig ConfigStorage::load() const
     config.agentProjectDirectory = settings.value(AgentProjectDirectoryKey, defaults.agentProjectDirectory).toString();
     if (config.agentProjectDirectory.trimmed().isEmpty()) {
         config.agentProjectDirectory = defaults.agentProjectDirectory;
+    }
+    config.pythonExecutable = settings.value(PythonExecutableKey, defaults.pythonExecutable).toString();
+    if (config.pythonExecutable.trimmed().isEmpty()) {
+        config.pythonExecutable = defaults.pythonExecutable;
+    }
+    config.pythonSidecarDirectory = settings.value(PythonSidecarDirectoryKey, defaults.pythonSidecarDirectory).toString();
+    if (config.pythonSidecarDirectory.trimmed().isEmpty()) {
+        config.pythonSidecarDirectory = defaults.pythonSidecarDirectory;
     }
 
     const QString legacyApiKey = settings.value(ApiKeyKey).toString();
@@ -98,6 +130,7 @@ bool ConfigStorage::save(const AppConfig &config, QString *error) const
     settings.setValue(ProviderNameKey, config.providerName);
     settings.setValue(BaseUrlKey, config.baseUrl);
     settings.setValue(ModelNameKey, config.modelName);
+    settings.setValue(BackendTypeKey, backendTypeToString(config.backendType));
     if (config.temperature.has_value()) {
         settings.setValue(TemperatureKey, config.temperature.value());
     } else {
@@ -118,6 +151,14 @@ bool ConfigStorage::save(const AppConfig &config, QString *error) const
                       config.agentProjectDirectory.trimmed().isEmpty()
                           ? AppConfig::defaultAgentProjectDirectory()
                           : config.agentProjectDirectory.trimmed());
+    settings.setValue(PythonExecutableKey,
+                      config.pythonExecutable.trimmed().isEmpty()
+                          ? AppConfig::defaultPythonExecutable()
+                          : config.pythonExecutable.trimmed());
+    settings.setValue(PythonSidecarDirectoryKey,
+                      config.pythonSidecarDirectory.trimmed().isEmpty()
+                          ? AppConfig::defaultPythonSidecarDirectory()
+                          : config.pythonSidecarDirectory.trimmed());
     settings.sync();
 
     if (settings.status() != QSettings::NoError) {

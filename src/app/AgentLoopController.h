@@ -1,12 +1,22 @@
 #pragma once
 
+// 功能：Agent 循环控制器 — 定义 Agent 异步循环引擎 (AgentLoopEngine) 和
+//        同步调用包装 (executeLoop / runPlan)。
+// 异步引擎：AgentLoopEngine 基于 QObject 信号/槽，每轮通过 QTimer::singleShot(0)
+//           释放调用栈，不阻塞 UI。
+// 同步包装：executeLoop() 保持原同步接口，供测试和旧调用方使用。
+// V19 D-2: 新增 AgentLoopEngine，替代原有的 QEventLoop AiLoopRunner。
+
 #include "app/AgentPlan.h"
 #include "core/AppLanguage.h"
 #include "services/RequestErrorCategory.h"
 #include "tools/AgentToolRegistry.h"
 
+#include <QElapsedTimer>
+#include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 
 #include <functional>
 
@@ -29,47 +39,39 @@ enum class AgentLoopRunStatus {
 
 // 功能：描述循环终止原因；使用模块：executeLoop 终止判断和审计日志。
 enum class TerminationReason {
-    None,           // 无需终止
-    StepLimit,      // 达到步数上限
-    RuntimeLimit,   // 达到时间上限
-    StepTimeout,    // 单步超时
-    Stopped,        // 用户停止
-    AIDone,         // AI 返回 done=true
-    AIError,        // AI 调用失败
-    ParseError      // 解析失败（保留，不用于终止）
+    None,
+    StepLimit,
+    RuntimeLimit,
+    StepTimeout,
+    Stopped,
+    AIDone,
+    AIError,
+    ParseError
 };
 
 struct AgentLoopOptions {
-    int maxSteps = 10;             // 功能：最大连续动作数；使用模块：Agentic Loop 运行时。
-    qint64 maxRuntimeMs = 120000;  // 功能：总运行耗时上限；使用模块：防止长时间占用 UI。
-    qint64 maxStepMs = 30000;     // 功能：单步耗时上限；使用模块：后续命令执行安全边界。
-    std::function<bool()> shouldStop; // 功能：停止请求回调；使用模块：兼容 Agent 循环和测试。
+    int maxSteps = 10;
+    qint64 maxRuntimeMs = 120000;
+    qint64 maxStepMs = 30000;
+    std::function<bool()> shouldStop;
 };
 
-// 功能：统一的循环终止检查策略；使用模块：executeLoop 每轮迭代前后的终止判断。
 struct LoopTerminationPolicy {
     int maxSteps = 10;
     qint64 maxRuntimeMs = 120000;
     qint64 maxStepMs = 30000;
     std::function<bool()> shouldStop;
 
-    // 功能：从 AgentLoopOptions 构造策略；使用模块：executeLoop 初始化。
     static LoopTerminationPolicy fromOptions(const AgentLoopOptions &options);
-
-    // 功能：检查终止条件，返回原因；使用模块：executeLoop 每轮终止判断。
-    // lastStepMs > 0 时同时检查单步超时。
     TerminationReason check(int completedSteps, qint64 elapsedMs, qint64 lastStepMs = 0) const;
-
-    // 功能：终止原因的文本标签；使用模块：审计日志和错误提示。
     static QString reasonLabel(TerminationReason reason);
 };
 
 struct AgentLoopCallbacks {
-    std::function<void(int)> stepStarted; // 功能：步骤开始回调；使用模块：UI 刷新。
-    std::function<void(int, const ToolResult &)> stepFinished; // 功能：步骤结束回调；使用模块：UI 刷新。
+    std::function<void(int)> stepStarted;
+    std::function<void(int, const ToolResult &)> stepFinished;
 };
 
-// 功能：AI 单步调用的统一返回结构；使用模块：executeLoop 中 AiLoopRunner::call 的返回值。
 struct AiLoopResponse {
     bool ok = false;
     QString fullText;
@@ -81,20 +83,74 @@ struct AiLoopResponse {
 };
 
 struct AgentLoopRunResult {
-    AgentLoopRunStatus status = AgentLoopRunStatus::Completed; // 功能：循环结束原因；使用模块：UI 状态提示和测试。
-    int executedStepCount = 0;       // 功能：已执行步骤数；使用模块：验收和日志。
-    QString error;                   // 功能：失败原因；使用模块：状态提示。
-    QString lastToolId;              // 功能：最后执行工具 ID；使用模块：审计日志。
-    QString lastOutput;              // 功能：最后输出摘要；使用模块：后续规划输入。
-    QStringList auditTrail;          // 功能：Agent 专用审计链；使用模块：测试和日志。
+    AgentLoopRunStatus status = AgentLoopRunStatus::Completed;
+    int executedStepCount = 0;
+    QString error;
+    QString lastToolId;
+    QString lastOutput;
+    QStringList auditTrail;
+};
+
+// D-2: 异步 Agent Loop 引擎 — 继承 QObject 使用信号/槽代替 QEventLoop
+class AgentLoopEngine : public QObject {
+    Q_OBJECT
+public:
+    explicit AgentLoopEngine(QObject *parent = nullptr);
+
+    // 功能：启动异步循环；使用模块：AgentOrchestrator 或测试。
+    void start(AIClient *aiClient, const AppConfig &config, const QString &userGoal,
+               const AgentToolRegistry &registry, const AgentToolExecutionContext &context,
+               const AgentLoopOptions &options = AgentLoopOptions(),
+               const AgentLoopCallbacks &callbacks = AgentLoopCallbacks(),
+               AppLanguage language = AppLanguage::Chinese,
+               HookManager *hooks = nullptr, SkillManager *skills = nullptr);
+    // 功能：停止循环；使用模块：取消请求。
+    void stop();
+    bool isRunning() const;
+
+signals:
+    void finished(const AgentLoopRunResult &result);
+    void stepStarted(int step);
+    void stepFinished(int step, const ToolResult &result);
+    void aiResponseReceived(const QString &fullText);
+
+private:
+    void doIteration();
+    void handleAiResponse(const AiLoopResponse &response);
+    void finish(AgentLoopRunStatus status, const QString &error = QString());
+
+    AIClient *m_aiClient = nullptr;
+    const AppConfig *m_config = nullptr;
+    QString m_userGoal;
+    AgentToolRegistry m_registry;
+    AgentToolExecutionContext m_context;
+    AgentLoopOptions m_options;
+    AgentLoopCallbacks m_callbacks;
+    AppLanguage m_language = AppLanguage::Chinese;
+    HookManager *m_hooks = nullptr;
+    SkillManager *m_skills = nullptr;
+
+    // 运行状态
+    bool m_running = false;
+    int m_stepCount = 0;
+    QElapsedTimer m_runtime;
+    AgentLoopRunResult m_result;
+    QStringList m_observations;
+    QSet<QString> m_actionFingerprints;
+    QString m_currentResponseText; // 功能：跨异步信号保存本轮 AI 回复，避免 lambda 捕获栈变量。
+
+    // AI 回复信号连接
+    QMetaObject::Connection m_connDelta;
+    QMetaObject::Connection m_connFinished;
+    QMetaObject::Connection m_connFailed;
+    QTimer m_timeoutTimer;
 };
 
 namespace AgentLoopController {
 
-// 功能：返回运行状态稳定字符串；使用模块：日志和测试。
 QString runStatusToString(AgentLoopRunStatus status);
 
-// 功能：按观察、选择下一步、执行、评估的循环运行计划；使用模块：兼容测试路径。
+// 功能：仍保留同步调用（内部使用 QEventLoop+AgentLoopEngine 包装）；使用模块：测试。
 AgentLoopRunResult runPlan(
     AgentPlan *plan,
     const AgentToolRegistry &registry,
@@ -102,8 +158,7 @@ AgentLoopRunResult runPlan(
     const AgentLoopOptions &options = AgentLoopOptions(),
     const AgentLoopCallbacks &callbacks = AgentLoopCallbacks());
 
-// 功能：每步调 AI → 解析 → 执行工具 → 收集观测 → 继续的同步循环；使用模块：兼容测试路径。
-// 主 UI Agent 入口应使用 ApplicationController + AgentOrchestrator 的异步流程。
+// 功能：同步便捷包装（内部使用 QEventLoop 等 AgentLoopEngine 结果）；使用模块：测试。
 AgentLoopRunResult executeLoop(
     AIClient *aiClient,
     const AppConfig &config,

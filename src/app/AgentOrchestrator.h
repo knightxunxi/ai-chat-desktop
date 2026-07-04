@@ -29,6 +29,7 @@ struct PendingToolResult {
 // 前向声明
 class AIClient;
 class ConfigCoordinator;
+class PythonSidecarClient;
 class SessionCoordinator;
 struct AgentPlan;
 struct SkillDefinition;
@@ -95,6 +96,18 @@ public:
     // 功能：执行 Agent 计划步骤，追加结果到当前会话；返回 true 表示全部步骤成功。使用模块：ApplicationController::handleRequestFinished。
     bool executePlanAndReportToChat(const AgentPlan &plan);
 
+    // V19 #25: 并行执行计划步骤（无依赖步骤同时进行）
+    struct StepResult {
+        int stepIndex;
+        QString toolId;
+        bool ok;
+        QString output;
+    };
+    QVector<StepResult> executePlanStepsParallel(
+        const AgentPlan &plan,
+        const AgentToolRegistry &registry,
+        const AgentToolExecutionContext &context);
+
     // ── Token 上下文 ──
     size_t getContextWindowTokens() const;
 
@@ -160,6 +173,8 @@ private:
 
     // V17.6 P1-3: 轻量子代理工具
     AgentToolDefinition createSubAgentTool() const;
+    // 功能：获取当前 Python sidecar 客户端；使用模块：工具执行上下文。
+    PythonSidecarClient *activeSidecarClient() const;
 
     // V12.4: 测试友元
     friend struct ChatToolExecutionTestAccessor;

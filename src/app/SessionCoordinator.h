@@ -59,7 +59,9 @@ public:
     // 功能：截断当前会话指定消息之后的所有消息；使用模块：MainWindow::onMessageEditConfirmed。
     void truncateCurrentSessionFrom(const QString &messageId);
     // 功能：为当前会话创建对话分支；使用模块：MainWindow。
-    void createMessageBranch(const QString &parentMessageId);
+    void createMessageBranch(const QString &parentMessageId, const QVector<ChatMessage> &messages = {});
+    // #26: 循环切换指定消息的下一个分支
+    void cycleBranch(const QString &parentMessageId);
     // 功能：把当前会话插入或更新到摘要列表（暴露给 AC 用于首条消息时更新侧边栏）。
     void upsertCurrentSessionSummary(bool moveToTop);
 

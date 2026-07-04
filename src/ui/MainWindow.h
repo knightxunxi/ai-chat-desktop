@@ -5,6 +5,7 @@
 #include "core/SessionListFilter.h"
 #include "ui/AgentStepWidget.h"
 #include "ui/AgentStepGroupWidget.h"
+#include "ui/CommandPalette.h"
 
 #include <QMainWindow>
 #include <QHash>
@@ -36,6 +37,11 @@ protected:
     void closeEvent(QCloseEvent *event) override;
     // V17.1: 拦截粘贴事件以支持图片粘贴；使用模块：m_messageInput 上安装。
     bool eventFilter(QObject *obj, QEvent *event) override;
+
+    // V19: 文件补全弹出框
+    void showFileCompletion();
+    // V19: 斜杠命令（/clear, /export, /role, /tools, /new, /help）
+    bool handleSlashCommand(const QString &cmd);
 
 private:
     // 功能：创建侧边栏、聊天区、输入区和顶部按钮；使用模块：构造函数。
@@ -154,7 +160,8 @@ private:
     QPushButton *m_retryButton = nullptr;    // 功能：失败重试按钮；使用模块：底部输入区。
     QPushButton *m_sendButton = nullptr;     // 功能：发送/停止按钮；使用模块：底部输入区。
     QPushButton *m_modeToggleButton = nullptr; // 功能：Chat/Agent 模式切换按钮；使用模块：底部输入区。
-    bool m_isAgentMode = false;              // 功能：当前是否处于 Agent 统一模式；使用模块：sendCurrentMessage 路由。
+    bool m_isAgentMode = false;
+    CommandPalette *m_commandPalette = nullptr; // V19: 命令面板
     QPushButton *m_settingsButton = nullptr; // 功能：设置入口；使用模块：顶部工具区。
     QLabel *m_modelLabel = nullptr;          // 功能：当前模型展示；使用模块：顶部标题区。
     QLabel *m_personaLabel = nullptr;        // 功能：当前角色展示；使用模块：顶部标题区。
@@ -162,6 +169,14 @@ private:
     QPointer<AgentStepGroupWidget> m_currentStepGroup; // V18.4: 当前步骤分组卡片
     QHash<QString, MessageWidget *> m_messageWidgets; // CH-8: 消息 ID 到 MessageWidget 的映射
     QPushButton *m_themeToggleButton = nullptr;  // V16.3: 主题切换按钮
+
+    // V19: 输入区增强（Task Pack B）
+    QStringList m_inputHistory;           // 发送历史，最多 50 条
+    int m_inputHistoryIndex = -1;         // ↑↓ 导航当前索引
+    QListWidget *m_fileCompletionPopup = nullptr; // @ 文件补全下拉
+
+    // V19: Token 预算追踪
+    int m_accumulatedTokens = 0;          // 本轮累计 token 消耗
 
     // V17.1: 图片预览
     // V17.1: 待发送图片 base64 列表

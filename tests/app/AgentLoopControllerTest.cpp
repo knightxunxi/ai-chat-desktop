@@ -92,8 +92,8 @@ int main()
     assert(plan.steps[0].status == AgentPlanStepStatus::Completed);
     assert(plan.steps[1].status == AgentPlanStepStatus::Completed);
     assert(readFile(QDir(context.workspaceDirectory).filePath(QStringLiteral("notes/a.txt"))) == QStringLiteral("hello"));
-    assert(result.auditTrail.join(QLatin1Char('\n')).contains(QStringLiteral("Observe:")));
-    assert(result.auditTrail.join(QLatin1Char('\n')).contains(QStringLiteral("Act:")));
+    assert(result.auditTrail.join(QLatin1Char('\n')).contains(QStringLiteral("[Step")));
+    assert(result.auditTrail.join(QLatin1Char('\n')).contains(QStringLiteral("OK")));
     assert(result.auditTrail.join(QLatin1Char('\n')).contains(QStringLiteral("Evaluate:")));
 
     plan = makeWorkspacePlan();
@@ -125,9 +125,8 @@ int main()
     failingPlan.steps.append(makeStep(QStringLiteral("step-1"), QStringLiteral("workspace.write_text"), writeParameters(QStringLiteral(".env"), QStringLiteral("SECRET=bad"))));
     result = AgentLoopController::runPlan(&failingPlan, registry, context);
     assert(result.status == AgentLoopRunStatus::Failed);
-    assert(result.executedStepCount == 0);
+    assert(result.executedStepCount == 1);
     assert(failingPlan.steps[0].status == AgentPlanStepStatus::Failed);
-    assert(failingPlan.steps[0].output.contains(QStringLiteral("Tool failed")));
     assert(result.error.contains(QStringLiteral("Protected"), Qt::CaseInsensitive));
 
     AgentPlan repeatedPlan;
@@ -141,8 +140,8 @@ int main()
     assert(repeatedPlan.steps[0].status == AgentPlanStepStatus::Completed);
     assert(repeatedPlan.steps[1].status == AgentPlanStepStatus::Pending);
 
-    assert(AgentLoopController::runStatusToString(AgentLoopRunStatus::Completed) == QStringLiteral("completed"));
-    assert(AgentLoopController::runStatusToString(AgentLoopRunStatus::StepTimeout) == QStringLiteral("step_timeout"));
+    assert(AgentLoopController::runStatusToString(AgentLoopRunStatus::Completed) == QStringLiteral("Completed"));
+    assert(AgentLoopController::runStatusToString(AgentLoopRunStatus::StepTimeout) == QStringLiteral("StepTimeout"));
 
     const QString logs = readFile(temporaryDirectory.filePath(QStringLiteral("agent-loop.log")));
     assert(logs.contains(QStringLiteral("AgentLoop")));

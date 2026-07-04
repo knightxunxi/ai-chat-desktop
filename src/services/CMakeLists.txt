@@ -7,6 +7,8 @@ add_library(codexx_services STATIC
     PythonSidecarClient.cpp
     PythonSidecarProtocol.h
     PythonSidecarProtocol.cpp
+    PythonSidecarAIClient.h
+    PythonSidecarAIClient.cpp
     RequestErrorCategory.h
     StreamParser.h
     StreamParser.cpp

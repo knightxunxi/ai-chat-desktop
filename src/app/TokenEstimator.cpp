@@ -135,3 +135,19 @@ size_t TokenEstimator::estimateSystemPromptTokens(const QString &systemPrompt)
 {
     return estimateTokens(systemPrompt) + 4;
 }
+
+// V19: 从 OpenAI API usage JSON 解析实际 token 数
+size_t TokenEstimator::parseUsageTokens(const QJsonObject &usage)
+{
+    return static_cast<size_t>(usage.value(QStringLiteral("total_tokens")).toInt(0));
+}
+
+size_t TokenEstimator::promptTokensFromUsage(const QJsonObject &usage)
+{
+    return static_cast<size_t>(usage.value(QStringLiteral("prompt_tokens")).toInt(0));
+}
+
+size_t TokenEstimator::completionTokensFromUsage(const QJsonObject &usage)
+{
+    return static_cast<size_t>(usage.value(QStringLiteral("completion_tokens")).toInt(0));
+}

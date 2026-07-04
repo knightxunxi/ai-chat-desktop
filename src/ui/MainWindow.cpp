@@ -7,6 +7,7 @@
 #include "ui/RolePromptDialog.h"
 #include "ui/ScheduledTaskDialog.h"
 #include "ui/SettingsDialog.h"
+#include "ui/StatisticsDialog.h"
 #include "ui/ToolsDialog.h"
 
 #include <QApplication>
@@ -39,6 +40,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
+#include <QShortcut>
 #include <QTextEdit>
 #include <QTimer>
 #include <QUuid>
@@ -62,6 +64,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
     event->accept();
     QCoreApplication::quit();
 }
+
+
 
 void MainWindow::setupUi()
 {
@@ -288,11 +292,97 @@ void MainWindow::setupUi()
         changeSessionFilter(SessionListFilter::Archived);
     });
 
-    auto *returnShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), m_messageInput);
-    connect(returnShortcut, &QShortcut::activated, this, &MainWindow::sendCurrentMessage);
+    // V19: 快捷键系统
+    auto *shortcutNewSession = new QShortcut(QKeySequence(QStringLiteral("Ctrl+N")), this);
+    connect(shortcutNewSession, &QShortcut::activated, this, &MainWindow::startNewChat);
 
-    auto *enterShortcut = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Enter")), m_messageInput);
-    connect(enterShortcut, &QShortcut::activated, this, &MainWindow::sendCurrentMessage);
+    auto *shortcutFocusInput = new QShortcut(QKeySequence(QStringLiteral("Ctrl+K")), this);
+    connect(shortcutFocusInput, &QShortcut::activated, this, [this]() {
+        m_messageInput->setFocus();
+    });
+
+    auto *shortcutEscape = new QShortcut(QKeySequence(QStringLiteral("Escape")), this);
+    connect(shortcutEscape, &QShortcut::activated, this, [this]() {
+        if (m_controller.isGenerating()) {
+            m_controller.cancelCurrentRequest();
+        } else {
+            m_messageInput->clear();
+        }
+    });
+
+    // Ctrl+Enter 改为换行（不再发送）
+    auto *shortcutNewline = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Enter")), m_messageInput);
+    connect(shortcutNewline, &QShortcut::activated, this, [this]() {
+        m_messageInput->insertPlainText(QStringLiteral("\n"));
+    });
+    // Ctrl+Return 也从发送改为换行
+    auto *shortcutNewline2 = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Return")), m_messageInput);
+    connect(shortcutNewline2, &QShortcut::activated, this, [this]() {
+        m_messageInput->insertPlainText(QStringLiteral("\n"));
+    });
+
+    // 文件补全弹出框
+    m_fileCompletionPopup = new QListWidget(this);
+    m_fileCompletionPopup->setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint);
+    m_fileCompletionPopup->setVisible(false);
+    m_fileCompletionPopup->setMaximumHeight(200);
+    m_fileCompletionPopup->setMinimumWidth(300);
+    connect(m_fileCompletionPopup, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
+        if (!item) return;
+        // 替换最后一个 @ 为完整路径
+        QString text = m_messageInput->toPlainText();
+        int lastAt = text.lastIndexOf(QChar('@'));
+        if (lastAt >= 0) {
+            text = text.left(lastAt) + item->data(Qt::UserRole).toString();
+            m_messageInput->setText(text);
+            QTextCursor cursor = m_messageInput->textCursor();
+            cursor.movePosition(QTextCursor::End);
+            m_messageInput->setTextCursor(cursor);
+        }
+        m_fileCompletionPopup->setVisible(false);
+        m_messageInput->setFocus();
+    });
+
+    // V19: 命令面板
+    m_commandPalette = new CommandPalette(this);
+    m_commandPalette->setVisible(false);
+    connect(m_commandPalette, &CommandPalette::commandSelected, this, [this](const QString &id, const QVariant &) {
+        if (id == QStringLiteral("new_chat")) startNewChat();
+        else if (id == QStringLiteral("export")) exportCurrentChat();
+        else if (id == QStringLiteral("toggle_mode")) toggleAgentMode();
+        else if (id == QStringLiteral("role")) editSystemPrompt();
+        else if (id == QStringLiteral("tools")) openToolsDialog();
+        else if (id == QStringLiteral("settings")) openSettingsDialog();
+        else if (id == QStringLiteral("statistics")) { StatisticsDialog d(m_controller.sessionCoordinator(), this); d.exec(); }
+        else if (id == QStringLiteral("logs")) openLogViewerDialog();
+        else if (id == QStringLiteral("dark_mode")) toggleDarkMode();
+        else if (id == QStringLiteral("delete")) deleteCurrentChat();
+        else if (id == QStringLiteral("help_slash")) showStatusMessage(
+            QStringLiteral("Commands: /clear /export /role /tools /new /help"),
+            QStringLiteral("命令：/clear 清空 /export 导出 /role 角色 /tools 工具 /new 新建 /help 帮助"), 5000);
+    });
+
+    auto *shortcutPalette = new QShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+P")), this);
+    connect(shortcutPalette, &QShortcut::activated, this, [this]() {
+        if (m_commandPalette->isVisible()) {
+            m_commandPalette->hidePalette();
+            return;
+        }
+        QVector<CommandPalette::Command> cmds;
+        cmds.append({QStringLiteral("new_chat"),      text(QStringLiteral("New Chat"),          QStringLiteral("新建会话")),       QStringLiteral("Ctrl+N")});
+        cmds.append({QStringLiteral("toggle_mode"),   text(QStringLiteral("Toggle Agent Mode"),QStringLiteral("切换 Agent 模式")),QString()});
+        cmds.append({QStringLiteral("dark_mode"),     text(QStringLiteral("Toggle Dark Mode"),  QStringLiteral("切换暗色模式")),  QString()});
+        cmds.append({QStringLiteral("export"),        text(QStringLiteral("Export Chat"),       QStringLiteral("导出当前会话")),  QString()});
+        cmds.append({QStringLiteral("role"),          text(QStringLiteral("Edit Role Prompt"),  QStringLiteral("编辑角色提示词")),QString()});
+        cmds.append({QStringLiteral("tools"),         text(QStringLiteral("Tools"),             QStringLiteral("工具窗口")),      QString()});
+        cmds.append({QStringLiteral("settings"),      text(QStringLiteral("Settings"),          QStringLiteral("设置")),          QString()});
+        cmds.append({QStringLiteral("statistics"),    text(QStringLiteral("Statistics"),        QStringLiteral("使用统计")),      QString()});
+        cmds.append({QStringLiteral("logs"),          text(QStringLiteral("Logs"),              QStringLiteral("日志")),          QString()});
+        cmds.append({QStringLiteral("delete"),        text(QStringLiteral("Delete Chat"),       QStringLiteral("删除当前会话")),  QString()});
+        cmds.append({QStringLiteral("help_slash"),    text(QStringLiteral("Slash Commands"),    QStringLiteral("斜杠命令帮助")),  QStringLiteral("/help")});
+        m_commandPalette->setCommands(cmds);
+        m_commandPalette->showAtCenter();
+    });
 }
 
 void MainWindow::connectController()
@@ -497,6 +587,35 @@ void MainWindow::populateChatView()
         }
         if (message.role == MessageRole::User) {
             connect(widget, &MessageWidget::quoteReplyRequested, this, &MainWindow::onQuoteReplyRequested);
+        }
+
+        // #26: 渲染当前消息下的替代分支，并显示当前选中的分支内容。
+        QVector<int> matchingBranches;
+        for (int branchIndex = 0; branchIndex < session.branches.size(); ++branchIndex) {
+            const auto &branch = session.branches[branchIndex];
+            if (branch.parentMessageId == message.id && !branch.messages.isEmpty()) {
+                matchingBranches.append(branchIndex);
+            }
+        }
+        if (!matchingBranches.isEmpty()) {
+            int currentBranchPosition = matchingBranches.indexOf(session.currentBranchIndex);
+            if (currentBranchPosition < 0) {
+                currentBranchPosition = 0;
+            }
+
+            auto *branchBtn = m_chatView->addBranchIndicator(
+                message.id, matchingBranches.size(), currentBranchPosition);
+            QPointer<ChatView> safeView = m_chatView;
+            connect(branchBtn, &QPushButton::clicked, this, [this, safeView, mid = message.id]() {
+                if (!safeView) return;
+                m_controller.cycleBranchMessage(mid);
+                populateChatView();
+            });
+
+            const MessageBranch &branch = session.branches[matchingBranches[currentBranchPosition]];
+            for (const ChatMessage &branchMessage : branch.messages) {
+                m_chatView->addBranchMessage(branchMessage.role, branchMessage.content, branch.branchId);
+            }
         }
     }
 
@@ -858,6 +977,11 @@ void MainWindow::sendCurrentMessage()
     }
 
     const QString content = m_messageInput->toPlainText().trimmed();
+
+    // V19: 斜杠命令
+    if (content.startsWith(QChar('/'))) {
+        if (handleSlashCommand(content)) return;
+    }
     // V17.1: 即使文本为空，如果有图片也可以发送
     if (content.isEmpty() && m_pendingImages.isEmpty()) {
         return;
@@ -888,6 +1012,24 @@ void MainWindow::sendCurrentMessage()
     } else {
         m_controller.sendMessage(content);            // 纯 Chat
     }
+
+    // V19: 输入历史记录（去重，上限 50）
+    if (!content.isEmpty()) {
+        if (m_inputHistory.isEmpty() || m_inputHistory.last() != content) {
+            m_inputHistory.append(content);
+            if (m_inputHistory.size() > 50)
+                m_inputHistory.removeFirst();
+        }
+        m_inputHistoryIndex = m_inputHistory.size(); // 指向最新 +1（即空输入状态）
+    }
+
+    // V19: 累计 token 消耗估算（char*1 + CJK*2/3，与 TokenEstimator 一致）
+    int cjk = 0, other = 0;
+    for (const QChar &ch : content) {
+        if (ch.unicode() >= 0x4E00 && ch.unicode() <= 0x9FFF) cjk++;
+        else other++;
+    }
+    m_accumulatedTokens += qMax(1, (int)(other / 4.0 + cjk * 1.5));
 }
 
 void MainWindow::toggleAgentMode()
@@ -901,6 +1043,47 @@ void MainWindow::toggleAgentMode()
             ? text(QStringLiteral("Type a task — AI will loop and auto-execute..."),
                    QStringLiteral("...AI 自动判断并循环执行..."))
             : text(QStringLiteral("Type a message..."), QStringLiteral("输入消息...")));
+}
+
+// V19: 斜杠命令处理器
+bool MainWindow::handleSlashCommand(const QString &cmd)
+{
+    const QString lower = cmd.toLower();
+    if (lower == QStringLiteral("/clear") || lower == QStringLiteral("/c")) {
+        m_messageInput->clear();
+        startNewChat();
+        showStatusMessage(QStringLiteral("Chat cleared"), QStringLiteral("聊天已清空"), 2000);
+        return true;
+    }
+    if (lower == QStringLiteral("/export") || lower == QStringLiteral("/e")) {
+        exportCurrentChat();
+        m_messageInput->clear();
+        return true;
+    }
+    if (lower.startsWith(QStringLiteral("/role")) || lower.startsWith(QStringLiteral("/r"))) {
+        editSystemPrompt();
+        m_messageInput->clear();
+        return true;
+    }
+    if (lower == QStringLiteral("/tools") || lower == QStringLiteral("/t")) {
+        openToolsDialog();
+        m_messageInput->clear();
+        return true;
+    }
+    if (lower == QStringLiteral("/new") || lower == QStringLiteral("/n")) {
+        startNewChat();
+        m_messageInput->clear();
+        return true;
+    }
+    if (lower == QStringLiteral("/help") || lower == QStringLiteral("/h")) {
+        showStatusMessage(
+            QStringLiteral("Commands: /clear, /export, /role, /tools, /new, /help"),
+            QStringLiteral("命令：/clear 清空 /export 导出 /role 角色 /tools 工具 /new 新建 /help 帮助"),
+            5000);
+        m_messageInput->clear();
+        return true;
+    }
+    return false; // 不是斜杠命令，正常发送
 }
 
 void MainWindow::addUserMessage(const QString &content)
@@ -1014,8 +1197,12 @@ void MainWindow::onMessageRegenerateRequested()
 {
     // V17.4: 对话分支 — 保存当前分支后再重新生成
     const auto &session = m_controller.currentSession();
-    if (!session.messages.isEmpty()) {
-        m_controller.createMessageBranch(session.messages.last().id);
+    if (session.messages.size() >= 2 && session.messages.last().role == MessageRole::Assistant) {
+        const ChatMessage previousAssistant = session.messages.last();
+        const ChatMessage parentUser = session.messages[session.messages.size() - 2];
+        if (parentUser.role == MessageRole::User) {
+            m_controller.createMessageBranch(parentUser.id, QVector<ChatMessage>{previousAssistant});
+        }
     }
 
     m_controller.retryLastRequest();
@@ -1094,12 +1281,16 @@ void MainWindow::onAgentDebugPrompt(const QString &prompt)
         prompt);
 }
 
-// ─── V17.1: 事件过滤器 — 拦截图片粘贴 ──────────────────────────────
+// ─── V17.1 + V19: 事件过滤器 — 图片粘贴 + 输入历史 + @ 文件补全 ─────
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     if (obj == m_messageInput && event->type() == QEvent::KeyPress) {
         auto *keyEvent = static_cast<QKeyEvent *>(event);
+        const int key = keyEvent->key();
+        const Qt::KeyboardModifiers mods = keyEvent->modifiers();
+
+        // V17.1: 图片粘贴
         if (keyEvent->matches(QKeySequence::Paste)) {
             QClipboard *cb = QApplication::clipboard();
             if (cb == nullptr) {
@@ -1108,13 +1299,66 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             const QImage image = cb->image();
             if (!image.isNull()) {
                 onImagePasted(image);
-                return true; // 消费事件，避免图片 base64 文本出现在输入框
+                return true;
             }
         }
+
+        // V19: ↑ 输入历史上一条
+        if (key == Qt::Key_Up && mods == Qt::NoModifier && m_inputHistoryIndex > 0) {
+            if (m_inputHistoryIndex == m_inputHistory.size()) {
+                // 首次按 ↑（即将回溯）
+            }
+            m_inputHistoryIndex--;
+            m_messageInput->setText(m_inputHistory[m_inputHistoryIndex]);
+            QTextCursor cursor = m_messageInput->textCursor();
+            cursor.movePosition(QTextCursor::End);
+            m_messageInput->setTextCursor(cursor);
+            return true;
+        }
+        // V19: ↓ 输入历史下一条
+        if (key == Qt::Key_Down && mods == Qt::NoModifier && m_inputHistoryIndex < m_inputHistory.size()) {
+            m_inputHistoryIndex++;
+            if (m_inputHistoryIndex < m_inputHistory.size()) {
+                m_messageInput->setText(m_inputHistory[m_inputHistoryIndex]);
+            } else {
+                m_messageInput->clear();
+            }
+            return true;
+        }
+        // V19: @ 文件补全
+        if (key == Qt::Key_At && mods == Qt::NoModifier) {
+            showFileCompletion();
+            return false; // 让 @ 字符正常输入
+        }
+
         return QMainWindow::eventFilter(obj, event);
     }
 
     return QMainWindow::eventFilter(obj, event);
+}
+
+// V19: 文件补全弹出 — 显示项目目录下最近 10 个文件
+void MainWindow::showFileCompletion()
+{
+    QDir dir(QDir::currentPath());
+    if (!dir.exists()) return;
+
+    m_fileCompletionPopup->clear();
+    QStringList files = dir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    int count = 0;
+    for (const QString &name : files) {
+        if (count >= 10) break;
+        auto *item = new QListWidgetItem(name, m_fileCompletionPopup);
+        item->setData(Qt::UserRole, dir.absoluteFilePath(name));
+        count++;
+    }
+    if (m_fileCompletionPopup->count() == 0) return;
+
+    QPoint pos = m_messageInput->mapToGlobal(QPoint(0, m_messageInput->height()));
+    m_fileCompletionPopup->move(pos);
+    m_fileCompletionPopup->setVisible(true);
+    m_fileCompletionPopup->raise();
+    m_fileCompletionPopup->setFocus();
 }
 
 void MainWindow::onImagePasted(const QImage &image)

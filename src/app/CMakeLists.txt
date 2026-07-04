@@ -56,6 +56,7 @@ target_link_libraries(codexx_app PUBLIC
     Qt6::Widgets
     Qt6::Network
     Qt6::Sql
+    Qt6::Concurrent
 )
 
 target_include_directories(codexx_app PUBLIC

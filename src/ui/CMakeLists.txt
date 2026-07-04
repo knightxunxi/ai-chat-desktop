@@ -10,6 +10,8 @@ add_library(codexx_ui STATIC
     ChatView.cpp
     CodeHighlighter.h
     CodeHighlighter.cpp
+    CommandPalette.h
+    CommandPalette.cpp
     ConfirmToolDialog.h
     ConfirmToolDialog.cpp
     FileToolsDialog.h
@@ -26,6 +28,8 @@ add_library(codexx_ui STATIC
     ScheduledTaskDialog.cpp
     SettingsDialog.h
     SettingsDialog.cpp
+    StatisticsDialog.h
+    StatisticsDialog.cpp
     TokenBar.h
     TokenBar.cpp
     ToolsDialog.h

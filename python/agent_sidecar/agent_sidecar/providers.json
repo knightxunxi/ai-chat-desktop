@@ -1,0 +1,20 @@
+[
+    {
+        "name": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "default_model": "deepseek-chat"
+    },
+    {
+        "name": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "api_key_env": "OPENAI_API_KEY",
+        "default_model": "gpt-4o"
+    },
+    {
+        "name": "Ollama",
+        "base_url": "http://localhost:11434",
+        "api_key_env": "",
+        "default_model": "llama3"
+    }
+]

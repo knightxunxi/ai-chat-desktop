@@ -9,9 +9,12 @@
 #include "core/PromptTemplate.h"
 #include "core/SessionListFilter.h"
 #include "services/RequestErrorCategory.h"
+#include "services/AIClient.h"
 #include "services/OpenAICompatibleClient.h"
+#include "services/PythonSidecarAIClient.h"
 #include "services/ToolCall.h"
 
+#include <QMetaObject>
 #include <QObject>
 #include <QVector>
 
@@ -35,12 +38,13 @@ public:
 
     // 功能：加载配置、提示词模板和聊天历史；使用模块：MainWindow 构造时调用。
     void initialize();
+    void initAIClient(); // V19: 根据配置选择 AI 后端
 
     // 功能：读取当前配置；使用模块：MainWindow/SettingsDialog 展示当前模型和语言。
     const AppConfig &config() const;
     // 功能：获取 AI 客户端指针；使用模块：调试、测试和外部集成。
-    AIClient *aiClient() { return &m_aiClient; }
-    const AIClient *aiClient() const { return &m_aiClient; }
+    AIClient *aiClient() { return m_aiClient.get(); }
+    const AIClient *aiClient() const { return m_aiClient.get(); }
     // 功能：读取当前会话；使用模块：MainWindow 刷新聊天区和角色显示。
     const ChatSession &currentSession() const;
     // 功能：读取会话摘要列表；使用模块：MainWindow 侧边栏列表。
@@ -109,7 +113,9 @@ public slots:
     void resumeAgentLoop();
     void clearAgentLoopState();
     // V17.4: 为当前会话创建对话分支
-    void createMessageBranch(const QString &parentMessageId);
+    void createMessageBranch(const QString &parentMessageId, const QVector<ChatMessage> &messages = {});
+    // #26: 循环切换消息的下一个分支
+    void cycleBranchMessage(const QString &messageId);
     // CH-8: 公开保存会话接口；使用模块：MainWindow::onMessageEditConfirmed。
     bool saveCurrentSession(bool moveToTop = true);
     // CH-8: 编辑当前会话中指定消息的内容；使用模块：MainWindow::onMessageEditConfirmed。
@@ -171,6 +177,14 @@ private:
     // 功能：处理请求失败；使用模块：OpenAICompatibleClient::requestFailed 信号。
     void handleRequestFailed(const QString &message, RequestErrorCategory category);
     void handleResponseTruncated();  // V17.6 P2-2: 输出截断自动续接。
+    // 功能：重新绑定当前 AIClient 信号；使用模块：initAIClient 切换直连/sidecar 后恢复事件链。
+    void connectAIClientSignals();
+    // 功能：解析 Python sidecar 目录；使用模块：initAIClient 避免硬编码开发机路径。
+    QString resolvePythonSidecarDirectory() const;
+    // 功能：获取当前 Python sidecar 客户端；使用模块：工具上下文 system.list_providers。
+    PythonSidecarClient *activeSidecarClient() const;
+    // 功能：构建工具执行上下文；使用模块：原生工具调用执行。
+    AgentToolExecutionContext buildToolExecutionContext() const;
     // V12.3: 处理流式工具调用参数完整事件；使用模块：OpenAICompatibleClient::toolUseBlockComplete 信号。
     void handleToolUseBlockComplete(const QString &toolName, const QJsonObject &arguments);
     // 功能：创建助手占位消息并调用 AI 客户端；使用模块：sendMessage/retryLastRequest。
@@ -202,7 +216,8 @@ private:
     ConfigCoordinator m_configCoordinator;        // 功能：配置管理协调器。
     SessionCoordinator m_sessionCoordinator;      // 功能：会话管理协调器。
     AgentOrchestrator m_agentOrchestrator;        // 功能：Agent 编排器。
-    OpenAICompatibleClient m_aiClient;            // 功能：实际网络请求客户端。
+    QScopedPointer<AIClient> m_aiClient;          // V19: 可切换的 AI 后端客户端。
+    QVector<QMetaObject::Connection> m_aiClientConnections; // 功能：AIClient 切换时统一断开旧连接。
     QString m_currentAssistantContent;            // 功能：流式回复累积内容。
     QString m_agentPlanResponseBuffer;            // 功能：Agent 计划流式响应缓存。
     ToolCallList m_agentToolCalls;                // 功能：Agent 原生工具调用缓存。

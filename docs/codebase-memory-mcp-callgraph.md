@@ -3,7 +3,7 @@
 > 最后更新：2026-07-04
 > MCP 项目名：`D-C1-CodeXX`
 > MCP 可执行文件：`D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe`
-> 当前索引：410 文件，4064 节点，10464 条边
+> 当前索引：411 文件，4096 节点，10495 条边
 > 用途：给后续 Agent 提供调用关系入口、影响分析方法和开发前后检查规则。
 
 ---
@@ -45,7 +45,7 @@ D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe cli index_status '{"project":
 当前期望状态：
 
 ```json
-{"project":"D-C1-CodeXX","nodes":4064,"edges":10464,"status":"ready"}
+{"project":"D-C1-CodeXX","nodes":4096,"edges":10495,"status":"ready"}
 ```
 
 节点和边数量会随源码、文档、测试变化而变化，状态为 `ready` 比具体数字更重要。

@@ -11,6 +11,7 @@ add_library(codexx_mcp STATIC
 target_link_libraries(codexx_mcp PUBLIC
     codexx_core
     Qt6::Core
+    Qt6::Network
 )
 
 target_include_directories(codexx_mcp PUBLIC
