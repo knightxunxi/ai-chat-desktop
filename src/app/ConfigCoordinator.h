@@ -29,7 +29,7 @@ public:
 
 public slots:
     // 功能：保存 API、模型和语言配置；使用模块：SettingsDialog 确认后由 ApplicationController 调用。
-    void saveConfig(const AppConfig &config);
+    bool saveConfig(const AppConfig &config);
     // 功能：保存角色提示词模板；使用模块：RolePromptDialog 确认后由 ApplicationController 调用。
     void savePromptTemplates(const QVector<PromptTemplate> &templates);
 

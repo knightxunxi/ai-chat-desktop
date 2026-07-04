@@ -30,11 +30,8 @@
 | `docs/REVIEW_WORKFLOW.md` | 审查工作流，覆盖影响分析、问题等级、验证和学习沉淀 |
 | `docs/DEVELOPMENT_PLAN.md` | 实时开发计划，记录优先级、状态、技术债 |
 | `docs/codebase-memory-mcp-callgraph.md` | codebase-memory-mcp 使用方式、调用关系分析和开发前后索引规则 |
-| `docs/49-v19-python-agent-capability-layer-plan.md` | Python 能力层专项计划 |
-| `docs/50-modular-ai-assisted-development.md` | 模块化 AI 辅助开发方法论 |
+| `docs/52-next-wave-plan.md` | 下一波开发规划，记录修复闭环后的任务顺序和并行关系 |
 | `docs/架构优化方向.md` | 架构债务和优化方向 |
-| `docs/已实现功能与待开发路线.md` | 功能完成度和产品路线 |
-| `docs/FileInteractionService-API.md` | 文件交互服务 API 参考 |
 | `docs/done/` | 已完成或仅历史参考的文档 |
 | `learn/` | 学习、面试、架构理解和接手资料 |
 
@@ -114,12 +111,12 @@ D:\MCP\codebase-memory-mcp\codebase-memory-mcp.exe cli detect_changes '{"project
 
 | 任务类型 | 必读文档 | 优先阅读源码 |
 |----------|----------|--------------|
-| Python 能力层 | `docs/49-v19-python-agent-capability-layer-plan.md`、`learn/07-Python能力层学习.md` | `src/services/PythonSidecar*`、`python/agent_sidecar/`、相关测试 |
-| Agent 循环和工具执行 | `docs/已实现功能与待开发路线.md`、`docs/架构优化方向.md` | `src/app/ApplicationController*`、`src/agent/`、`src/tools/` |
+| Python 能力层 | `learn/07-Python能力层学习.md`、`docs/done/49-v19-python-agent-capability-layer-plan.md` | `src/services/PythonSidecar*`、`python/agent_sidecar/`、相关测试 |
+| Agent 循环和工具执行 | `docs/codebase-memory-mcp-callgraph.md`、`docs/架构优化方向.md` | `src/app/ApplicationController*`、`src/tools/`、相关测试 |
 | 调用关系和影响分析 | `docs/codebase-memory-mcp-callgraph.md` | 先用 `codebase-memory-mcp` 查询相关类、方法、调用边，再读源码核对 |
 | UI 和交互 | `learn/01-architecture.md`、`learn/03-technology-notes.md` | `src/ui/`、`resources/styles/app.qss`、UI 相关测试 |
-| 文件能力 | `docs/FileInteractionService-API.md` | `src/services/FileInteractionService*`、文件工具测试 |
-| 架构重构 | `docs/50-modular-ai-assisted-development.md`、`docs/架构优化方向.md` | 目标模块和接口调用方 |
+| 文件能力 | `docs/done/FileInteractionService-API.md` | `src/services/FileInteractionService*`、文件工具测试 |
+| 架构重构 | `docs/done/50-modular-ai-assisted-development.md`、`docs/架构优化方向.md` | 目标模块和接口调用方 |
 | 打包发布 | `README.md`、`docs/done/05-windows-packaging.md` | `CMakeLists.txt`、`release/`、构建脚本 |
 | 学习和交接 | `learn/README.md` | 与学习主题对应的源码 |
 
@@ -219,7 +216,7 @@ cmake --build build --config Release -j4
 - 完成了专项计划：更新对应专题文档，必要时移入 `docs/done/`。
 - 修改了架构边界：更新 `docs/架构优化方向.md` 或新增专题说明。
 - 修改了调用关系、主流程入口或 MCP 索引规则：更新 `docs/codebase-memory-mcp-callgraph.md`。
-- 修改了 Python 能力层：更新 `docs/49-v19-python-agent-capability-layer-plan.md` 和 `learn/07-Python能力层学习.md`。
+- 修改了 Python 能力层：更新 `learn/07-Python能力层学习.md`，如涉及路线变化再更新 `docs/52-next-wave-plan.md`。
 - 修改了学习价值较高的逻辑：更新 `learn/` 中对应学习文档。
 
 完成文档不是形式要求，而是为了让后续 Agent 和人工接手时能直接恢复上下文。

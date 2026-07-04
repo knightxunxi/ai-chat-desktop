@@ -1,6 +1,6 @@
 # CodeXX Agent 岗位求职准备
 
-> 基于 CodeXX 项目（约 3 万行 C++/Qt6，68 个 CTest，12 个 CMake 静态库）
+> 基于 CodeXX 项目（约 3 万行 C++/Qt6，69 个 CTest，12 个 CMake 静态库）
 > 目标岗位：AI Agent 开发工程师 / LLM应用开发 / 智能体引擎开发
 
 ---
@@ -47,7 +47,7 @@ Sidecar / JSONL / JSON-RPC     — 混合语言 Agent 架构常见
 | 桌面自动化 | SendInput 键鼠模拟 + UIAutomation + OCR + 截图 + 前台窗口校验 | ✅ Win32原生 |
 | 工具注册表 | AgentToolRegistry，35+工具，7类，单一数据源，Lambda执行体 | ✅ 教科书级 |
 | Hook插件 | 6个Hook点 + BuiltinHook + ScriptHookRunner + QProcess沙箱 | ✅ 可扩展 |
-| Python 能力层 | Python sidecar + JSONL 协议 + C++ QProcess 客户端 | ✅ V19 已启动 |
+| Python 能力层 | Python sidecar + JSONL 协议 + C++ QProcess 客户端 | ✅ V19 已接入可切换后端 |
 
 ---
 
@@ -82,7 +82,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 - 桌面自动化闭环：Win32 SendInput 键鼠模拟 + UIAutomation 控件定位 +
   Windows.Media.Ocr OCR + 前台窗口黑名单安全校验。
 - 集成 MCP 协议支持，JSON-RPC over QProcess 连接外部工具服务器。
-- 68 个 CTest 自动化测试零回归，12 个 CMake 静态库分层架构，并启动 Python sidecar 能力层演进。
+- 69 个 CTest 自动化测试零回归，12 个 CMake 静态库分层架构，并接入 Python sidecar 可切换后端。
 ```
 
 ### 2.3 一句话项目描述（不同场合）
@@ -161,7 +161,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 - 把 762 行的 defaultRegistry() 拆为 9 个类别化注册函数（registerFileTools/registerPerceptionTools...）
 - tools/ 目录拆为 7 个 CMake 子库按领域独立编译
 
-**R**：新增工具从"改 3 个文件"变成"Registry 里加 10 行"，68 个测试零回归。面试时可以直接展示代码：`REGISTER_TOOL("file.read_text", ..., [](const QJsonObject &args) { ... });`
+**R**：新增工具从"改 3 个文件"变成"Registry 里加 10 行"，69 个测试零回归。面试时可以直接展示代码：`REGISTER_TOOL("file.read_text", ..., [](const QJsonObject &args) { ... });`
 
 ### STAR 2：ApplicationController 上帝对象拆分
 
@@ -176,7 +176,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 - AC 从 350→220 行（-37%），.cpp 从 1600→1270 行（-21%）
 - Coordinator signals → AC connect 转发 → MainWindow，上层零改动
 
-**R**：68 个测试全部通过，零回归。架构师的角色在这里体现——不是"能跑就行"，而是"怎么跑得更好维护"。
+**R**：69 个测试全部通过，零回归。架构师的角色在这里体现——不是"能跑就行"，而是"怎么跑得更好维护"。
 
 ### STAR 3：Agent 会话恢复
 
@@ -204,7 +204,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 - C++ 新增 `PythonSidecarProtocol` 和 `PythonSidecarClient`，用 `QProcess` 管理子进程、请求超时、stderr 和结构化错误。
 - 新增 Python 单元测试、C++ 协议测试和 C++ 启动真实 Python sidecar 的集成测试。
 
-**R**：Python 能力层已能独立运行并被 C++ 调用，CTest 演进到 68/68 通过；后续可在不破坏 C++ Agent 主循环的情况下接入 tokenizer、WebSearch、文档解析和 Playwright。
+**R**：Python 能力层已能独立运行并被 C++ 调用，可作为 AIClient 可切换后端使用；CTest 演进到 69/69 通过，Python sidecar 单测 20/20 通过。后续可在不破坏 C++ Agent 主循环的情况下接入 tokenizer、WebSearch、文档解析和 Playwright。
 
 ---
 
@@ -213,7 +213,7 @@ CodeXX AI Agent 桌面平台 | C++17 / Qt6 / CMake / OpenAI API / Win32
 | 岗位方向 | CodeXX 匹配度 | 需要补的知识 |
 |----------|:---:|------|
 | AI Agent 开发（C++） | ⭐⭐⭐⭐⭐ 95% | 几乎全部覆盖 |
-| AI Agent 开发（Python） | ⭐⭐⭐⭐ 75% | Python sidecar 已启动，后续补 tokenizer/embedding/Web/Playwright |
+| AI Agent 开发（Python） | ⭐⭐⭐⭐ 75% | Python sidecar 已接入，后续补 embedding/Playwright |
 | LLM 应用开发 | ⭐⭐⭐⭐ 80% | RAG 专项（向量数据库/Milvus） |
 | 后端开发（C++） | ⭐⭐⭐ 65% | 网络编程/多线程/分布式 |
 | 桌面应用开发（Qt） | ⭐⭐⭐⭐⭐ 90% | CodeXX 本身就是 Qt 项目 |

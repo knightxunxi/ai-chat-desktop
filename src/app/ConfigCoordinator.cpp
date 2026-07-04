@@ -35,11 +35,18 @@ QString ConfigCoordinator::text(const QString &english, const QString &chinese) 
     return m_config.language == AppLanguage::English ? english : chinese;
 }
 
-void ConfigCoordinator::saveConfig(const AppConfig &config)
+bool ConfigCoordinator::saveConfig(const AppConfig &config)
 {
     m_config = config;
-    m_configStorage.save(m_config);
+    QString error;
+    const bool saved = m_configStorage.save(m_config, &error);
     emit configChanged();
+    if (!saved) {
+        emit startupWarning(
+            QStringLiteral("Settings were applied for this session, but could not be fully saved.\n\n%1").arg(error),
+            QStringLiteral("设置已应用到本次会话，但未能完整保存到本机。\n\n%1").arg(error));
+    }
+    return saved;
 }
 
 void ConfigCoordinator::savePromptTemplates(const QVector<PromptTemplate> &templates)

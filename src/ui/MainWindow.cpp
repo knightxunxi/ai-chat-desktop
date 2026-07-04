@@ -807,7 +807,7 @@ void MainWindow::openScheduledTaskDialog()
 }
 
 // V15.5: openFileToolsDialog 已移除，FileInteractionService API 保留不变。
-// 文件工具功能现通过 Agent Skill（.workbuddy/skills/file-*/）调用，见 docs/FileInteractionService-API.md
+// 文件工具功能现通过 Agent Skill（.workbuddy/skills/file-*/）调用，见 docs/done/FileInteractionService-API.md
 
 void MainWindow::generateAgentPlan()
 {
@@ -1205,7 +1205,7 @@ void MainWindow::onMessageRegenerateRequested()
         }
     }
 
-    m_controller.retryLastRequest();
+    m_controller.regenerateLastResponse();
 }
 
 void MainWindow::onQuoteReplyRequested(const QString &content)

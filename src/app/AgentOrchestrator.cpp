@@ -9,29 +9,32 @@
 #include "app/ConfigCoordinator.h"
 #include "app/ContextWindowManager.h"
 #include "app/SessionCoordinator.h"
-#include "core/AppConfig.h"
-#include "services/AIClient.h"
 #include "app/TokenEstimator.h"
+#include "core/AppConfig.h"
 #include "hooks/BuiltinHooks.h"
 #include "hooks/HookDefinition.h"
 #include "hooks/HookManager.h"
+#include "memory/ProjectMemoryManager.h"
 #include "mcp/McpRegistry.h"
-#include <QtConcurrent/QtConcurrentRun>
 #include "skills/SkillDefinition.h"
 #include "skills/SkillManager.h"
+#include "services/AIClient.h"
+#include "services/OpenAICompatibleClient.h"
 #include "services/PythonSidecarAIClient.h"
 #include "support/AppLogger.h"
 #include "tools/AgentToolCatalog.h"
 #include "tools/AgentToolRegistry.h"
-#include "memory/ProjectMemoryManager.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QEventLoop>
 #include <QJsonDocument>
-#include <QTimer>
-#include <QJsonDocument>
 #include <QStandardPaths>
+#include <QTimer>
+#include <QtConcurrent/QtConcurrentRun>
+
+#include <memory>
 
 namespace {
 
@@ -39,6 +42,64 @@ namespace {
 int estimateTokenCount(const QString &text)
 {
     return static_cast<int>(TokenEstimator::estimateTokens(text));
+}
+
+bool containsPythonSidecarPackage(const QString &directoryPath)
+{
+    const QString trimmedPath = directoryPath.trimmed();
+    if (trimmedPath.isEmpty()) {
+        return false;
+    }
+
+    return QDir(QDir::cleanPath(trimmedPath)).exists(QStringLiteral("agent_sidecar"));
+}
+
+QString resolvePythonSidecarDirectoryForSubAgent(const QString &configuredDirectory)
+{
+    const QString configured = configuredDirectory.trimmed();
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString currentDir = QDir::currentPath();
+
+    QStringList candidates;
+    if (!configured.isEmpty()) {
+        candidates.append(configured);
+    }
+    candidates.append({
+        QDir(appDir).filePath(QStringLiteral("python/agent_sidecar")),
+        QDir(appDir).filePath(QStringLiteral("../python/agent_sidecar")),
+        QDir(currentDir).filePath(QStringLiteral("python/agent_sidecar")),
+        QDir(currentDir).filePath(QStringLiteral("../python/agent_sidecar")),
+        AppConfig::defaultPythonSidecarDirectory()
+    });
+
+    for (const QString &candidate : candidates) {
+        if (containsPythonSidecarPackage(candidate)) {
+            return QDir::cleanPath(candidate);
+        }
+    }
+
+    return QDir::cleanPath(candidates.isEmpty() ? AppConfig::defaultPythonSidecarDirectory() : candidates.first());
+}
+
+std::unique_ptr<AIClient> createIsolatedSubAgentClient(const AppConfig &config)
+{
+    if (config.backendType != AIBackendType::Sidecar) {
+        return std::make_unique<OpenAICompatibleClient>();
+    }
+
+    auto sidecar = std::make_unique<PythonSidecarAIClient>();
+    const QString pythonExecutable = config.pythonExecutable.trimmed().isEmpty()
+                                         ? AppConfig::defaultPythonExecutable()
+                                         : config.pythonExecutable.trimmed();
+    const QString sidecarDirectory = resolvePythonSidecarDirectoryForSubAgent(config.pythonSidecarDirectory);
+    if (sidecar->startSidecar(pythonExecutable, sidecarDirectory, 5000)) {
+        return sidecar;
+    }
+
+    AppLogger::warning(QStringLiteral("SubAgent"),
+                       QStringLiteral("Python sidecar failed for sub-agent. executable=%1 dir=%2 error=%3")
+                           .arg(pythonExecutable, sidecarDirectory, sidecar->lastError()));
+    return std::make_unique<OpenAICompatibleClient>();
 }
 
 } // namespace
@@ -683,7 +744,6 @@ AgentToolDefinition AgentOrchestrator::createSubAgentTool() const
     required.append(QStringLiteral("question"));
     paramSchema[QStringLiteral("required")] = required;
 
-    AIClient *client = m_aiClient;
     AppConfig subConfig = m_configCoordinator->config();
 
     return AgentToolDefinition{
@@ -691,14 +751,14 @@ AgentToolDefinition AgentOrchestrator::createSubAgentTool() const
         paramSchema,
         AgentToolRegistryFactory::functionNameForToolId(QStringLiteral("agent.explore")),
         true,
-        [client, subConfig, isChinese](const QJsonObject &params, const AgentToolExecutionContext &) -> ToolResult {
+        [subConfig, isChinese](const QJsonObject &params, const AgentToolExecutionContext &) -> ToolResult {
             const QString question = params.value(QStringLiteral("question")).toString().trimmed();
             if (question.isEmpty()) {
                 return {false, QString(), QStringLiteral("question is required")};
             }
 
-            if (!client) {
-                return {false, QString(), QStringLiteral("AIClient is not available")};
+            if (!subConfig.isComplete()) {
+                return {false, QString(), QStringLiteral("AI configuration is incomplete")};
             }
 
             // 只给只读工具：file.read_text, file.list_directory, project.find_files
@@ -729,17 +789,18 @@ AgentToolDefinition AgentOrchestrator::createSubAgentTool() const
             QString resultText;
             bool finished = false;
             QString errorMsg;
+            std::unique_ptr<AIClient> subClient = createIsolatedSubAgentClient(subConfig);
 
             QMetaObject::Connection c1 = QObject::connect(
-                client, &AIClient::textDeltaReceived,
+                subClient.get(), &AIClient::textDeltaReceived,
                 [&resultText](const QString &delta) { resultText += delta; });
 
             QMetaObject::Connection c2 = QObject::connect(
-                client, &AIClient::requestFinished,
+                subClient.get(), &AIClient::requestFinished,
                 [&loop, &finished]() { finished = true; loop.quit(); });
 
             QMetaObject::Connection c3 = QObject::connect(
-                client, &AIClient::requestFailed,
+                subClient.get(), &AIClient::requestFailed,
                 [&loop, &errorMsg](const QString &msg, RequestErrorCategory) {
                     errorMsg = msg;
                     loop.quit();
@@ -750,7 +811,7 @@ AgentToolDefinition AgentOrchestrator::createSubAgentTool() const
             QObject::connect(&timeoutTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
             timeoutTimer.start(30000); // 30s sub-agent timeout
 
-            client->sendChat(subConfig, session);
+            subClient->sendChat(subConfig, session);
 
             loop.exec();
 

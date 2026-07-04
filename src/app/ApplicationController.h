@@ -98,6 +98,8 @@ public slots:
     void cancelCurrentRequest();
     // 功能：重新发送上一条失败请求；使用模块：MainWindow 重试按钮。
     void retryLastRequest();
+    // 功能：重新生成最后一条成功助手回复；使用模块：MessageWidget 右键重新生成。
+    void regenerateLastResponse();
     // 功能：根据用户目标生成 Agent 结构化计划；使用模块：MainWindow 计划按钮。
     void generateAgentPlan(const QString &goal, int continuationDepth = 0);
     // 功能：发送统一模式消息（AI 自动判断聊天/执行）；使用模块：MainWindow 统一模式切换。

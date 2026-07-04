@@ -392,7 +392,7 @@ v1.0 提示词结构：意图标签 + 工具使用提示 + 匹配 Skill + ⭐ �
 
 ## 21. v1.0 测试统计
 
-当前全量 68 个测试，100% 通过。覆盖核心模型、服务、存储、工具、Agent、记忆、Skills、Hooks、UI、输入、桌面和 Python sidecar 等层级。CI 双重构建（Debug/Release），GitHub Actions 自动触发。
+当前全量 69 个测试，100% 通过。覆盖核心模型、服务、存储、工具、Agent、记忆、Skills、Hooks、UI、输入、桌面和 Python sidecar 等层级。CI 双重构建（Debug/Release），GitHub Actions 自动触发。
 
 ## 14. windeployqt
 
@@ -460,7 +460,7 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 实际选择：自定义轻量级 assert + CTest
 ```
 
-**为什么**：QTest 需要 Qt 事件循环，Google Test 需要额外编译依赖。手写框架的测试入口是 `int main() { assert(...); }`——不需要链接任何框架库。当前 68 个测试大多是纯逻辑测试，不依赖窗口和事件循环。另外，手写测试意味着你对每个断言的发生位置和失败信息有完全控制。
+**为什么**：QTest 需要 Qt 事件循环，Google Test 需要额外编译依赖。手写框架的测试入口是 `int main() { assert(...); }`——不需要链接任何框架库。当前 69 个测试大多是纯逻辑测试，不依赖窗口和事件循环。另外，手写测试意味着你对每个断言的发生位置和失败信息有完全控制。
 
 **面试表达**：在不需要 mock/spy 的纯逻辑测试场景下，轻量方案往往比重框架更实用。
 
@@ -529,7 +529,7 @@ windeployqt release\AIChatDesktop\AIChatDesktop.exe
 实际选择：C++ 保留主控，Python 作为能力层 sidecar
 ```
 
-**为什么**：C++ 已经沉淀了 Qt UI、Agent 循环、工具注册、Win32 桌面操作、权限边界和 68 项测试。如果把 Agent 主循环迁移到 Python，会丢掉这些工程资产，并且形成两套 Agent 流程。Python 的优势在 AI 生态：多厂商 SDK、tokenizer、embedding、网页解析、文档解析、Playwright。因此更合理的边界是：C++ 负责“决策和权限”，Python 负责“模型和能力”。
+**为什么**：C++ 已经沉淀了 Qt UI、Agent 循环、工具注册、Win32 桌面操作、权限边界和 69 项测试。如果把 Agent 主循环迁移到 Python，会丢掉这些工程资产，并且形成两套 Agent 流程。Python 的优势在 AI 生态：多厂商 SDK、tokenizer、embedding、网页解析、文档解析、Playwright。因此更合理的边界是：C++ 负责“决策和权限”，Python 负责“模型和能力”。
 
 **面试表达**：这是 sidecar 架构。主进程通过 `QProcess + JSONL` 调用 Python 子进程，既保持桌面主程序稳定，又为后续接入 Python AI 生态留下空间。
 

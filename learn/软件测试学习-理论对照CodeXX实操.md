@@ -12,8 +12,8 @@
 |------|-------------|---------|
 | **测试用例** | 一个 `assert()` | `CronParserTest.cpp` 里每行 `assert()` 就是一个 case |
 | **测试套件** | 一个测试 exe | `CronParserTest.exe` 本身就是一个套件（含 8 个断言） |
-| **测试覆盖率** | CTest 63 个测试目标 | `ctest -N` 列出全部 |
-| **回归测试** | 每次改完代码跑 `ctest` | 确保 63 个全绿 |
+| **测试覆盖率** | CTest 69 个测试目标 | `ctest -N` 列出全部 |
+| **回归测试** | 每次改完代码跑 `ctest` | 确保 69 个全绿 |
 | **冒烟测试** | `MainWindowSmokeTest` | 只测构造/析构不崩溃 |
 
 ---
@@ -26,7 +26,7 @@
 | **集成测试** | 验证模块间交互 | `AgentLoopExecutionTest` — 涉及 AC + AIClient + Registry + Session |
 | **黑白盒** | 不看/看源码 | 黑盒：`CronParserTest`(只看输入输出) / 白盒：`CodeHighlighterTest`(验证内部 format) |
 | **手工测试** | 人工执行 | 启动 exe，手动聊两句验证 UI |
-| **自动化测试** | CTest 自动跑 | `ctest` 一键跑 63 个 |
+| **自动化测试** | CTest 自动跑 | `ctest` 一键跑 69 个 |
 | **功能测试** | 测功能正确性 | `StreamParserTest` — 验证 SSE 解析逻辑 |
 | **性能测试** | 测响应时间等 | ❌ CodeXX 暂无 |
 | **冒烟测试** | 快速验核心功能 | `AppLaunchSmokeTest` — 启动应用不崩 |
@@ -42,7 +42,7 @@
 | **测试设计** | 编写测试用例 | 看 `tests/CMakeLists.txt` 每个测试目标的设计意图 |
 | **测试执行** | 跑测试 | `cd build && ctest --output-on-failure` |
 | **缺陷管理** | 提交跟踪 | `git commit` + 修复后重跑 `ctest` |
-| **测试报告** | `ctest` 输出 | `100% tests passed, 0 tests failed out of 63` |
+| **测试报告** | `ctest` 输出 | `100% tests passed, 0 tests failed out of 69` |
 
 ---
 
@@ -122,7 +122,7 @@ assert(connector.listTools().isEmpty());                // 未连 → 空
 
 | 书中概念 | CodeXX 现状 |
 |---------|-----------|
-| **回归测试自动化** | ✅ `ctest` 63 个全部自动化 |
+| **回归测试自动化** | ✅ `ctest` 69 个全部自动化 |
 | **CI/CD 流水线** | ❌ 暂无 Jenkins/GitHub Actions 集成 |
 | **数据驱动测试** | ❌ 测试数据写死在代码里 |
 | **模块化框架** | ⚠️ 每个测试是独立的 exe，但 `tests/CMakeLists.txt` 用变量共享源码路径 |
@@ -146,7 +146,7 @@ assert(connector.listTools().isEmpty());                // 未连 → 空
 |------|-----------|
 | 缺陷严重级别 | ❌ 无正式跟踪（但 `git log` + commit message 可回溯） |
 | 测试覆盖率 | 没有量化统计，但每个模块都有对应的 test exe |
-| 测试执行进度 | `ctest` 输出 `X/63 passed` |
+| 测试执行进度 | `ctest` 输出 `X/69 passed` |
 
 ---
 
@@ -188,7 +188,7 @@ assert(connector.listTools().isEmpty());                // 未连 → 空
 
 第4小时：自动化测试 (第6章)
   读：测试金字塔、自动化适用场景
-  看：tests/CMakeLists.txt → 理解 63 个测试如何组织
+  看：tests/CMakeLists.txt → 理解 69 个测试如何组织
   跑：ctest --output-on-failure → 看失败时输出什么
   动手：给 MessageWidget 的代码块渲染写一个新 assert
 ```

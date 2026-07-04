@@ -135,7 +135,7 @@ UI 变更：
 - `docs/DEVELOPMENT_PLAN.md` 是否更新状态、日期、技术债。
 - `docs/codebase-memory-mcp-callgraph.md` 是否反映新的主流程或调用边界。
 - `docs/DOCUMENT_INDEX.md` 是否新增、归档或更新文档状态。
-- Python 能力层变更是否更新 `docs/49-v19-python-agent-capability-layer-plan.md`。
+- Python 能力层变更是否更新 `learn/07-Python能力层学习.md`，路线变化是否更新 `docs/52-next-wave-plan.md`。
 - 学习价值较高的变更是否更新 `learn/`。
 
 ---

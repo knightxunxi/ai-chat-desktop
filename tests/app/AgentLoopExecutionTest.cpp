@@ -58,6 +58,12 @@ struct AgentLoopExecutionTestAccessor {
         c.m_agentOrchestrator.initialize(c.m_aiClient.data(), &c.m_configCoordinator, &c.m_sessionCoordinator);
     }
 
+    static void setAiClient(ApplicationController &c, AIClient *client) {
+        c.m_aiClient.reset(client);
+        c.connectAIClientSignals();
+        initOrchestrator(c);
+    }
+
     static QString buildNextLoopPrompt(ApplicationController &c) {
         return c.m_agentOrchestrator.buildNextLoopPrompt();
     }
@@ -65,6 +71,28 @@ struct AgentLoopExecutionTestAccessor {
 
 // 简便别名
 using A = AgentLoopExecutionTestAccessor;
+
+class RegenerateClient final : public AIClient
+{
+public:
+    int requestCount = 0;
+    QString lastUserContent;
+
+    void sendChat(const AppConfig &, const ChatSession &session) override
+    {
+        ++requestCount;
+        for (int index = session.messages.size() - 1; index >= 0; --index) {
+            if (session.messages[index].role == MessageRole::User) {
+                lastUserContent = session.messages[index].content;
+                break;
+            }
+        }
+        emit textDeltaReceived(QStringLiteral("regenerated response"));
+        emit requestFinished();
+    }
+
+    void cancel() override {}
+};
 
 static AppConfig makeTestConfig()
 {
@@ -340,6 +368,33 @@ int main()
     }
 
     // ================================================================
+    // Test 10: regenerate-success-response-does-not-require-retry-flag
+    // 成功回复的重新生成应独立于失败重试按钮状态。
+    // ================================================================
+    {
+        ApplicationController controller;
+        A::config(controller) = makeTestConfig();
+        auto *client = new RegenerateClient();
+        A::setAiClient(controller, client);
+        A::setGenerating(controller, false);
+
+        ChatSession &session = A::session(controller);
+        session = ChatSession::createDefault();
+        session.addMessage(MessageRole::User, QStringLiteral("Explain this code"));
+        session.addMessage(MessageRole::Assistant, QStringLiteral("old response"));
+
+        assert(!A::retryAvailable(controller));
+        controller.regenerateLastResponse();
+
+        assert(client->requestCount == 1);
+        assert(client->lastUserContent == QStringLiteral("Explain this code"));
+        assert(session.messages.size() == 2);
+        assert(session.messages.last().role == MessageRole::Assistant);
+        assert(session.messages.last().content == QStringLiteral("regenerated response"));
+        assert(!A::isGenerating(controller));
+    }
+
+    // ================================================================
     // Summary
     // ================================================================
     std::printf("\n");
@@ -354,6 +409,7 @@ int main()
     std::printf("  [PASS] agent-mode-sends-loop\n");
     std::printf("  [PASS] loop-status-emitted\n");
     std::printf("  [PASS] matched-skills-injected-into-main-loop-prompt\n");
+    std::printf("  [PASS] regenerate-success-response\n");
     std::printf("========================================\n");
     return 0;
 }

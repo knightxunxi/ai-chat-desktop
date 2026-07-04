@@ -12,7 +12,7 @@ src/ui          Qt Widgets 界面层
 src/app         应用控制层
   ↓
 src/services    AI API、流式响应服务、Python sidecar 协议客户端
-python/agent_sidecar  Python AI 能力层 sidecar（V19 实验分支）
+python/agent_sidecar  Python AI 能力层 sidecar（V19 可切换后端）
 src/storage     本地配置、凭据、聊天记录、模板存储
 src/tools       本地文本工具
 src/core        核心数据模型
@@ -344,7 +344,7 @@ src/app          ┌─ ConfigCoordinator（配置+Prompt）
                  └─ AgentOrchestrator（Agent循环+Skills+Hooks+AutoFix）
   ↓
 src/services     AI API 客户端（OpenAICompatibleClient + StreamParser + PythonSidecarClient）
-python/agent_sidecar  Python 能力层（JSONL 协议，模型/token/Web/文档能力预留）
+python/agent_sidecar  Python 能力层（JSONL 协议，模型/token/Web/文档能力）
 src/memory       三层记忆（L1/L2/L3 → systemPrompt 注入）
 src/skills       15 个 Skill（工作流 + 工具）
 src/hooks        6 个生命周期钩子（速率限制 / 敏感过滤 / 外部脚本）
@@ -372,4 +372,4 @@ src/support      日志、脱敏等通用能力
 | 桌面操作 | 无 | Win32/UIA 全链路（截图→OCR→点击→输入） |
 | 记忆 | 无 | 三层记忆 + 每周压缩 + systemPrompt 注入 |
 | 代码量 | ~10,000 行 | ~31,000 行 |
-| 测试 | ~30 个 | **68 个，100% 通过** |
+| 测试 | ~30 个 | **69 个，100% 通过** |

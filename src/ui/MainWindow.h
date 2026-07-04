@@ -80,7 +80,7 @@ private:
     void openLogViewerDialog();
     // 功能：打开本地工具窗口；使用模块：工具按钮。
     void openToolsDialog();
-    // V15.5: openFileToolsDialog 已移除。FileInteractionService API 保留，见 docs/FileInteractionService-API.md
+    // V15.5: openFileToolsDialog 已移除。FileInteractionService API 保留，见 docs/done/FileInteractionService-API.md
 
     // V15.3: 打开调度任务管理窗口；使用模块：调度任务按钮。
     void openScheduledTaskDialog();

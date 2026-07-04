@@ -114,7 +114,7 @@
 
 参考回答：
 
-> 项目使用 CTest 统一运行测试。测试覆盖核心模型、服务商预设、会话列表排序、SSE 解析、请求体构建、HTTP 错误分类、配置和凭据迁移、SQLite 存储、Markdown 导出、日志脱敏、日志读取、本地工具逻辑、Agent 工具目录、计划解析、Agentic Loop、工具注册表、Function Calling schema、tool_calls 流式解析、命令执行策略、记忆/Skills/Hooks/MCP、UI smoke test，以及 V19 Python sidecar 协议和 QProcess 客户端。当前是 68 个测试全部通过。
+> 项目使用 CTest 统一运行测试。测试覆盖核心模型、服务商预设、会话列表排序、SSE 解析、请求体构建、HTTP 错误分类、配置和凭据迁移、SQLite 存储、Markdown 导出、日志脱敏、日志读取、本地工具逻辑、Agent 工具目录、计划解析、Agentic Loop、工具注册表、Function Calling schema、tool_calls 流式解析、命令执行策略、记忆/Skills/Hooks/MCP、UI smoke test，以及 V19 Python sidecar 协议和 QProcess 客户端。当前是 69 个测试全部通过。
 
 ## 20. UI 部分怎么测试？
 
@@ -336,6 +336,6 @@
 
 参考回答：
 
-> 最难的倒不是某个单一技术点，而是系统复杂度的管理。从 20 个工具到 51 个工具，从 1 个 ApplicationController 到 3 个 Coordinator + 7 个工具子库，再到 V19 Python sidecar，每一步都要保证 68 个测试零回归。印象最深的是工具注册表的设计——一开始工具描述散落在 Prompt 构建、计划执行、Function Calling schema 三个地方，每加一个工具要改三处。后来我把它统一到 AgentToolRegistry，描述和执行函数来自同一份定义，新增工具只需要 10 行代码。这就是设计模式里说的"单一数据源"。
+> 最难的倒不是某个单一技术点，而是系统复杂度的管理。从 20 个工具到 51 个工具，从 1 个 ApplicationController 到 3 个 Coordinator + 7 个工具子库，再到 V19 Python sidecar，每一步都要保证 69 个测试零回归。印象最深的是工具注册表的设计——一开始工具描述散落在 Prompt 构建、计划执行、Function Calling schema 三个地方，每加一个工具要改三处。后来我把它统一到 AgentToolRegistry，描述和执行函数来自同一份定义，新增工具只需要 10 行代码。这就是设计模式里说的"单一数据源"。
 
 > V10.3 的记忆是项目级受控记忆，不是自动长期记忆。应用会读取项目目录下的 `AGENT_MEMORY.md` 作为受限上下文；追加记忆必须通过 `memory.append_project_note` 工具，并经过计划窗口和用户确认。服务层会拒绝明显包含 API Key、password、token、Bearer、secret 等敏感字段的内容，也限制单条记忆长度。记忆只帮助 Agent 理解用户明确要求保存的偏好或项目决策，不能扩大工具权限、绕过确认或覆盖本地安全策略。

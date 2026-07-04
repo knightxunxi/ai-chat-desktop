@@ -85,7 +85,7 @@
 
 | 知识点 | 对应文件 | 做什么 |
 |--------|---------|--------|
-| CTest 注册与执行 | `tests/CMakeLists.txt` | `add_test(NAME ...)` 注册 68 个 |
+| CTest 注册与执行 | `tests/CMakeLists.txt` | `add_test(NAME ...)` 注册 69 个 |
 | `assert()` 断言机制 | 每个测试 exe 的 `main()` | 失败→abort→退出码≠0→CTest FAILED |
 | 测试金字塔 | 整个 tests/ | 45单元+8集成+2系统 |
 | 每个测试 exe 链接最小静态库 | `tests/CMakeLists.txt` | CronParserTest 只链 `codexx_scheduler` |
@@ -188,7 +188,7 @@
 | 岗位 | 核心技能 | CodeXX 知识点 | 可写到简历上的话 |
 |------|---------|-------------|---------------|
 | **C++ 开发** | Qt6、CMake | 12 静态库架构、信号槽 | "参与 Qt6/C++ AI 桌面应用开发，实现 Agent 循环和 30+ 工具系统" |
-| **QA 测试** | 单元/集成/系统测试 | 68 个 CTest | "从零建立自动化测试体系，覆盖 68 个测试用例，使用 assert 框架" |
+| **QA 测试** | 单元/集成/系统测试 | 69 个 CTest | "从零建立自动化测试体系，覆盖 69 个测试用例，使用 assert 框架" |
 | **DevOps** | CI/CD、打包 | 4 个 build 目录 | "配置 CMake 多编译器构建，实现 Debug/Release 自动化打包" |
 | **AI 应用开发** | Function Calling、Agent | Agent 循环全流程 | "实现 OpenAI-compatible 的 Agent 循环，支持 50 轮自主决策" |
 | **安全工程师** | 注入防护、凭证过滤 | Hook 系统 | "实现 4 层注入防护：prompt 围栏+敏感过滤+截断+系统保护" |

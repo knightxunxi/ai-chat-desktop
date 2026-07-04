@@ -116,6 +116,16 @@ QString compactPreview(QString text, int maxLength)
     return text.left(maxLength) + QStringLiteral("...");
 }
 
+bool containsPythonSidecarPackage(const QString &directoryPath)
+{
+    const QString trimmedPath = directoryPath.trimmed();
+    if (trimmedPath.isEmpty()) {
+        return false;
+    }
+
+    return QDir(QDir::cleanPath(trimmedPath)).exists(QStringLiteral("agent_sidecar"));
+}
+
 } // namespace
 
 ApplicationController::ApplicationController(QObject *parent)
@@ -240,23 +250,23 @@ void ApplicationController::connectAIClientSignals()
 QString ApplicationController::resolvePythonSidecarDirectory() const
 {
     const QString configured = m_configCoordinator.config().pythonSidecarDirectory.trimmed();
-    if (!configured.isEmpty()) {
-        return QDir::cleanPath(configured);
-    }
-
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString currentDir = QDir::currentPath();
-    const QStringList candidates = {
+
+    QStringList candidates;
+    if (!configured.isEmpty()) {
+        candidates.append(configured);
+    }
+    candidates.append({
         QDir(appDir).filePath(QStringLiteral("python/agent_sidecar")),
         QDir(appDir).filePath(QStringLiteral("../python/agent_sidecar")),
         QDir(currentDir).filePath(QStringLiteral("python/agent_sidecar")),
         QDir(currentDir).filePath(QStringLiteral("../python/agent_sidecar")),
         AppConfig::defaultPythonSidecarDirectory()
-    };
+    });
 
     for (const QString &candidate : candidates) {
-        const QDir dir(candidate);
-        if (dir.exists(QStringLiteral("agent_sidecar"))) {
+        if (containsPythonSidecarPackage(candidate)) {
             return QDir::cleanPath(candidate);
         }
     }
@@ -348,7 +358,7 @@ bool ApplicationController::exportCurrentSessionMarkdown(const QString &filePath
 void ApplicationController::saveConfig(const AppConfig &config)
 {
     const AppConfig previousConfig = m_configCoordinator.config();
-    m_configCoordinator.saveConfig(config);
+    const bool saved = m_configCoordinator.saveConfig(config);
 
     const bool backendChanged =
         previousConfig.backendType != config.backendType
@@ -357,6 +367,12 @@ void ApplicationController::saveConfig(const AppConfig &config)
     if (backendChanged) {
         initAIClient();
         m_agentOrchestrator.initialize(m_aiClient.data(), &m_configCoordinator, &m_sessionCoordinator);
+    }
+
+    if (!saved) {
+        emit statusMessage(QStringLiteral("Settings were applied, but saving them failed."),
+                           QStringLiteral("设置已应用，但保存失败。"),
+                           6000);
     }
 }
 
@@ -927,6 +943,47 @@ void ApplicationController::retryLastRequest()
         m_sessionCoordinator.currentSession().messages.removeLast();
     }
 
+    m_currentAssistantContent.clear();
+    emit currentSessionChanged();
+    startAssistantRequest(retryContent);
+}
+
+void ApplicationController::regenerateLastResponse()
+{
+    if (m_isGenerating) {
+        return;
+    }
+
+    if (!m_configCoordinator.config().isComplete()) {
+        emit configurationMissing();
+        return;
+    }
+
+    ChatSession &session = m_sessionCoordinator.currentSession();
+    if (session.messages.size() < 2 || session.messages.last().role != MessageRole::Assistant) {
+        emit statusMessage(QStringLiteral("No assistant response available to regenerate."),
+                           QStringLiteral("没有可重新生成的助手回复。"),
+                           3000);
+        return;
+    }
+
+    int userIndex = -1;
+    for (int index = session.messages.size() - 2; index >= 0; --index) {
+        if (session.messages[index].role == MessageRole::User) {
+            userIndex = index;
+            break;
+        }
+    }
+    if (userIndex < 0 || session.messages[userIndex].content.trimmed().isEmpty()) {
+        emit statusMessage(QStringLiteral("No user message found for regeneration."),
+                           QStringLiteral("没有找到可用于重新生成的用户消息。"),
+                           3000);
+        return;
+    }
+
+    const QString retryContent = session.messages[userIndex].content;
+    setRetryAvailable(false);
+    session.messages.removeLast();
     m_currentAssistantContent.clear();
     emit currentSessionChanged();
     startAssistantRequest(retryContent);

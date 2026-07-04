@@ -196,12 +196,14 @@ flowchart TD
 |--------|----------|----------|
 | `MainWindow::sendCurrentMessage` | `src/ui/MainWindow.cpp:853` | UI 发送入口，根据 Agent 模式分发到普通聊天或 Agent |
 | `ApplicationController::sendMessage` | `src/app/ApplicationController.cpp:340` | 普通聊天入口，写入用户消息并启动 AI 请求 |
+| `ApplicationController::regenerateLastResponse` | `src/app/ApplicationController.cpp` | 成功助手回复的重新生成入口，不依赖失败重试标记 |
 | `ApplicationController::sendAgentLoopMessage` | `src/app/ApplicationController.cpp:620` | Agent 连续循环入口，初始化 Agent 上下文和第一轮请求 |
 | `ApplicationController::continueAgentLoop` | `src/app/ApplicationController.cpp:722` | 启动下一轮 Agent AI 请求 |
 | `ApplicationController::executeAgentToolDefinition` | `src/app/ApplicationController.cpp:867` | 工具执行结果封装为 Agent 步骤和待回传结果 |
 | `ApplicationController::executeAgentToolCalls` | `src/app/ApplicationController.cpp:948` | 批量解析和执行模型返回的 tool call |
 | `ApplicationController::handleRequestFinished` | `src/app/ApplicationController.cpp:1164` | AI 响应完成后的核心分流点，复杂度 30、认知复杂度 73 |
 | `ApplicationController::onScheduledTaskTriggered` | `src/app/ApplicationController.cpp:1671` | 定时任务触发后进入 Agent 消息路径 |
+| `AgentOrchestrator::createSubAgentTool` | `src/app/AgentOrchestrator.cpp` | `agent.explore` 子 Agent 工具，使用独立 AIClient，避免主会话信号串扰 |
 | `AgentOrchestrator::executePlanAndReportToChat` | `src/app/AgentOrchestrator.cpp:393` | 计划步骤执行，复杂度 18、认知复杂度 39 |
 | `AgentLoopController::executeLoop` | `src/app/AgentLoopController.cpp` | 独立可测循环实现，复杂度 43、认知复杂度 105 |
 | `AgentToolRegistry::execute` | `src/tools/AgentToolRegistry.cpp:576` | 工具注册表统一执行入口 |
@@ -275,6 +277,29 @@ C++ PythonSidecarClient
 ```
 
 Python 能力层只提供能力，不直接执行本机高权限工具，也不接管 Agent 主循环。
+
+### 7.5 消息重新生成与子 Agent
+
+```text
+右键 Assistant 消息
+  -> MainWindow::onMessageRegenerateRequested
+  -> ApplicationController::regenerateLastResponse
+  -> 移除最后一条 assistant 回复
+  -> startAssistantRequest(上一条 user 内容)
+```
+
+成功回复重新生成和失败重试是两条路径：失败重试使用 `retryLastRequest()`，成功回复重新生成使用 `regenerateLastResponse()`。
+
+```text
+Agent tool: agent.explore
+  -> AgentOrchestrator::createSubAgentTool
+  -> createIsolatedSubAgentClient
+  -> Direct: OpenAICompatibleClient
+  -> Sidecar: PythonSidecarAIClient，启动失败则回退 OpenAICompatibleClient
+  -> 子 Agent 只使用只读工具上下文
+```
+
+子 Agent 不复用主 `m_aiClient`，否则它的 `textDeltaReceived/requestFinished/requestFailed` 会进入主 `ApplicationController`，污染当前聊天或 Agent 主循环。
 
 ---
 

@@ -1,8 +1,8 @@
 # V19 Python 能力层学习
 
 > 对应分支：`feature/python-agent-capability-layer`  
-> 对应规划：`docs/49-v19-python-agent-capability-layer-plan.md`  
-> 当前状态：Python sidecar 骨架已建立，Debug 构建通过，CTest 68/68 通过
+> 对应规划：`docs/done/49-v19-python-agent-capability-layer-plan.md`；后续增强见 `docs/52-next-wave-plan.md`
+> 当前状态：Python sidecar 已作为可切换 AI 后端接入，Debug 构建通过，CTest 69/69 通过，Python 单测 20/20 通过
 
 ---
 
@@ -29,7 +29,7 @@ Python sidecar 负责能力：
 | 方案 | 优点 | 问题 |
 |------|------|------|
 | 全部继续 C++ | 单一语言、部署简单 | AI 生态扩展慢，接 tokenizer/embedding/Web/Playwright 成本高 |
-| Python 重写 Agent | AI 库丰富 | 会丢掉现有 Qt UI、Win32 工具、安全边界和 68 项测试积累 |
+| Python 重写 Agent | AI 库丰富 | 会丢掉现有 Qt UI、Win32 工具、安全边界和 69 项测试积累 |
 | C++ 主控 + Python sidecar | 保留桌面工程优势，同时接入 Python AI 生态 | 需要设计进程协议、超时、错误处理和打包策略 |
 
 当前选择第三种，因为它最符合项目现状：C++ 已经有完整 Agent 平台，Python 只补能力短板。
