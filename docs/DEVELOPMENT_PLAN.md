@@ -1,7 +1,7 @@
 # CodeXX 开发计划（实时更新）
 
-> 生成日期：2026-07-04 | 基线：v1.0 + Python sidecar 可切换后端 + 本轮修复闭环完成
-> 测试状态：69/69 ✅；Python sidecar 20/20 ✅
+> 生成日期：2026-07-05 | 基线：v1.0 + Python sidecar 可切换后端 + 本轮修复闭环完成
+> 测试状态：69/69 ✅；Python sidecar 28/28 ✅
 > 工作流入口：开始开发前先读取 `AGENT.md` 和 `docs/DEVELOPMENT_WORKFLOW.md`
 > 使用说明：每完成一个 Phase 中的项目，请更新对应行状态为 ✅，添加完成日期
 
@@ -36,10 +36,15 @@
 | `DEVELOPMENT_PLAN.md` | 开发计划 | 🔄 实时维护 |
 | `codebase-memory-mcp-callgraph.md` | MCP 使用方式 + 调用关系分析 | 🔄 随主流程和索引规则实时更新 |
 | `52-next-wave-plan.md` | 下一波开发规划 | 🔄 新主规划 |
+| `已实现功能.md` | 功能总览 | 🔄 已落地能力全景，完成能力迁入这里 |
+| `待开发功能.md` | 功能路线 | 🔄 未完成、占位、暂缓、跳过和弃用功能统一维护 |
 | `架构优化方向.md` | 架构优化 | 🔄 8 个方向均未做完 |
-| `自更新方向优化.md` | 自更新设计 | ❌ 未实施 |
+| `自更新方向优化.md` | 自更新设计 | 📌 v1.0 仅保留占位入口，真实 GitHub Release 接入后续推进 |
+| `游戏助手与YOLO自动化规划.md` | 游戏助手 | ⬚ 主页面入口、YOLO 自动化和受限逆向学习方向规划 |
 
-已完成或被新规划接替的文档已移入 `docs/done/`：`14-code-style.md`、`49-v19-python-agent-capability-layer-plan.md`、`50-modular-ai-assisted-development.md`、`51-next-four-direction-roadmap.md`、`CODE_REVIEW_DOCUMENT.md`、`FileInteractionService-API.md`、`已实现功能与待开发路线.md`。
+已完成或被新规划接替的历史专题文档已移入 `docs/done/`：`14-code-style.md`、`49-v19-python-agent-capability-layer-plan.md`、`50-modular-ai-assisted-development.md`、`51-next-four-direction-roadmap.md`、`CODE_REVIEW_DOCUMENT.md`、`FileInteractionService-API.md`。
+
+原 `已实现功能与待开发路线.md` 已按用途拆分为 `docs/已实现功能.md` 和 `docs/待开发功能.md`，不再归档到 `docs/done/`。弃用、跳过和暂缓功能统一放入 `docs/待开发功能.md` 并说明原因。
 
 ---
 
@@ -64,12 +69,12 @@
 
 | # | 开发项 | 状态 | 预估 | 来源 |
 |:-:|--------|:---:|:---:|------|
-| 9 | **WebSearch 工具** | ✅ 2026-07-04 | 已实现路线.md |
-| 10 | **Token 预算追踪**（每轮统计消耗，边际效益检测） | ✅ 2026-07-04 | 已实现路线.md |
-| 11 | **快捷键系统**（Ctrl+N/K/Enter/Esc/Ctrl+Enter换行） | ✅ 2026-07-04 | 已实现路线.md |
-| 12 | **输入区增强**（↑↓历史 / Ctrl+Enter换行 / @提及文件） | ✅ 2026-07-04 | 已实现路线.md |
-| 13 | **自动打包 CI**（windeployqt + zip + GitHub Release） | ✅ 2026-07-04 | 已实现路线.md |
-| 14 | **使用统计面板**（SQLite 统计 + 纯 UI 展示） | ✅ 2026-07-04 | 1 天 | 已实现路线.md |
+| 9 | **WebSearch 工具** | ✅ 2026-07-04 | `docs/已实现功能.md` |
+| 10 | **Token 预算追踪**（每轮统计消耗，边际效益检测） | ✅ 2026-07-04 | `docs/已实现功能.md` |
+| 11 | **快捷键系统**（Ctrl+N/K/Enter/Esc/Ctrl+Enter换行） | ✅ 2026-07-04 | `docs/已实现功能.md` |
+| 12 | **输入区增强**（↑↓历史 / Ctrl+Enter换行 / @提及文件） | ✅ 2026-07-04 | `docs/已实现功能.md` |
+| 13 | **自动打包 CI**（windeployqt + zip + GitHub Release） | ✅ 2026-07-04 | `docs/已实现功能.md` |
+| 14 | **使用统计面板**（SQLite 统计 + 纯 UI 展示） | ✅ 2026-07-04 | 1 天 | `docs/已实现功能.md` |
 | 15 | **本地模型供应商基础支持**（Ollama via providers） | ✅ 2026-07-04 | 架构优化.md |
 | 15b | **本地小模型 PreSend Hook**（ollama/llama.cpp 摘要预处理） | ⬚ | 2-3 天 | 下一波后续增强 |
 | 16 | **多厂商适配层 C++ 端**（system.list_providers + sidecar 桥接） | ✅ 2026-07-04 | 架构优化.md |
@@ -78,11 +83,11 @@
 
 | # | 开发项 | 状态 | 预估 | 来源 |
 |:-:|--------|:---:|:---:|------|
-| 17 | **命令面板 Ctrl+Shift+P**（模糊搜索操作） | ✅ 2026-07-04 | 已实现路线.md |
-| 18 | **斜杠命令**（/clear /export /tools /role /new /help） | ✅ 2026-07-04 | 已实现路线.md |
+| 17 | **命令面板 Ctrl+Shift+P**（模糊搜索操作） | ✅ 2026-07-04 | `docs/已实现功能.md` |
+| 18 | **斜杠命令**（/clear /export /tools /role /new /help） | ✅ 2026-07-04 | `docs/已实现功能.md` |
 | 19 | **AC 继续拆分**（StreamCoordinator 基础） | ✅ 2026-07-04 | 架构优化.md |
 | 19b | **MediaCoordinator / ViewManager 拆分** | ⬚ | 2 天 | 下一波后续增强 |
-| 20 | **日志脱敏增强**（追加前过 SensitiveFilterHook） | ✅ 2026-07-04 | 已实现路线.md |
+| 20 | **日志脱敏增强**（追加前过 SensitiveFilterHook） | ✅ 2026-07-04 | `docs/已实现功能.md` |
 | 21 | **MockApiClient + Agent E2E 循环测试** | ✅ 2026-07-04 | 架构优化.md |
 
 ### P2：中等或低可行 / 高工时
@@ -93,23 +98,23 @@
 | 23 | **MCP TLS/认证**（QSslSocket + API Key 透传） | ✅ 2026-07-04 | 技术债务 |
 | 24 | **Token 估算精确化**（tiktoken + API usage 解析） | ✅ 2026-07-04 | 技术债务 |
 | 25 | **工具并行执行**（QtConcurrent 无依赖并行） | ✅ 2026-07-04 | 架构优化.md |
-| 26 | **对话分叉 UI 完善**（分支指示器 + 循环切换） | ✅ 2026-07-04 | 已实现路线.md |
-| 27 | **审查结果结构化**（diff 解析 + 问题分类 + 历史去重） | ✅ 2026-07-04 | 已实现路线.md |
-| 28 | **Catch2 测试框架迁移**（assert → REQUIRE） | ⏭ 跳过 | 评估：收益低、迁移风险高 |
+| 26 | **对话分叉 UI 完善**（分支指示器 + 循环切换） | ✅ 2026-07-04 | `docs/已实现功能.md` |
+| 27 | **审查结果结构化**（diff 解析 + 问题分类 + 历史去重） | ✅ 2026-07-04 | `docs/已实现功能.md` |
+| 28 | **Catch2 测试框架迁移**（assert → REQUIRE） | ⏭ 跳过 | `docs/待开发功能.md` |
 | D-2 | **AgentLoopController 异步化** | ✅ 2026-07-04 | 架构优化.md |
 
 ### P3：大工程 / 长期愿景
 
 | # | 开发项 | 状态 | 预估 | 来源 |
 |:-:|--------|:---:|:---:|------|
-| 29 | **自更新系统**（GitHub Release 检查 + 手动下载） | ⬚ N3 | 2-3 天 | `52-next-wave-plan.md` |
-| 30 | **跨平台准备层**（PlatformServices 抽象） | ⬚ N5 | 3-5 天 | `52-next-wave-plan.md` |
-| 31 | **插件系统最小闭环**（QPluginLoader + plugin.json） | ⬚ N4 | 4-5 天 | `52-next-wave-plan.md` |
-| 32 | **角色扮演系统**（Persona + Emotion + Narration） | ⬚ | 5-7 天 | 已实现路线.md |
+| 29 | **自更新系统**（GitHub Release 检查 + 手动下载） | 📌 2026-07-05 占位 | 2-3 天 | `52-next-wave-plan.md` |
+| 30 | **跨平台准备层**（PlatformServices 抽象） | ✅ 2026-07-04 N5 | 3-5 天 | `52-next-wave-plan.md` |
+| 31 | **插件系统最小闭环**（QPluginLoader + plugin.json） | ✅ 2026-07-04 N4 | 4-5 天 | `52-next-wave-plan.md` |
+| 32 | **角色扮演系统**（Persona + Emotion + Narration） | ⬚ | 5-7 天 | `docs/待开发功能.md` |
 | 33 | **双 Agent 互审 + 共享记忆** | ⬚ | 10 天 | 自更新方向.md |
-| 34 | **浏览器操作集成**（Playwright via Python sidecar） | ⬚ N2 | 3-5 天 | `52-next-wave-plan.md` |
-| 35 | **游戏自动化**（状态机 + 模板匹配） | ⬚ | 10-15 天 | 已实现路线.md |
-| 36 | **发布稳定与真实场景验收** | ⬚ N1 | 1 天 | `52-next-wave-plan.md` |
+| 34 | **浏览器操作集成**（Playwright via Python sidecar） | ✅ 2026-07-04 N2 | 3-5 天 | `52-next-wave-plan.md` |
+| 35 | **游戏自动化 / 游戏助手**（YOLO 识别 + 状态机 + 受控自动化） | ⬚ | 10-15 天 | `docs/游戏助手与YOLO自动化规划.md` |
+| 36 | **发布稳定与真实场景验收** | ✅ 2026-07-04 N1 | 1 天 | `52-next-wave-plan.md` |
 
 ---
 
@@ -143,15 +148,22 @@ Phase 4 ═══ 架构深化（完成）
   ├─ ✅ #15 本地小模型预处理（Ollama 已在 providers.json 支持）
   └─ ✅ D-3 重复动作检测优化
 
-Phase 5 ═══ 技术债务清理（剩余 3 项）
+Phase 5 ═══ 技术债务清理 ✅ 全部完成
   ├─ ✅ #23 MCP TLS/认证
   ├─ ✅ #22 暗/亮主题颜色变量化
   ├─ ✅ #24 Token 估算精确化
   ├─ ✅ #25 工具并行执行
   ├─ ✅ #26 对话分叉 UI 完善
   ├─ ✅ #27 审查结果结构化
-  ├─ ⬚ ~~#28 Catch2 测试迁移~~（已评估 — 跳过，收益低风险高）
-  └─ ✅ D-2 AgentLoopController 异步化（AgentLoopEngine 异步引擎 + 同步兼容）
+  ├─ ⏭ ~~#28 Catch2 测试迁移~~（已评估 — 跳过）
+  └─ ✅ D-2 AgentLoopController 异步化
+
+Wave 2 ═══ 52-next-wave-plan（N3 自更新为占位）
+  ├─ ✅ N1 发布稳定与真实场景验收
+  ├─ ✅ N2 Playwright 浏览器自动化
+  ├─ 📌 N3 自更新系统占位
+  ├─ ✅ N4 插件系统最小闭环
+  └─ ✅ N5 跨平台准备层
 
 Phase 6 ═══ 下一波规划（见 docs/52-next-wave-plan.md）
   ├─ N1 / #36 发布稳定与真实场景验收
@@ -186,7 +198,7 @@ Phase 6 ═══ 下一波规划（见 docs/52-next-wave-plan.md）
 |------|--------|:---:|----------|
 | N1 | 发布稳定与真实场景验收 | ⬚ | 可与 N3 设计并行 |
 | N2 | Playwright 浏览器自动化 | ⬚ | 可与 N3 并行，不与 Agent 主循环重构并行 |
-| N3 | 自更新系统 | ⬚ | 可与 N2 并行 |
+| N3 | 自更新系统 | 📌 占位 | 可与 N2 并行 |
 | N4 | 插件系统最小闭环 | ⬚ | N1 后做，避免打包和加载边界同时不稳 |
 | N5 | 跨平台准备层 | ⬚ | 设计可与 N4 并行，代码实现建议串行 |
 | N6 | 双 Agent / 角色 / 游戏自动化 | ⬚ | 暂缓 |
@@ -222,3 +234,33 @@ Phase 6 ═══ 下一波规划（见 docs/52-next-wave-plan.md）
 | 回归测试补充 | ✅ | `AgentLoopExecutionTest` 增加成功回复重新生成回归用例，测试总数保持 69/69 通过 |
 
 验证：`git diff --check`、`cmake --build build -j4`、`ctest --test-dir build --output-on-failure`、`python -m unittest discover -s python\agent_sidecar\tests` 全部通过。
+
+---
+
+## 八、2026-07-05 审查修复记录
+
+| 范围 | 状态 | 说明 |
+|------|:---:|------|
+| 浏览器工具业务失败判定 | ✅ | C++ `browser.open` / `browser.extract_text` / `browser.screenshot` 现在会检查 sidecar `result.ok`，不再把 Playwright 缺失或运行失败误判为成功 |
+| 浏览器工具输入边界 | ✅ | Python sidecar 仅接受绝对 `http://` / `https://` URL，截图输出目录限制在系统临时目录内 |
+| 浏览器资源释放 | ✅ | browser/page/playwright 在异常路径也会关闭，避免 sidecar 残留浏览器进程 |
+| 插件发现路径 | ✅ | `AgentOrchestrator` 同时扫描应用目录 `plugins/` 与项目目录 `plugins/`，开发构建产物和发布插件目录均可发现 |
+| 插件启停状态 | ✅ | `PluginManager` 跳过重复插件 ID，重新启用插件成功后恢复 `loaded=true` |
+| 自动更新 | 📌 | v1.0 保留设置页“检查更新”占位入口，不访问占位 GitHub 仓库；真实 Release 接入后续推进 |
+| 发布包依赖 | ✅ | 已补充 `release/AIChatDesktop/Qt6Concurrent.dll`，打包报告已记录 |
+| 文档状态 | ✅ | 当时将 `已实现功能与待开发路线.md` 归档到 `docs/done/`；2026-07-06 已按功能拆分策略调整为活跃文档 |
+
+验证：`git diff --check`、`cmake --build build -j4`、`ctest --test-dir build --output-on-failure`、`$env:PYTHONPATH='D:\C1\CodeXX\python\agent_sidecar'; python -m unittest discover -s python\agent_sidecar\tests` 全部通过。
+
+---
+
+## 九、2026-07-06 文档结构调整记录
+
+| 范围 | 状态 | 说明 |
+|------|:---:|------|
+| 功能总览拆分 | ✅ | 原 `已实现功能与待开发路线.md` 拆分为 `docs/已实现功能.md` 和 `docs/待开发功能.md` |
+| 已实现能力维护 | ✅ | 已落地能力统一维护到 `docs/已实现功能.md`，不再和待开发路线混写 |
+| 待开发和弃用维护 | ✅ | 未完成、占位、暂缓、跳过和明确不做的功能统一维护到 `docs/待开发功能.md`，并标明原因 |
+| done 目录策略 | ✅ | 功能总览类文档不再归档到 `docs/done/`，只归档历史专题、验收记录和旧设计 |
+
+验证：文档结构调整，无需构建；执行 `git diff --check`。

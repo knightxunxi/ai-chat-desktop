@@ -16,6 +16,7 @@
 #include "hooks/HookManager.h"
 #include "memory/ProjectMemoryManager.h"
 #include "mcp/McpRegistry.h"
+#include "plugins/PluginManager.h"
 #include "skills/SkillDefinition.h"
 #include "skills/SkillManager.h"
 #include "services/AIClient.h"
@@ -140,6 +141,16 @@ void AgentOrchestrator::initialize(AIClient *aiClient, ConfigCoordinator *config
 
     // V15.4: 初始化 MCP 注册表
     m_mcpRegistry = std::make_unique<McpRegistry>(this);
+
+    // N4: 初始化插件管理器
+    m_pluginManager = std::make_unique<PluginManager>(this);
+    const QString appPluginsDir = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("plugins"));
+    m_pluginManager->scanAndLoadPlugins(appPluginsDir);
+    if (!m_configCoordinator->config().agentProjectDirectory.isEmpty()) {
+        const QString pluginsDir = QDir(m_configCoordinator->config().agentProjectDirectory)
+                                       .filePath(QStringLiteral("plugins"));
+        m_pluginManager->scanAndLoadPlugins(pluginsDir);
+    }
 
     if (!m_configCoordinator->config().agentProjectDirectory.isEmpty()) {
         const QString mcpConfigPath = QDir::cleanPath(
@@ -311,6 +322,16 @@ AgentToolRegistry AgentOrchestrator::toolRegistry() const
             continue;
         }
         registry.registerExternalTools(connector->listTools(), connector);
+    }
+
+    // N4: 注册插件工具
+    if (m_pluginManager) {
+        const QVector<PluginToolInfo> pluginTools = m_pluginManager->allPluginTools();
+        for (const auto &entry : m_pluginManager->allPlugins()) {
+            if (entry.enabled && entry.loaded && entry.instance) {
+                registry.registerPluginTools(entry.tools, entry.instance);
+            }
+        }
     }
 
     return registry;

@@ -32,6 +32,8 @@ add_subdirectory(src/hooks)     # codexx_hooks
 add_subdirectory(src/scheduler) # codexx_scheduler
 add_subdirectory(src/mcp)       # codexx_mcp
 add_subdirectory(src/tools)     # codexx_tools
+add_subdirectory(src/plugins)   # codexx_plugins (N4, must be before app)
+add_subdirectory(src/platform)  # codexx_platform (N5)
 add_subdirectory(src/app)       # codexx_app
 add_subdirectory(src/ui)        # codexx_ui
 

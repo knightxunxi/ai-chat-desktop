@@ -318,6 +318,16 @@ ApplicationController 从单体拆分为三个 Coordinator：
 
 每子库独立编译，依赖方向明确（tools_core ← tools_input ← AgentToolRegistry）。
 
+### 新增子库（V15-V19 / N4-N5）
+
+| 子库 | 目录 | 说明 |
+|------|------|------|
+| `codexx_mcp` | `src/mcp/` | MCP 协议层 — QProcess 本地 / QSslSocket 网络双模式 |
+| `codexx_plugins` | `src/plugins/` | 插件系统 (N4) — PluginInterface + PluginManager + QPluginLoader |
+| `codexx_platform` | `src/platform/` | 跨平台抽象 (N5) — PlatformServices 接口 + Win32/Unsupported 实现 |
+
+当前共 **14 个子库**（+2 独立 shared lib：`example_plugin`、Python sidecar）。
+
 ### 桌面自动化层（V14+ / V18.2+）
 
 | 能力 | 实现 |
@@ -332,44 +342,70 @@ ApplicationController 从单体拆分为三个 Coordinator：
 
 这些能力让 Agent 可以像人一样操作电脑，而不只是操作文件系统。
 
+### 跨平台抽象（N5）
+
+`PlatformServices` 接口将 Windows-only 能力统一定义为纯虚接口，由工厂函数根据编译平台创建实现：
+
+| 接口方法 | Windows 实现 |
+|---------|-------------|
+| `saveCredential` / `loadCredential` | Win32 Credential Manager |
+| `captureScreen` | QScreen grabWindow（占位） |
+| `enumWindows` / `foregroundWindow` | Win32 EnumWindows / GetForegroundWindow |
+| `mouseClick` / `keyPress` / `typeText` | Win32 SendInput |
+| `isForegroundAllowed` | 默认允许 |
+
+非 Windows 平台返回 `UnsupportedPlatformServices`，所有方法返回明确不可用错误。
+
 ## 7. v1.0 整体架构图
 
 ```text
 用户操作
   ↓
 src/ui           Qt Widgets 界面层（ChatView, AgentStepGroupWidget, SettingsDialog...）
+  ├── 快捷键 Ctrl+N/K/Shift+P
+  ├── 命令面板 / 斜杠命令
+  └── 检查更新按钮（UpdateChecker → GitHub API）
   ↓
 src/app          ┌─ ConfigCoordinator（配置+Prompt）
-                 ├─ SessionCoordinator（会话+持久化）
-                 └─ AgentOrchestrator（Agent循环+Skills+Hooks+AutoFix）
+                 ├─ SessionCoordinator（会话+持久化+对话分叉）
+                 └─ AgentOrchestrator（Agent循环+Skills+Hooks+AutoFix+并行执行）
   ↓
 src/services     AI API 客户端（OpenAICompatibleClient + StreamParser + PythonSidecarClient）
-python/agent_sidecar  Python 能力层（JSONL 协议，模型/token/Web/文档能力）
+                 ├── UpdateChecker（GitHub Releases 查询）
+                 └── PythonSidecarAIClient（sidecar 后端切换）
+python/agent_sidecar  Python 能力层（JSONL 协议，模型/token/Web/文档/浏览器能力）
 src/memory       三层记忆（L1/L2/L3 → systemPrompt 注入）
-src/skills       15 个 Skill（工作流 + 工具）
+src/skills       15+ Skill（工作流 + 工具 + 技能匹配）
 src/hooks        6 个生命周期钩子（速率限制 / 敏感过滤 / 外部脚本）
+src/mcp          MCP 连接器（本地 QProcess + 网络 TLS 双模式）
+src/plugins      插件系统（PluginManager + QPluginLoader + plugin.json）
+src/platform     跨平台抽象（PlatformServices 接口 + Win32/Unsupported）
+src/scheduler    定时任务（Cron 调度 + JSON 持久化）
   ↓
-src/tools        ┌─ registry（51 工具注册表）
+src/tools        ┌─ registry（60+ 工具注册表）
                  ├─ core（文件交互、工作区策略、命令运行）
                  ├─ perception（窗口、截图、OCR）
                  ├─ input（键盘鼠标 Win32 模拟）
-                 ├─ dev（UIA 控件定位、文件搜索）
+                 ├─ dev（UIA 控件定位、文件搜索、审查）
                  ├─ text（JSON/Markdown 清理）
                  └─ assistant（日报、提醒）
   ↓
-src/core         核心数据模型（AppConfig, ChatSession, AgentPlan...）
+src/core         核心数据模型（AppConfig, ChatSession, AgentPlan, AgentLoopState...）
 src/support      日志、脱敏等通用能力
 ```
 
 ## 8. v1.0 与早期版本的架构对比
 
-| 维度 | V1-V11 (聊天客户端) | V12-V18 (Agent 平台) |
+| 维度 | V1-V11 (聊天客户端) | V19 / N1-N5 (完整平台) |
 |------|-------------------|---------------------|
-| 工具数量 | ~15 个（文本+文件+命令） | **51 个**（7 领域） |
-| 架构复杂度 | ui→app→services→storage | 同左 + memory/skills/hooks + 7 工具子库 |
+| 工具数量 | ~15 个（文本+文件+命令） | **60+ 个**（10 领域，含浏览器/插件/MCP 动态） |
+| 架构复杂度 | ui→app→services→storage | 同左 + memory/skills/hooks + mcp/plugins/platform/scheduler + 7 工具子库 + Python sidecar |
+| 子库数量 | 5 个 | **14 个** CMake 静态库 + 1 个示例插件 shared lib |
 | ApplicationController | 单体 ~350 行 .h | 拆为 3 个 Coordinator |
-| Agent 能力 | AI 建议计划→用户确认→执行 | 全自动 OODA 循环 + 意图排序 + AutoFix |
+| Agent 能力 | AI 建议计划→用户确认→执行 | 全自动 OODA 循环 + 意图排序 + AutoFix + 并行执行 |
 | 桌面操作 | 无 | Win32/UIA 全链路（截图→OCR→点击→输入） |
+| Python 集成 | 无 | 侧车进程（模型/token/Web/文档/浏览器） |
+| 外部能力 | 无 | MCP TLS / 插件 / 定时任务 / 自更新 |
 | 记忆 | 无 | 三层记忆 + 每周压缩 + systemPrompt 注入 |
-| 代码量 | ~10,000 行 | ~31,000 行 |
-| 测试 | ~30 个 | **69 个，100% 通过** |
+| 代码量 | ~10,000 行 | ~35,000 行 |
+| 测试 | ~30 个 | **C++ 69 + Python 25 = 94 个，零回归** |

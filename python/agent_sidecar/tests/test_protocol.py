@@ -181,6 +181,86 @@ class ProtocolTest(unittest.TestCase):
             import os
             os.unlink(tmp_path)
 
+    # ── N2: 浏览器自动化测试（无依赖时验证降级） ─────────────────────
+
+    def test_browser_ping_without_playwright(self) -> None:
+        response = self._handle(
+            {"id": "req-20", "method": "browser.ping", "params": {}}
+        )
+        self.assertTrue(response["ok"])
+        result = response["result"]
+        self.assertIn("available", result)
+
+    def test_browser_open_missing_url(self) -> None:
+        response = self._handle(
+            {"id": "req-21", "method": "browser.open", "params": {}}
+        )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "invalid_params")
+
+    def test_browser_open_rejects_non_http_url(self) -> None:
+        response = self._handle(
+            {
+                "id": "req-21b",
+                "method": "browser.open",
+                "params": {"url": "file:///C:/Windows/win.ini"},
+            }
+        )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "invalid_params")
+
+    def test_browser_screenshot_missing_url(self) -> None:
+        response = self._handle(
+            {"id": "req-22", "method": "browser.screenshot", "params": {}}
+        )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "invalid_params")
+
+    def test_browser_screenshot_rejects_non_temp_output_dir(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        outside_temp = str(Path(tempfile.gettempdir()).resolve().parent)
+        response = self._handle(
+            {
+                "id": "req-22b",
+                "method": "browser.screenshot",
+                "params": {
+                    "url": "https://example.com",
+                    "output_dir": outside_temp,
+                },
+            }
+        )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "invalid_params")
+
+    def test_browser_extract_text_missing_url(self) -> None:
+        response = self._handle(
+            {"id": "req-23", "method": "browser.extract_text", "params": {}}
+        )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "invalid_params")
+
+    def test_browser_extract_text_rejects_relative_url(self) -> None:
+        response = self._handle(
+            {
+                "id": "req-23b",
+                "method": "browser.extract_text",
+                "params": {"url": "example.com/page"},
+            }
+        )
+        self.assertFalse(response["ok"])
+        self.assertEqual(response["error"]["code"], "invalid_params")
+
+    def test_browser_ping_in_ping_capabilities(self) -> None:
+        response = self._handle({"id": "req-24", "method": "ping", "params": {}})
+        self.assertTrue(response["ok"])
+        caps = response["result"]["capabilities"]
+        self.assertIn("browser.ping", caps)
+        self.assertIn("browser.open", caps)
+        self.assertIn("browser.extract_text", caps)
+        self.assertIn("browser.screenshot", caps)
+
 
 class ProvidersTest(unittest.TestCase):
     """Tests for provider configuration module."""

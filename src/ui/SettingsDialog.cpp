@@ -1,9 +1,11 @@
 #include "ui/SettingsDialog.h"
 
 #include "core/ProviderPreset.h"
+#include "services/UpdateChecker.h"
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDoubleValidator>
 #include <QFormLayout>
@@ -224,6 +226,107 @@ void SettingsDialog::setupUi()
         });
         rootLayout->addWidget(m_debugModeCheckbox);
         rootLayout->addSpacing(4);
+    }
+
+    // N3: 检查更新按钮
+    {
+        auto *updateSeparator = new QFrame(this);
+        updateSeparator->setFrameShape(QFrame::HLine);
+        rootLayout->addSpacing(8);
+        rootLayout->addWidget(updateSeparator);
+        rootLayout->addSpacing(4);
+
+        auto *updateLayout = new QHBoxLayout();
+        auto *updateBtn = new QPushButton(this);
+        updateBtn->setObjectName(QStringLiteral("checkUpdateBtn"));
+        updateBtn->setText(dialogText(m_initialConfig.language,
+            QStringLiteral("Check for Updates"),
+            QStringLiteral("检查更新")));
+        updateBtn->setFixedWidth(160);
+
+        auto *versionLabel = new QLabel(this);
+        versionLabel->setText(dialogText(m_initialConfig.language,
+            QStringLiteral("Current version: 1.0"),
+            QStringLiteral("当前版本: 1.0")));
+        versionLabel->setStyleSheet(QStringLiteral("color: #888;"));
+
+        updateLayout->addWidget(updateBtn);
+        updateLayout->addWidget(versionLabel);
+        updateLayout->addStretch();
+        rootLayout->addLayout(updateLayout);
+
+        // 连接检查更新
+        auto *checker = new UpdateChecker(this);
+        connect(updateBtn, &QPushButton::clicked, this, [this, updateBtn, checker]() {
+            updateBtn->setEnabled(false);
+            updateBtn->setText(dialogText(m_initialConfig.language,
+                QStringLiteral("Checking..."),
+                QStringLiteral("检查中...")));
+            checker->checkForUpdates();
+        });
+        connect(checker, &UpdateChecker::updateCheckFinished, this,
+            [this, updateBtn](const UpdateInfo &info) {
+                updateBtn->setEnabled(true);
+                updateBtn->setText(dialogText(m_initialConfig.language,
+                    QStringLiteral("Check for Updates"),
+                    QStringLiteral("检查更新")));
+
+                if (!info.placeholderMessage.isEmpty()) {
+                    QMessageBox::information(this,
+                        dialogText(m_initialConfig.language,
+                            QStringLiteral("Update Placeholder"),
+                            QStringLiteral("更新检查占位")),
+                        info.placeholderMessage);
+                    return;
+                }
+
+                if (!info.errorMessage.isEmpty()) {
+                    QMessageBox::warning(this,
+                        dialogText(m_initialConfig.language,
+                            QStringLiteral("Update Check Failed"),
+                            QStringLiteral("检查更新失败")),
+                        info.errorMessage);
+                    return;
+                }
+
+                if (!info.hasUpdate) {
+                    QMessageBox::information(this,
+                        dialogText(m_initialConfig.language,
+                            QStringLiteral("Up to Date"),
+                            QStringLiteral("已是最新版本")),
+                        dialogText(m_initialConfig.language,
+                            QStringLiteral("You are running the latest version (%1).")
+                                .arg(info.currentVersion),
+                            QStringLiteral("当前已是最新版本 (%1)。")
+                                .arg(info.currentVersion)));
+                    return;
+                }
+
+                // 有更新
+                QString msg = dialogText(m_initialConfig.language,
+                    QStringLiteral("New version %1 is available!\n\nRelease notes:\n%2\n\nCurrent: %3\nLatest: %4")
+                        .arg(info.latestVersion, info.releaseNotes, info.currentVersion, info.latestVersion),
+                    QStringLiteral("新版本 %1 可用！\n\n更新说明：\n%2\n\n当前版本：%3\n最新版本：%4")
+                        .arg(info.latestVersion, info.releaseNotes, info.currentVersion, info.latestVersion));
+
+                QMessageBox box(this);
+                box.setWindowTitle(dialogText(m_initialConfig.language,
+                    QStringLiteral("Update Available"),
+                    QStringLiteral("有可用更新")));
+                box.setText(msg);
+                box.setStandardButtons(QMessageBox::Ok);
+                if (!info.downloadUrl.isEmpty()) {
+                    auto *downloadBtn = box.addButton(
+                        dialogText(m_initialConfig.language,
+                            QStringLiteral("Download"),
+                            QStringLiteral("下载")),
+                        QMessageBox::ActionRole);
+                    connect(downloadBtn, &QPushButton::clicked, this, [url = info.downloadUrl]() {
+                        QDesktopServices::openUrl(QUrl(url));
+                    });
+                }
+                box.exec();
+            });
     }
 
     m_buttonBox = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, this);

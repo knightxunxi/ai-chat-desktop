@@ -18,6 +18,9 @@
 5. [面试问题预测与参考答案](05-interview-qa.md) — 54 道题（含 11 道 Agent 专题）
 6. [Agent 岗位求职准备](06-Agent岗位求职准备.md) — Agent 岗位市场分析、简历优化、高频考点、STAR 故事、自查清单
 7. [V19 Python 能力层学习](07-Python能力层学习.md) — Python sidecar、JSONL 协议、C++/Python 分层边界
+8. [CodeXX 全量学习路线](CodeXX全量学习-三线路线图.md) — 三大面试路线（C++核心 / Agent系统 / 桌面自动化跨平台）
+
+## 文档层次
 
 ## 文档层次
 

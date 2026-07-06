@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
+from urllib.parse import urlparse
 from typing import Any
 
 from . import providers
@@ -27,6 +31,10 @@ def ping() -> dict[str, Any]:
             "model.list_providers",
             "web.extract",
             "document.to_markdown",
+            "browser.ping",
+            "browser.open",
+            "browser.extract_text",
+            "browser.screenshot",
         ],
     }
 
@@ -353,3 +361,204 @@ def _normalize_chat_response(data: dict[str, Any]) -> dict[str, Any]:
         "tool_calls": tool_calls if isinstance(tool_calls, list) else [],
         "usage": usage if isinstance(usage, dict) else {},
     }
+
+
+# ── N2: 浏览器自动化 ─────────────────────────────────────────────────────
+
+
+def _check_playwright_installed() -> tuple[bool, str]:
+    """Check if playwright and chromium are installed. Returns (ok, message)."""
+    try:
+        import playwright  # noqa: F401
+    except ImportError:
+        return False, "playwright not installed. Run: pip install playwright && playwright install chromium"
+    ok, _ = _check_chromium_installed()
+    if not ok:
+        return False, "chromium browser not installed. Run: playwright install chromium"
+    return True, ""
+
+
+def _check_chromium_installed() -> tuple[bool, str]:
+    """Check if chromium is available via playwright CLI."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "--dry-run", "chromium"],
+            capture_output=True, text=True, timeout=10
+        )
+        if "chromium" in result.stdout.lower():
+            return True, ""
+        return False, "chromium not found in playwright install list"
+    except Exception as e:
+        return False, str(e)
+
+
+def browser_ping(params: dict[str, Any]) -> dict[str, Any]:
+    """Check if browser automation is available."""
+    ok, msg = _check_playwright_installed()
+    if not ok:
+        return {"available": False, "error": msg}
+    return {"available": True, "engine": "playwright", "browser": "chromium"}
+
+
+def _get_browser_page():
+    """Lazy-import playwright and launch headless browser. Returns (page, browser, playwright_ctx)."""
+    from playwright.sync_api import sync_playwright
+    p = sync_playwright().start()
+    browser = p.chromium.launch(headless=True)
+    page = browser.new_page()
+    return page, browser, p
+
+
+def _browser_url(params: dict[str, Any], method: str) -> str:
+    url = params.get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise SidecarError("invalid_params", f"{method} requires a non-empty url.")
+
+    normalized = url.strip()
+    parsed = urlparse(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise SidecarError(
+            "invalid_params",
+            f"{method} only accepts absolute http:// or https:// URLs.",
+        )
+    return normalized
+
+
+def _optional_positive_int(params: dict[str, Any], name: str, default: int, limit: int) -> int:
+    value = params.get(name, default)
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as error:
+        raise SidecarError("invalid_params", f"{name} must be an integer.") from error
+    if parsed <= 0:
+        raise SidecarError("invalid_params", f"{name} must be greater than 0.")
+    return min(parsed, limit)
+
+
+def _browser_screenshot_dir(params: dict[str, Any]) -> str:
+    import tempfile
+
+    output_dir = params.get("output_dir", "")
+    if output_dir in (None, ""):
+        base_dir = Path(tempfile.gettempdir()) / "aichatdesktop-browser"
+    elif isinstance(output_dir, str):
+        base_dir = Path(output_dir).expanduser().resolve()
+        temp_root = Path(tempfile.gettempdir()).resolve()
+        try:
+            base_dir.relative_to(temp_root)
+        except ValueError as error:
+            raise SidecarError(
+                "invalid_params",
+                f"output_dir must be inside the temp directory: {temp_root}",
+            ) from error
+    else:
+        raise SidecarError("invalid_params", "output_dir must be a string.")
+
+    base_dir.mkdir(parents=True, exist_ok=True)
+    return str(base_dir)
+
+
+def _close_browser(page: Any, browser: Any, playwright_ctx: Any) -> None:
+    for resource in (page, browser):
+        if resource is None:
+            continue
+        try:
+            resource.close()
+        except Exception:
+            pass
+    if playwright_ctx is not None:
+        try:
+            playwright_ctx.stop()
+        except Exception:
+            pass
+
+
+def browser_open(params: dict[str, Any]) -> dict[str, Any]:
+    """Open a URL in headless browser and extract page info."""
+    url = _browser_url(params, "browser.open")
+    timeout = _optional_positive_int(params, "timeout_ms", 15000, 60000)
+    ok, msg = _check_playwright_installed()
+    if not ok:
+        return {"ok": False, "error": msg}
+
+    page = browser = p = None
+    try:
+        page, browser, p = _get_browser_page()
+        page.goto(url, timeout=timeout, wait_until="domcontentloaded")
+        title = page.title()
+        body_text = page.inner_text("body")[:5000]
+        return {
+            "ok": True,
+            "title": title,
+            "body_preview": body_text[:2000],
+            "url": url,
+            "chars": len(body_text),
+        }
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+    finally:
+        _close_browser(page, browser, p)
+
+
+def browser_extract_text(params: dict[str, Any]) -> dict[str, Any]:
+    """Open a URL and extract main readable text content."""
+    url = _browser_url(params, "browser.extract_text")
+    timeout = _optional_positive_int(params, "timeout_ms", 15000, 60000)
+    max_chars = _optional_positive_int(params, "max_chars", 10000, 100000)
+    ok, msg = _check_playwright_installed()
+    if not ok:
+        return {"ok": False, "error": msg}
+
+    page = browser = p = None
+    try:
+        page, browser, p = _get_browser_page()
+        page.goto(url, timeout=timeout, wait_until="networkidle")
+        text = page.inner_text("body")
+        import re
+        text = re.sub(r"\s+", " ", text).strip()
+        if len(text) > max_chars:
+            text = text[:max_chars] + "\n\n[truncated...]"
+        title = page.title()
+        browser.close()
+        p.stop()
+        return {
+            "ok": True,
+            "title": title,
+            "text": text,
+            "chars": len(text),
+        }
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+    finally:
+        _close_browser(page, browser, p)
+
+
+def browser_screenshot(params: dict[str, Any]) -> dict[str, Any]:
+    """Open a URL, take a screenshot, and return its path."""
+    url = _browser_url(params, "browser.screenshot")
+    timeout = _optional_positive_int(params, "timeout_ms", 15000, 60000)
+    output_dir = _browser_screenshot_dir(params)
+    ok, msg = _check_playwright_installed()
+    if not ok:
+        return {"ok": False, "error": msg}
+
+    page = browser = p = None
+    try:
+        page, browser, p = _get_browser_page()
+        page.goto(url, timeout=timeout, wait_until="domcontentloaded")
+        page.set_viewport_size({"width": 1280, "height": 720})
+
+        output_path = os.path.join(
+            output_dir,
+            f"screenshot_{int(__import__('time').time())}.png",
+        )
+        page.screenshot(path=output_path)
+        return {
+            "ok": True,
+            "screenshot_path": output_path,
+            "size_bytes": os.path.getsize(output_path),
+        }
+    except Exception as error:
+        return {"ok": False, "error": str(error)}
+    finally:
+        _close_browser(page, browser, p)

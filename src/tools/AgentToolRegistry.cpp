@@ -1,6 +1,7 @@
 #include "tools/registry/AgentToolRegistry.h"
 
 #include "mcp/McpConnector.h"
+#include "plugins/PluginInterface.h"
 
 #include "hooks/HookDefinition.h"
 #include "hooks/HookManager.h"
@@ -114,6 +115,15 @@ QJsonObject textInputSchema()
 QJsonObject noParameterSchema()
 {
     return objectSchema(QJsonObject(), QStringList());
+}
+
+ToolResult sidecarFailureFromResult(const QString &method, const QJsonObject &result)
+{
+    const QString error = result.value(QStringLiteral("error")).toString();
+    if (!error.isEmpty()) {
+        return ToolResult::failure(QStringLiteral("%1 failed: %2").arg(method, error));
+    }
+    return ToolResult::failure(QStringLiteral("%1 failed without an error message.").arg(method));
 }
 
 QJsonObject pathOnlySchema()
@@ -689,6 +699,52 @@ void AgentToolRegistry::registerExternalTools(const QVector<McpToolDefinition> &
                 return ToolResult::failure(QStringLiteral("MCP connector is not available."));
             }
             return connector->callTool(toolName, args);
+        };
+
+        m_definitions.append(def);
+    }
+}
+
+// N4: 注册插件工具
+void AgentToolRegistry::registerPluginTools(const QVector<PluginToolInfo> &pluginTools,
+                                             PluginInterface *pluginInstance)
+{
+    for (const PluginToolInfo &pluginTool : pluginTools) {
+        // 检查是否已存在同名工具
+        bool alreadyExists = false;
+        for (const AgentToolDefinition &existing : m_definitions) {
+            if (existing.descriptor.id == pluginTool.id) {
+                alreadyExists = true;
+                break;
+            }
+        }
+        if (alreadyExists) {
+            continue;
+        }
+
+        AgentToolDefinition def;
+        def.descriptor.id = pluginTool.id;
+        def.descriptor.englishName = pluginTool.name;
+        def.descriptor.chineseName = pluginTool.name;
+        def.descriptor.englishDescription = pluginTool.description;
+        def.descriptor.chineseDescription = pluginTool.description;
+        def.descriptor.inputPolicy = QStringLiteral("json");
+        def.descriptor.risk = pluginTool.risk;
+        def.descriptor.requiresUserConfirmation = (pluginTool.risk >= AgentToolRisk::Medium);
+        def.descriptor.resultMayContainSensitiveContent = false;
+        def.descriptor.enabledForAgent = true;
+        def.functionName = AgentToolRegistryFactory::functionNameForToolId(pluginTool.id);
+        def.parameterSchema = pluginTool.schema;
+        def.executableFromPlanPreview = true;
+
+        // execute 回调通过 pluginInstance 转发到插件
+        def.execute = [pluginInstance, toolId = pluginTool.id](
+                          const QJsonObject &args,
+                          const AgentToolExecutionContext &context) -> ToolResult {
+            if (pluginInstance == nullptr) {
+                return ToolResult::failure(QStringLiteral("Plugin is not loaded."));
+            }
+            return pluginInstance->execute(toolId, args, context);
         };
 
         m_definitions.append(def);
@@ -1890,6 +1946,94 @@ void registerWebTools(QVector<AgentToolDefinition> &definitions)
             if (results.isEmpty()) return ToolResult::success(QStringLiteral("No results found."));
             return ToolResult::success(results.join(QStringLiteral("\n\n")));
         }));
+
+    // N2: 浏览器自动化工具 — 通过 Python sidecar 的 browser.* 方法
+    {
+        QJsonObject browserOpenSchema;
+        {
+            QJsonObject properties;
+            properties.insert(QStringLiteral("url"), stringProperty(
+                QStringLiteral("URL to open in headless browser.")));
+            browserOpenSchema = objectSchema(properties, {QStringLiteral("url")});
+        }
+        definitions.append(makeDefinition(
+            makeDescriptor(QStringLiteral("browser.open"),
+                QStringLiteral("Open Browser"), QStringLiteral("打开浏览器"),
+                QStringLiteral("Open a URL in a headless Chromium browser and return page title and body preview."),
+                QStringLiteral("在无头 Chromium 浏览器中打开 URL，返回页面标题和正文摘要。"),
+                QStringLiteral("Requires Python sidecar + Playwright. Tool is read-only."),
+                AgentToolRisk::Medium, false),
+            browserOpenSchema, true,
+            [](const QJsonObject &params, const AgentToolExecutionContext &context) {
+                if (!context.sidecarClient || !context.sidecarClient->isRunning()) {
+                    return ToolResult::failure(QStringLiteral("Python sidecar is not running. Switch to Sidecar backend first."));
+                }
+                const auto resp = context.sidecarClient->send(QStringLiteral("browser.open"), params);
+                if (!resp.ok) {
+                    return ToolResult::failure(QStringLiteral("browser.open failed: %1").arg(resp.parseError));
+                }
+                if (!resp.result.value(QStringLiteral("ok")).toBool(false)) {
+                    return sidecarFailureFromResult(QStringLiteral("browser.open"), resp.result);
+                }
+                const QString title = resp.result.value(QStringLiteral("title")).toString();
+                const QString preview = resp.result.value(QStringLiteral("body_preview")).toString();
+                return ToolResult::success(QStringLiteral("Title: %1\n\n%2").arg(title, preview));
+            }));
+
+        definitions.append(makeDefinition(
+            makeDescriptor(QStringLiteral("browser.extract_text"),
+                QStringLiteral("Extract Web Text"), QStringLiteral("提取网页文本"),
+                QStringLiteral("Open URL in headless browser and extract clean readable text."),
+                QStringLiteral("在无头浏览器中打开 URL 并提取干净的文本内容。"),
+                QStringLiteral("Requires Python sidecar + Playwright."),
+                AgentToolRisk::Low, false),
+            browserOpenSchema, true,
+            [](const QJsonObject &params, const AgentToolExecutionContext &context) {
+                if (!context.sidecarClient || !context.sidecarClient->isRunning()) {
+                    return ToolResult::failure(QStringLiteral("Python sidecar is not running."));
+                }
+                const auto resp = context.sidecarClient->send(QStringLiteral("browser.extract_text"), params);
+                if (!resp.ok) {
+                    return ToolResult::failure(QStringLiteral("browser.extract_text failed: %1").arg(resp.parseError));
+                }
+                if (!resp.result.value(QStringLiteral("ok")).toBool(false)) {
+                    return sidecarFailureFromResult(QStringLiteral("browser.extract_text"), resp.result);
+                }
+                return ToolResult::success(resp.result.value(QStringLiteral("text")).toString());
+            }));
+
+        QJsonObject screenshotSchema;
+        {
+            QJsonObject properties;
+            properties.insert(QStringLiteral("url"), stringProperty(
+                QStringLiteral("URL to screenshot.")));
+            properties.insert(QStringLiteral("output_dir"), stringProperty(
+                QStringLiteral("Optional output directory for the screenshot.")));
+            screenshotSchema = objectSchema(properties, {QStringLiteral("url")});
+        }
+        definitions.append(makeDefinition(
+            makeDescriptor(QStringLiteral("browser.screenshot"),
+                QStringLiteral("Screenshot Webpage"), QStringLiteral("网页截图"),
+                QStringLiteral("Open a URL in headless browser, take a screenshot, and return the image path."),
+                QStringLiteral("在无头浏览器中打开 URL 并截取屏幕截图。"),
+                QStringLiteral("Screenshot is saved to temp dir. Requires Python sidecar + Playwright."),
+                AgentToolRisk::Medium, false),
+            screenshotSchema, true,
+            [](const QJsonObject &params, const AgentToolExecutionContext &context) {
+                if (!context.sidecarClient || !context.sidecarClient->isRunning()) {
+                    return ToolResult::failure(QStringLiteral("Python sidecar is not running."));
+                }
+                const auto resp = context.sidecarClient->send(QStringLiteral("browser.screenshot"), params);
+                if (!resp.ok) {
+                    return ToolResult::failure(QStringLiteral("browser.screenshot failed: %1").arg(resp.parseError));
+                }
+                if (!resp.result.value(QStringLiteral("ok")).toBool(false)) {
+                    return sidecarFailureFromResult(QStringLiteral("browser.screenshot"), resp.result);
+                }
+                const QString path = resp.result.value(QStringLiteral("screenshot_path")).toString();
+                return ToolResult::success(QStringLiteral("Screenshot saved to: %1").arg(path));
+            }));
+    }
 }
 
 // V18.5: 开发工具 — 压缩/解压/代码沙箱

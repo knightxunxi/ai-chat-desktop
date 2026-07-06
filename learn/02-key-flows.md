@@ -258,6 +258,157 @@ sequenceDiagram
 
 这个流程体现了 Agent 开发中的核心原则：模型负责建议，本地代码负责权限、路径和实际执行。
 
+## 13. Agentic Loop 连续执行流程（V19 D-2 异步化）
+
+V8.2 开始计划窗口使用 `AgentLoopController`，V19 D-2 重构为异步引擎 `AgentLoopEngine`。
+
+相关模块：
+
+- `AgentLoopEngine`（`src/app/AgentLoopController.h`）
+- `AgentOrchestrator`（`src/app/AgentOrchestrator.cpp`）
+
+关键变化：D-2 前使用 `QEventLoop` 同步阻塞，D-2 后改用 `QTimer::singleShot(0)` 驱动异步迭代，每轮释放事件栈，UI 不再冻结。
+
+```mermaid
+sequenceDiagram
+    participant E as AgentLoopEngine
+    participant T as QTimer
+    participant A as AIClient
+    participant R as AgentToolRegistry
+
+    E->>T: QTimer::singleShot(0)
+    T->>E: doIteration()
+    E->>A: sendChat() 异步
+    A->>E: requestFinished / textDelta
+    E->>R: execute(toolId, params)
+    R->>E: ToolResult
+    E->>T: QTimer::singleShot(0) 继续
+```
+
+`executeLoop()` 同步包装仍保留给测试使用。
+
+## 14. Python Sidecar 调用流程（V19）
+
+Python sidecar 是一个通过 `QProcess` 运行的独立 Python 进程，通过 JSONL 协议与 C++ 通信。
+
+相关模块：
+
+- `PythonSidecarClient`（`src/services/PythonSidecarClient.h`）
+- `PythonSidecarAIClient`（`src/services/PythonSidecarAIClient.h`）
+- `protocol.py` / `capabilities.py`
+
+```mermaid
+sequenceDiagram
+    participant C as C++ (AgentOrchestrator)
+    participant S as PythonSidecarClient
+    participant P as Python Sidecar
+    participant A as AI Service
+
+    C->>S: send("model.chat", params)
+    S->>P: QProcess stdin (JSONL)
+    P->>A: API 调用
+    A->>P: 响应
+    P->>S: stdout (JSONL)
+    S->>C: 解析 AiLoopResponse
+```
+
+Sidecar 能力一行为独立方法注册在 `protocol.py` 中：`ping`、`token.count`、`model.chat`、`model.list_providers`、`web.extract`、`document.to_markdown`、N2 以 `browser.*` 前缀新增。
+
+## 15. 浏览器自动化流程（N2）
+
+通过 Python sidecar 的 Playwright 能力实现浏览器自动化。C++ 只负责工具注册和权限边界。
+
+工具链路：
+
+```
+AgentToolRegistry → browser.open / browser.extract_text / browser.screenshot
+    → Python sidecar browser.* method → Playwright headless → 结构化 observation
+```
+
+## 16. 插件系统流程（N4）
+
+插件通过 QPluginLoader 动态加载，manifest 使用 plugin.json。
+
+相关模块：
+
+- `PluginInterface`（`src/plugins/PluginInterface.h`）
+- `PluginManager`（`src/plugins/PluginManager.h/.cpp`）
+- `AgentToolRegistry::registerPluginTools()`
+
+```mermaid
+flowchart LR
+    P["plugins/*/plugin.json"] --> M["PluginManager: 扫描 + 解析"]
+    M --> L["QPluginLoader 加载 DLL"]
+    L --> I["PluginInterface 实例"]
+    I --> T["PluginToolInfo"]
+    T --> R["registerPluginTools()"]
+    R --> D["AgentToolDefinition"]
+    D --> O["AgentOrchestrator::toolRegistry()"]
+```
+
+## 17. MCP 工具调用流程（V15-V19）
+
+MCP 通过 `QProcess`（本地模式）或 `QSslSocket`（网络 TLS 模式）连接外部服务。V19 #23 新增网络模式。
+
+相关模块：
+
+- `McpRegistry` / `McpConnector`
+- `AgentToolRegistry::registerExternalTools()`
+
+```mermaid
+sequenceDiagram
+    participant O as AgentOrchestrator
+    participant R as AgentToolRegistry
+    participant C as McpConnector
+    participant S as MCP Server
+
+    O->>R: registerExternalTools(tools, connector)
+    O->>R: execute("mcp.xxx", args)
+    R->>C: callTool(toolName, args)
+    C->>S: JSON-RPC over QProcess/QSslSocket
+    S->>C: 响应
+    C->>R: ToolResult
+```
+
+## 18. 自更新检查流程（N3）
+
+用户点击设置页"检查更新"按钮，`UpdateChecker` 查询 GitHub Releases API。
+
+相关模块：
+
+- `UpdateChecker`（`src/services/UpdateChecker.h/.cpp`）
+- SettingsDialog（`src/ui/SettingsDialog.cpp`）
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant S as SettingsDialog
+    participant C as UpdateChecker
+    participant G as GitHub API
+
+    U->>S: 点击"检查更新"
+    S->>C: checkForUpdates()
+    C->>G: GET /repos/{owner}/{repo}/releases/latest
+    G->>C: tag_name + assets + body
+    C->>C: 版本比较（数字逐段）
+    C->>S: updateCheckFinished(info)
+    S->>U: 弹窗（已是最新 / 有更新+下载按钮）
+```
+
+安全边界：不自动下载、不自动覆盖 exe、不自动执行。
+
+## 19. 工具并行执行流程（#25）
+
+V19 对只读工具组启用 `QtConcurrent` 并行执行。
+
+相关模块：
+
+- `AgentOrchestrator::executePlanAndReportToChat()`（`src/app/AgentOrchestrator.cpp`）
+- `AgentPlanExecutor`
+- `QtConcurrent::run()`
+
+关键点：只读工具（文件读取、grep 等）可并发执行，写入操作仍然串行。
+
 ## 13. Agentic Loop 连续执行流程
 
 V8.2 开始，计划窗口的连续执行不再自己维护循环，而是交给 `AgentLoopController`。

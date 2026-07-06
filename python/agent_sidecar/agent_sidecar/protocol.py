@@ -5,6 +5,10 @@ from typing import Any
 
 from .capabilities import (
     SidecarError,
+    browser_extract_text,
+    browser_open,
+    browser_ping,
+    browser_screenshot,
     chat,
     count_tokens,
     document_to_markdown,
@@ -91,5 +95,13 @@ def _dispatch(method: str, params: dict[str, Any]) -> dict[str, Any]:
         return web_extract(params)
     if method == "document.to_markdown":
         return document_to_markdown(params)
+    if method == "browser.ping":
+        return browser_ping(params)
+    if method == "browser.open":
+        return browser_open(params)
+    if method == "browser.extract_text":
+        return browser_extract_text(params)
+    if method == "browser.screenshot":
+        return browser_screenshot(params)
     raise SidecarError("method_not_found", f"Unsupported sidecar method: {method}.")
 

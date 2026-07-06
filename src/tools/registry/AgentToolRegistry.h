@@ -15,6 +15,9 @@ struct McpToolDefinition;
 class McpConnector;
 class PythonSidecarClient;
 
+struct PluginToolInfo;
+class PluginInterface;
+
 struct AgentToolExecutionContext {
     QString workspaceDirectory; // 功能：Agent 工作目录；使用模块：workspace.* 工具执行。
     QString projectDirectory;   // 功能：项目命令工作目录；使用模块：command.* 工具执行。
@@ -54,6 +57,10 @@ public:
     // V15.4: 注册 MCP 外部工具；使用模块：ApplicationController 初始化时注册 MCP 工具。
     void registerExternalTools(const QVector<McpToolDefinition> &mcpTools,
                                McpConnector *connector);
+
+    // N4: 注册插件工具；使用模块：AgentOrchestrator 初始化时注册插件工具。
+    void registerPluginTools(const QVector<PluginToolInfo> &pluginTools,
+                             PluginInterface *pluginInstance);
 
 private:
     QVector<AgentToolDefinition> m_definitions;

@@ -1,7 +1,7 @@
 # CodeXX 下一波开发规划
 
 > 创建日期：2026-07-04
-> 基线状态：本轮功能修复完成，`cmake --build build -j4` 通过，CTest 69/69 通过，Python sidecar 单测 20/20 通过。
+> 基线状态：本轮功能修复完成，`cmake --build build -j4` 通过，CTest 69/69 通过，Python sidecar 单测 28/28 通过。
 > 目标：在 v1.0 稳定基线之后，按“可落地、可验证、可并行”的方式推进下一批能力。
 
 ---
@@ -24,10 +24,10 @@
 
 | 顺序 | 任务包 | 状态 | 是否可并行 | 目标 |
 |------|--------|:---:|------------|------|
-| N1 | 发布稳定与真实场景验收 | ⬚ | 可与文档/小修并行 | 确认 v1.0 可演示、可打包、可回归 |
-| N2 | Playwright 浏览器自动化 | ⬚ | 与 N3 可并行，但不要同时改 Agent 主循环 | 让 Agent 具备真实网页操作能力 |
-| N3 | 自更新系统 | ⬚ | 可与 N2 并行 | 形成 GitHub Release 检查、下载、提示安装闭环 |
-| N4 | 插件系统最小闭环 | ⬚ | 依赖 N1 后做 | 为第三方/本地扩展工具预留边界 |
+| N1 | 发布稳定与真实场景验收 | ✅ 2026-07-04 | 可与文档/小修并行 | 确认 v1.0 可演示、可打包、可回归 |
+| N2 | Playwright 浏览器自动化 | ✅ 2026-07-04 | 与 N3 可并行，但不要同时改 Agent 主循环 | 让 Agent 具备真实网页操作能力 |
+| N3 | 自更新系统 | 📌 2026-07-05 占位 | 与 N2 可并行 | 设置页面保留"检查更新"入口；真实 GitHub Release 接入后续推进 |
+| N4 | 插件系统最小闭环 | ✅ 2026-07-04 | 依赖 N1 后做 | 为第三方/本地扩展工具预留边界 |
 | N5 | 跨平台准备层 | ⬚ | 可与 N4 设计并行，代码实现需串行 | 把 Windows-only 能力抽象清楚 |
 | N6 | 长期智能体增强 | ⬚ | 暂缓 | 双 Agent、角色系统、游戏自动化等长期方向 |
 
@@ -43,10 +43,10 @@
 
 | 子项 | 内容 | 验收 |
 |------|------|------|
-| N1-1 | 补一份 v1.0 手工验收清单 | 覆盖聊天、Agent 创建文件、重新生成、sidecar 切换、MCP、定时任务 |
-| N1-2 | 打包产物二次检查 | Release zip 可在干净目录启动，Qt 插件和 Python sidecar 路径可用 |
-| N1-3 | 真实 Agent 场景脚本 | 例如“创建文件 -> 构建测试 -> 总结结果”，记录预期 UI 表现 |
-| N1-4 | 文档状态收敛 | docs 活跃区只保留当前入口和未完成方向 |
+| N1-1 | 补一份 v1.0 手工验收清单 | ✅ 已创建 `docs/v1.0-acceptance-checklist.md` |
+| N1-2 | 打包产物二次检查 | ✅ 已检查并补充 `Qt6Concurrent.dll`，记录到 `docs/v1.0-packaging-report.md` |
+| N1-3 | 真实 Agent 场景脚本 | ✅ 已创建 `docs/v1.0-agent-scenarios.md` (8 个场景) |
+| N1-4 | 文档状态收敛 | ✅ 已集成到 DOCUMENT_INDEX.md |
 
 ### 并行建议
 
@@ -76,11 +76,11 @@ Python 能力层执行浏览器动作，但不接管 Agent 主循环，也不直
 
 | 子项 | 内容 | 验收 |
 |------|------|------|
-| N2-1 | sidecar 增加 `browser.ping` 和依赖检测 | 未安装 Playwright 时返回明确错误 |
-| N2-2 | 增加 `browser.open` / `browser.extract_text` | 可打开 URL 并提取页面标题、正文摘要 |
-| N2-3 | 增加 `browser.screenshot` | 返回截图路径或 base64 摘要，UI 不崩溃 |
-| N2-4 | C++ 注册浏览器工具 | 工具 schema 清晰，失败进入 Agent observation |
-| N2-5 | 测试 | Python 单测 + C++ 协议测试 + 无浏览器依赖时的降级测试 |
+| N2-1 | sidecar 增加 `browser.ping` 和依赖检测 | ✅ 已实现 `_check_playwright_installed()` |
+| N2-2 | 增加 `browser.open` / `browser.extract_text` | ✅ 已实现，C++ 工具已注册 |
+| N2-3 | 增加 `browser.screenshot` | ✅ 已实现，截图路径返回 |
+| N2-4 | C++ 注册浏览器工具 | ✅ `browser.open` / `browser.extract_text` / `browser.screenshot` |
+| N2-5 | 测试 | ✅ 8 个 Python 浏览器单测（含无依赖降级、URL/输出目录边界）+ C++ 69/69 零回归 |
 
 ### 参考
 
@@ -93,17 +93,17 @@ Python 能力层执行浏览器动作，但不接管 Agent 主循环，也不直
 
 ### 目标
 
-先做“检查更新 + 提示下载 + 打开 Release 页面/下载 zip”的安全版本，不做后台静默替换。
+v1.0 先保留“检查更新”入口作为占位，不访问占位仓库、不自动下载、不自动替换。真实发布仓库确认后，再接入“检查更新 + 提示下载 + 打开 Release 页面/下载 zip”的安全版本。
 
 ### 任务拆分
 
 | 子项 | 内容 | 验收 |
 |------|------|------|
-| N3-1 | 版本元数据模型 | 当前版本、最新版本、发布时间、下载地址 |
-| N3-2 | GitHub Releases 查询 | 能获取 latest release 和 assets |
-| N3-3 | UI 提示 | 有新版本时显示变更摘要和下载按钮 |
-| N3-4 | 安全边界 | 不自动覆盖当前 exe，不自动执行下载文件 |
-| N3-5 | 后续增强预留 | 校验 hash/signature、手动安装、回滚提示 |
+| N3-1 | 版本元数据模型 | 📌 `UpdateInfo` 保留，新增 `placeholderMessage` |
+| N3-2 | GitHub Releases 查询 | ⬚ 暂缓，避免访问占位仓库 |
+| N3-3 | UI 提示 | 📌 设置页面"检查更新"按钮保留，占位弹窗提示暂未启用 |
+| N3-4 | 安全边界 | ✅ 不自动覆盖、不自动下载、不自动执行 |
+| N3-5 | 后续增强预留 | 📌 版本比较和 GitHub 响应解析代码保留，真实仓库接入后启用 |
 
 ### 参考
 
@@ -136,11 +136,12 @@ PluginManager
 
 | 子项 | 内容 | 验收 |
 |------|------|------|
-| N4-1 | 插件 manifest 格式 | id、name、version、tools、risk、entry |
-| N4-2 | PluginManager | 扫描插件目录，加载/卸载，错误可诊断 |
-| N4-3 | 工具注册桥接 | 插件工具进入 `AgentToolRegistry`，仍走风险等级和 Hook |
-| N4-4 | 插件 UI | ToolsDialog 展示插件来源和启用状态 |
-| N4-5 | 示例插件 | 一个只读示例工具，便于后续开发复制 |
+| N4-1 | 插件 manifest 格式 | ✅ plugin.json (id / name / version / tools / risk / schema) |
+| N4-2 | PluginManager | ✅ 扫描应用目录/项目目录插件 → 解析 manifest → QPluginLoader → 工具提取 |
+| N4-3 | 工具注册桥接 | ✅ `registerPluginTools()` 方法 + AgentOrchestrator::toolRegistry() 集成 |
+| N4-4 | 插件 UI | 📌 PluginManager 已暴露 API，ToolsDialog 接入留待下轮 |
+| N4-5 | 示例插件 | ✅ `plugins/examples/ExamplePlugin` — `plugin.hello_world` 工具 |
+| N5 | **跨平台准备层** | ✅ 2026-07-04 | 3-5 天 | 平台抽象 |
 
 ### 参考
 
@@ -158,10 +159,10 @@ PluginManager
 
 | 子项 | 内容 | 验收 |
 |------|------|------|
-| N5-1 | PlatformServices 接口 | Credential、OCR、Input、WindowDetect、ForegroundGuard |
-| N5-2 | WindowsPlatformServices | 包装现有 Win32/UIA/OCR 实现 |
-| N5-3 | UnsupportedPlatformServices | 非 Windows 返回明确不可用错误 |
-| N5-4 | CMake 平台开关 | Windows-only 源码不污染跨平台构建 |
+| N5-1 | PlatformServices 接口 | ✅ 纯虚接口：Credential / OCR / Input / WindowDetect / ForegroundGuard |
+| N5-2 | WindowsPlatformServices | ✅ Win32 Credential Manager / EnumWindows / SendInput 包装 |
+| N5-3 | UnsupportedPlatformServices | ✅ 非 Windows 返回明确不可用错误 |
+| N5-4 | CMake 平台开关 | ✅ WIN32 条件链接 + 独立子库 |
 
 ### 并行建议
 

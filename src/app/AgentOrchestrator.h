@@ -5,6 +5,7 @@
 #include "core/AgentLoopState.h"
 #include "hooks/HookManager.h"
 #include "mcp/McpRegistry.h"
+#include "plugins/PluginManager.h"
 #include "services/ToolCall.h"
 #include "skills/SkillManager.h"
 #include "tools/AgentToolRegistry.h"
@@ -152,6 +153,9 @@ private:
 
     // ── V15.4 MCP ──
     std::unique_ptr<McpRegistry> m_mcpRegistry;
+
+    // ── N4: 插件系统 ──
+    std::unique_ptr<class PluginManager> m_pluginManager;
 
     // ── V16.3 调试 ──
     bool m_agentDebugMode = false;

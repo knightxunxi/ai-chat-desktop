@@ -33,9 +33,12 @@
 | `docs/REVIEW_WORKFLOW.md` | 审查流程 | 🔄 | 2026-07-04 | 企业级审查流程，包含影响分析、问题等级、验证和学习沉淀 |
 | `docs/DEVELOPMENT_PLAN.md` | 开发计划 | 🔄 | 2026-07-04 | 实时计划、优先级、技术债和后续路线 |
 | `docs/52-next-wave-plan.md` | 下一波规划 | 🔄 | 2026-07-04 | 修复闭环后的下一阶段任务、并行关系和验收标准 |
+| `docs/已实现功能.md` | 功能总览 | 🔄 | 2026-07-06 | 当前已经落地的功能全景和验收基线 |
+| `docs/待开发功能.md` | 功能路线 | 🔄 | 2026-07-06 | 未完成、占位、暂缓、跳过和弃用功能清单 |
 | `docs/codebase-memory-mcp-callgraph.md` | 调用关系 | 🔄 | 2026-07-04 | MCP 使用方式、调用关系分析、开发前后索引规则 |
 | `docs/架构优化方向.md` | 架构优化 | 🔄 | 2026-06-18 | 架构债务、拆分方向和长期优化 |
-| `docs/自更新方向优化.md` | 自更新 | ⬚ | 2026-06-05 | 自更新系统设计，下一波规划中作为独立任务推进 |
+| `docs/自更新方向优化.md` | 自更新 | 📌 | 2026-07-05 | 自更新系统设计；v1.0 仅保留检查更新占位入口，真实 Release 接入后续推进 |
+| `docs/游戏助手与YOLO自动化规划.md` | 游戏助手 | ⬚ | 2026-07-06 | 主页面游戏助手入口、YOLO 自动化助手和受限逆向学习助手规划 |
 
 ---
 
@@ -46,10 +49,12 @@
 | `docs/done/14-code-style.md` | 代码规范 | 🗄️ | 2026-05-27 | 已实施的基础代码规范 |
 | `docs/done/49-v19-python-agent-capability-layer-plan.md` | Python 能力层 | 🗄️ | 2026-07-04 | Python sidecar 专项计划，全部 Phase 已完成 |
 | `docs/done/50-modular-ai-assisted-development.md` | AI 辅助开发方法论 | 🗄️ | 2026-06-21 | 模块化 AI 开发方法、上下文控制和回归验证思路 |
+| `docs/v1.0-acceptance-checklist.md` | 验收 | ✅ | 2026-07-04 | v1.0 手工验收清单，7 大模块 40+ 验收项 |
+| `docs/v1.0-agent-scenarios.md` | 验收 | ✅ | 2026-07-04 | 8 个真实 Agent 场景脚本 |
+| `docs/v1.0-packaging-report.md` | 发布 | ✅ | 2026-07-04 | Release 打包检查报告 |
 | `docs/done/51-next-four-direction-roadmap.md` | 四方向规划 | 🗄️ | 2026-07-04 | S1-S4 已完成，后续由 `52-next-wave-plan.md` 接替 |
 | `docs/done/CODE_REVIEW_DOCUMENT.md` | 代码审查 | 🗄️ | 2026-07-04 | 功能↔代码位置映射归档，60+ 工具定位，含设计决策和测试结构 |
 | `docs/done/FileInteractionService-API.md` | API 参考 | 🗄️ | 2026-06-05 | 文件交互服务 API 说明 |
-| `docs/done/已实现功能与待开发路线.md` | 产品路线旧版 | 🗄️ | 2026-07-03 | 已被 `DEVELOPMENT_PLAN.md` 和 `52-next-wave-plan.md` 接替 |
 
 ---
 
@@ -90,10 +95,12 @@
 | 开发任务 | `DEVELOPMENT_WORKFLOW.md`、`DEVELOPMENT_PLAN.md`、`codebase-memory-mcp-callgraph.md` |
 | 审查任务 | `REVIEW_WORKFLOW.md`、`codebase-memory-mcp-callgraph.md`、相关 diff 和测试 |
 | Python 能力层 | `learn/07-Python能力层学习.md`、`docs/done/49-v19-python-agent-capability-layer-plan.md` |
-| 下一波规划 | `52-next-wave-plan.md`、`DEVELOPMENT_PLAN.md` |
+| 功能总览 | `已实现功能.md`、`待开发功能.md`、`DEVELOPMENT_PLAN.md` |
+| 下一波规划 | `待开发功能.md`、`52-next-wave-plan.md`、`DEVELOPMENT_PLAN.md` |
 | Agent 循环 | `codebase-memory-mcp-callgraph.md`、`DEVELOPMENT_PLAN.md` |
 | 架构优化 | `架构优化方向.md`、`docs/done/50-modular-ai-assisted-development.md` |
 | 工具系统 | `docs/done/FileInteractionService-API.md`、`docs/done/15-tool-integration-design.md` |
+| 游戏助手 | `docs/游戏助手与YOLO自动化规划.md`、`DEVELOPMENT_PLAN.md` 中 #35 |
 | 打包发布 | `README.md`、`docs/done/05-windows-packaging.md` |
 | 学习交接 | `learn/README.md`、`learn/01-architecture.md`、`learn/02-key-flows.md` |
 
@@ -110,12 +117,12 @@
 完成文档时：
 
 1. 将状态改为 ✅ 或 🗄️。
-2. 如果不再作为当前入口，移入 `docs/done/`。
+2. 如果不再作为当前入口，移入 `docs/done/`；功能总览类文档例外，优先拆分维护在 `docs/已实现功能.md` 和 `docs/待开发功能.md`。
 3. 更新 `docs/DEVELOPMENT_PLAN.md` 的文档现状检查。
 
 废弃文档时：
 
-1. 不直接删除，优先移入 `docs/done/`。
+1. 不直接删除，优先移入 `docs/done/`；废弃功能或跳过功能记录到 `docs/待开发功能.md` 并说明原因。
 2. 在本目录说明废弃原因或替代文档。
 3. 若包含错误结论，在文件顶部添加废弃说明。
 

@@ -51,6 +51,8 @@ target_link_libraries(codexx_app PUBLIC
     codexx_hooks
     codexx_scheduler
     codexx_mcp
+    codexx_platform
+    codexx_plugins
     codexx_tools
     Qt6::Core
     Qt6::Widgets

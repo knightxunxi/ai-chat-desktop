@@ -13,6 +13,8 @@ add_library(codexx_services STATIC
     StreamParser.h
     StreamParser.cpp
     ToolCall.h
+    UpdateChecker.h
+    UpdateChecker.cpp
 )
 
 target_link_libraries(codexx_services PUBLIC
